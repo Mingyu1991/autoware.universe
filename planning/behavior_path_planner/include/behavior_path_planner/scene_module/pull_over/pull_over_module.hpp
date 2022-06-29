@@ -163,7 +163,6 @@ public:
   void setParameters(const PullOverParameters & parameters);
 
 private:
-  rclcpp::TimerBase::SharedPtr timer_;
   PullOverParameters parameters_;
   ShiftParkingPath shift_parking_path_;
   rclcpp::Node * node_;

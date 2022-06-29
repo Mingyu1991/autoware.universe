@@ -67,11 +67,6 @@ PullOverModule::PullOverModule(
   lane_departure_checker_ = std::make_unique<LaneDepartureChecker>();
   lane_departure_checker_->setVehicleInfo(
     vehicle_info_util::VehicleInfoUtil(node).getVehicleInfo());
-  // Timer for searching goal and planing path.
-  // const auto period_ns =
-  //   std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0));
-  // timer_ = rclcpp::create_timer(
-  //   &node, node.get_clock(), period_ns, std::bind(&PullOverModule::onTimer, this));
   resetStatus();
 
   last_received_time_ = node.now();
@@ -298,11 +293,6 @@ BT::NodeStatus PullOverModule::updateState()
 
   return current_state_;
 }
-
-// void PullOverModule::onTimer()
-// {
-//   if (current_state_ != BT::NodeStatus::RUNNING) return;
-// }
 
 bool PullOverModule::planWithEfficientPath()
 {
