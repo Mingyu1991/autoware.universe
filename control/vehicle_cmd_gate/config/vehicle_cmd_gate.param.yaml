@@ -13,7 +13,7 @@
       lat_jerk_lim: 5.0
     on_transition:
       vel_lim: 50.0
-      lon_acc_lim: 0.5
-      lon_jerk_lim: 0.25
-      lat_acc_lim: 0.5
-      lat_jerk_lim: 0.25
+      lon_acc_lim: 1.0
+      lon_jerk_lim: 0.5
+      lat_acc_lim: 1.2
+      lat_jerk_lim: 0.75
