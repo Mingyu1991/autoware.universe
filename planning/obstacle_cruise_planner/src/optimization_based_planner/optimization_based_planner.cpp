@@ -20,12 +20,11 @@
 #include "obstacle_cruise_planner/utils.hpp"
 #include "tier4_autoware_utils/tier4_autoware_utils.hpp"
 
-// TODO(murooka)
-//#ifdef ROS_DISTRO_GALACTIC
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+// #ifdef ROS_DISTRO_GALACTIC
+ #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 //#else
-//#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-//#endif
+// #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+// #endif
 
 #include <tf2/utils.h>
 
@@ -719,7 +718,6 @@ boost::optional<SBoundaries> OptimizationBasedPlanner::getSBoundaries(
     if (marker_pose) {
       visualization_msgs::msg::MarkerArray wall_msg;
 
-      const double obj_vel = std::abs(obj.velocity);
       if (obj.has_stopped) {
         const auto markers = tier4_autoware_utils::createStopVirtualWallMarker(
           marker_pose.get(), "obstacle to follow", current_time, 0);
