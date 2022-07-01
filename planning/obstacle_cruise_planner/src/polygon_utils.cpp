@@ -167,8 +167,12 @@ Polygon2d convertObstacleToPolygon(
     // NOTE: push back the first point in order to close polygon
     appendPointToPolygon(polygon, polygon.outer().front());
   } else if (shape.type == autoware_auto_perception_msgs::msg::Shape::POLYGON) {
-    for (const auto point : shape.footprint.points) {
-      appendPointToPolygon(polygon, point);
+    for (const auto rel_point : shape.footprint.points) {
+      geometry_msgs::msg::Point abs_point;
+      abs_point.x = pose.position.x + rel_point.x;
+      abs_point.y = pose.position.y + rel_point.y;
+
+      appendPointToPolygon(polygon, abs_point);
     }
     if (polygon.outer().size() > 0) {
       // NOTE: push back the first point in order to close polygon
