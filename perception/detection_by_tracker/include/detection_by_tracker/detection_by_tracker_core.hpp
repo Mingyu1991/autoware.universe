@@ -70,6 +70,8 @@ private:
   std::shared_ptr<ShapeEstimator> shape_estimator_;
   std::shared_ptr<euclidean_cluster::EuclideanClusterInterface> cluster_;
 
+  bool ignore_unknown_tracker_;
+
   void onObjects(
     const tier4_perception_msgs::msg::DetectedObjectsWithFeature::ConstSharedPtr input_msg);
 
