@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 3.5)
 project(object_merger)
 
-
 # Ignore -Wnonportable-include-path in Clang for mussp
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wno-nonportable-include-path)
 endif()
+
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
 
 ### Find Eigen Dependencies
 find_package(eigen3_cmake_module REQUIRED)
