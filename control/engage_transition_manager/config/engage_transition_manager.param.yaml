@@ -6,7 +6,7 @@
       yaw_threshold: 0.524
       speed_upper_threshold: 10.0
       speed_lower_threshold: -10.0
-      acc_threshold: 5.0
+      acc_threshold: 1.5
       lateral_acc_threshold: 1.0
       lateral_acc_diff_threshold: 0.5
     stable_check:
