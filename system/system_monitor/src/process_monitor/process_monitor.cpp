@@ -59,7 +59,7 @@ ProcessMonitor::ProcessMonitor(const rclcpp::NodeOptions & options)
   // Start timer to execute top command
   timer_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   timer_ = rclcpp::create_timer(
-    this, get_clock(), 1s, std::bind(&ProcessMonitor::onTimer, this), timer_callback_group_);
+    this, get_clock(), 1.0000001s, std::bind(&ProcessMonitor::onTimer, this), timer_callback_group_);
 }
 
 void ProcessMonitor::monitorProcesses(diagnostic_updater::DiagnosticStatusWrapper & stat)

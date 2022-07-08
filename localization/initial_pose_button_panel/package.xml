@@ -16,6 +16,7 @@
   <depend>qtbase5-dev</depend>
   <depend>rviz_common</depend>
   <depend>tier4_localization_msgs</depend>
+  <depend>rclcpp</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>autoware_lint_common</test_depend>

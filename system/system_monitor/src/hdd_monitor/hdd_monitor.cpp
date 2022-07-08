@@ -57,7 +57,7 @@ HDDMonitor::HDDMonitor(const rclcpp::NodeOptions & options)
   // get HDD information from HDD reader for the first time
   updateHDDInfoList();
 
-  timer_ = rclcpp::create_timer(this, get_clock(), 1s, std::bind(&HDDMonitor::onTimer, this));
+  timer_ = rclcpp::create_timer(this, get_clock(), 1.0000001s, std::bind(&HDDMonitor::onTimer, this));
 }
 
 void HDDMonitor::checkSMARTTemperature(diagnostic_updater::DiagnosticStatusWrapper & stat)
