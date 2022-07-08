@@ -89,7 +89,7 @@ RadarFusionToDetectedObject::Output RadarFusionToDetectedObject::update(
         radars_within_split_object = filterRadarWithinObject(object, radars_within_object);
       }
       // Estimate twist of object
-      if (!radars_within_split_object || !(*radars_within_split_object).empty()) {
+      if (radars_within_split_object.empty()) {
         TwistWithCovariance twist_with_covariance =
           estimateTwist(split_object, radars_within_split_object);
         double twist_yaw = tier4_autoware_utils::normalizeRadian(
