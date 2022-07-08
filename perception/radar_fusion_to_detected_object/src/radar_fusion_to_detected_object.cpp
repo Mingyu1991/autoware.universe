@@ -34,6 +34,8 @@ using tier4_autoware_utils::Point2d;
 
 void RadarFusionToDetectedObject::setParam(const Param & param)
 {
+  param_.threshold_yaw_diff = param.threshold_yaw_diff;
+  
   // Radar fusion param
   param_.bounding_box_margin = param.bounding_box_margin;
   param_.split_threshold_velocity = param.split_threshold_velocity;
@@ -89,7 +91,7 @@ RadarFusionToDetectedObject::Output RadarFusionToDetectedObject::update(
         radars_within_split_object = filterRadarWithinObject(object, radars_within_object);
       }
       // Estimate twist of object
-      if (radars_within_split_object.empty()) {
+      if (!radars_within_split_object.empty()) {
         TwistWithCovariance twist_with_covariance =
           estimateTwist(split_object, radars_within_split_object);
         double twist_yaw = tier4_autoware_utils::normalizeRadian(
@@ -99,9 +101,10 @@ RadarFusionToDetectedObject::Output RadarFusionToDetectedObject::update(
         ;
         double diff_yaw = tier4_autoware_utils::normalizeRadian(twist_yaw - object_yaw);
         if (isYawCorrect(diff_yaw, param_.threshold_yaw_diff)) {
+
           split_object.kinematics.twist_with_covariance = twist_with_covariance;
           split_object.kinematics.has_twist = true;
-        }
+	}
       }
 
       // Delete objects with low probability
