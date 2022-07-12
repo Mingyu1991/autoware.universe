@@ -434,6 +434,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
 
   PathWithLaneId path_turn_right = generateArcPath(
     Cr, R_E_r, normalizeRadian(psi + M_PI_2 + theta_l), M_PI_2, !is_forward, is_forward);
+
   for (auto & p : path_turn_right.points) {
     p.lane_ids.push_back(closest_road_lanelet.id());
     p.lane_ids.push_back(closest_shoulder_lanelet.id());
@@ -460,8 +461,8 @@ std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   // debug
   Cr_.pose = Cr;
   Cr_.header = planner_data_->route_handler->getRouteHeader();
-  Cr_.pose = Cr;
-  Cr_.header = planner_data_->route_handler->getRouteHeader();
+  Cl_.pose = Cl;
+  Cl_.header = planner_data_->route_handler->getRouteHeader();
   start_pose_.pose = start_pose;
   start_pose_.header = planner_data_->route_handler->getRouteHeader();
   arc_end_pose_.pose = arc_end_pose;

@@ -31,9 +31,7 @@
 #include <memory>
 #include <vector>
 
-namespace behavior_path_planner
-{
-namespace pull_over_utils
+namespace behavior_path_planner::pull_over_utils
 {
 using autoware_auto_perception_msgs::msg::PredictedObjects;
 using autoware_auto_perception_msgs::msg::PredictedPath;
@@ -74,7 +72,6 @@ bool hasEnoughDistance(
   const bool isInGoalRouteSection, const Pose & goal_pose,
   const lanelet::routing::RoutingGraphContainer & overall_graphs);
 bool isObjectFront(const Pose & ego_pose, const Pose & obj_pose);
-}  // namespace pull_over_utils
-}  // namespace behavior_path_planner
+}  // namespace behavior_path_planner::pull_over_utils
 
 #endif  // BEHAVIOR_PATH_PLANNER__SCENE_MODULE__PULL_OVER__UTIL_HPP_
