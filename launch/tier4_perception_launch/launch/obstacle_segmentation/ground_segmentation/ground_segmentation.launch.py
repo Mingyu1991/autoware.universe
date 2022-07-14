@@ -126,7 +126,7 @@ class GroundSegmentationPipeline:
                     {
                         "input_topics": self.ground_segmentation_param["ransac_input_topics"],
                         "output_frame": LaunchConfiguration("base_frame"),
-                        "timeout_sec": 1.000001,
+                        "timeout_sec": 1.0000001,
                     }
                 ],
                 extra_arguments=[
