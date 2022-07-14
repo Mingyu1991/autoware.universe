@@ -521,8 +521,6 @@ ObstacleAvoidancePlanner::ObstacleAvoidancePlanner(const rclcpp::NodeOptions & n
   // TODO(murooka) tune this param when avoiding with obstacle_avoidance_planner
   traj_param_.center_line_width = vehicle_param_.width;
 
-  objects_ptr_ = std::make_unique<autoware_auto_perception_msgs::msg::PredictedObjects>();
-
   // set parameter callback
   set_param_res_ = this->add_on_set_parameters_callback(
     std::bind(&ObstacleAvoidancePlanner::paramCallback, this, std::placeholders::_1));
@@ -818,7 +816,7 @@ void ObstacleAvoidancePlanner::odomCallback(const nav_msgs::msg::Odometry::Share
 void ObstacleAvoidancePlanner::objectsCallback(
   const autoware_auto_perception_msgs::msg::PredictedObjects::SharedPtr msg)
 {
-  objects_ptr_ = std::make_unique<autoware_auto_perception_msgs::msg::PredictedObjects>(*msg);
+  objects_ptr_ = msg;
 }
 
 void ObstacleAvoidancePlanner::enableAvoidanceCallback(
@@ -903,6 +901,10 @@ ObstacleAvoidancePlanner::generateOptimizedTrajectory(
 
   if (reset_prev_optimization_) {
     resetPrevOptimization();
+  }
+
+  if (!objects_ptr_) {
+    return points_utils::convertToTrajectoryPoints(path.points);
   }
 
   // return prev trajectory if replan is not required

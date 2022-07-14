@@ -192,7 +192,7 @@ private:
   std::unique_ptr<geometry_msgs::msg::Pose> prev_ego_pose_ptr_;
   std::unique_ptr<Trajectories> prev_optimal_trajs_ptr_;
   std::unique_ptr<std::vector<autoware_auto_planning_msgs::msg::PathPoint>> prev_path_points_ptr_;
-  std::unique_ptr<autoware_auto_perception_msgs::msg::PredictedObjects> objects_ptr_;
+  autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr objects_ptr_{nullptr};
 
   std::unique_ptr<rclcpp::Time> latest_replanned_time_ptr_;
   tier4_autoware_utils::SelfPoseListener self_pose_listener_{this};
