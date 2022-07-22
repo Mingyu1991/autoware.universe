@@ -126,7 +126,8 @@ public:
 
   explicit Filter(
     const std::string & filter_name = "pointcloud_preprocessor_filter",
-    const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+    const rclcpp::NodeOptions & options = rclcpp::NodeOptions(),
+    bool enable_subscribe = true);
 
 protected:
   /** \brief The input PointCloud2 subscriber. */

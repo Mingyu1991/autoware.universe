@@ -37,9 +37,9 @@ namespace compare_map_segmentation
 {
 CompareElevationMapFilterComponent::CompareElevationMapFilterComponent(
   const rclcpp::NodeOptions & options)
-: Filter("CompareElevationMapFilter", options)
+: Filter("CompareElevationMapFilter", options, false)
 {
-  unsubscribe();
+  // unsubscribe();
   layer_name_ = this->declare_parameter("map_layer_name", std::string("elevation"));
   height_diff_thresh_ = this->declare_parameter("height_diff_thresh", 0.15);
   map_frame_ = this->declare_parameter("map_frame", "map");

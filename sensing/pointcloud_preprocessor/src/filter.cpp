@@ -62,7 +62,7 @@
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 pointcloud_preprocessor::Filter::Filter(
-  const std::string & filter_name, const rclcpp::NodeOptions & options)
+  const std::string & filter_name, const rclcpp::NodeOptions & options, bool enable_subscribe)
 : Node(filter_name, options), filter_field_name_(filter_name)
 {
   // Set parameters (moved from NodeletLazy onInit)
@@ -92,7 +92,10 @@ pointcloud_preprocessor::Filter::Filter(
       "output", rclcpp::SensorDataQoS().keep_last(max_queue_size_));
   }
 
-  subscribe();
+  if (enable_subscribe)
+  {
+    subscribe();
+  }
 
   // Set tf_listener, tf_buffer.
   setupTF();
