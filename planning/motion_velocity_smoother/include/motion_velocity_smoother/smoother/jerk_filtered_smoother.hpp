@@ -15,10 +15,10 @@
 #ifndef MOTION_VELOCITY_SMOOTHER__SMOOTHER__JERK_FILTERED_SMOOTHER_HPP_
 #define MOTION_VELOCITY_SMOOTHER__SMOOTHER__JERK_FILTERED_SMOOTHER_HPP_
 
+#include "motion_utils/trajectory/trajectory.hpp"
 #include "motion_velocity_smoother/smoother/smoother_base.hpp"
 #include "osqp_interface/osqp_interface.hpp"
 #include "tier4_autoware_utils/geometry/geometry.hpp"
-#include "tier4_autoware_utils/trajectory/trajectory.hpp"
 
 #include "autoware_auto_planning_msgs/msg/trajectory_point.hpp"
 
@@ -40,7 +40,7 @@ public:
     double jerk_filter_ds;
   };
 
-  explicit JerkFilteredSmoother(const Param & p);
+  explicit JerkFilteredSmoother(rclcpp::Node & node);
 
   bool apply(
     const double initial_vel, const double initial_acc, const TrajectoryPoints & input,
@@ -50,6 +50,7 @@ public:
     const TrajectoryPoints & input, const double v_current, const int closest_id) const override;
 
   void setParam(const Param & param);
+  Param getParam() const;
 
 private:
   Param smoother_param_;

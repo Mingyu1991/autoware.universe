@@ -61,7 +61,7 @@ TEST(spline_interpolation, slerp)
     }
   }
 
-  {  // curve: query_keys is same as random
+  {  // curve: query_keys is random
     const std::vector<double> base_keys{-1.5, 1.0, 5.0, 10.0, 15.0, 20.0};
     const std::vector<double> base_values{-1.2, 0.5, 1.0, 1.2, 2.0, 1.0};
     const std::vector<double> query_keys{0.0, 8.0, 18.0};
@@ -90,6 +90,18 @@ TEST(spline_interpolation, slerp)
     const std::vector<double> base_values{0.0, 1.5, 3.0};
     const std::vector<double> query_keys = base_keys;
     const std::vector<double> ans = base_values;
+
+    const auto query_values = interpolation::slerp(base_keys, base_values, query_keys);
+    for (size_t i = 0; i < query_values.size(); ++i) {
+      EXPECT_NEAR(query_values.at(i), ans.at(i), epsilon);
+    }
+  }
+
+  {  // curve: query_keys is random. size of base_keys is 3 (edge case in the implementation)
+    const std::vector<double> base_keys{-1.5, 1.0, 5.0};
+    const std::vector<double> base_values{-1.2, 0.5, 1.0};
+    const std::vector<double> query_keys{-1.0, 0.0, 4.0};
+    const std::vector<double> ans{-0.808769, -0.077539, 1.035096};
 
     const auto query_values = interpolation::slerp(base_keys, base_values, query_keys);
     for (size_t i = 0; i < query_values.size(); ++i) {
@@ -271,4 +283,30 @@ TEST(spline_interpolation, SplineInterpolationPoints2d)
   std::vector<geometry_msgs::msg::Point> single_points;
   single_points.push_back(createPoint(1.0, 0.0, 0.0));
   EXPECT_THROW(s.calcSplineCoefficients(single_points), std::logic_error);
+}
+
+TEST(spline_interpolation, SplineInterpolationPoints2dPolymorphism)
+{
+  using autoware_auto_planning_msgs::msg::TrajectoryPoint;
+  using tier4_autoware_utils::createPoint;
+
+  std::vector<geometry_msgs::msg::Point> points;
+  points.push_back(createPoint(-2.0, -10.0, 0.0));
+  points.push_back(createPoint(2.0, 1.5, 0.0));
+  points.push_back(createPoint(3.0, 3.0, 0.0));
+
+  std::vector<TrajectoryPoint> trajectory_points;
+  for (const auto & p : points) {
+    TrajectoryPoint tp;
+    tp.pose.position = p;
+    trajectory_points.push_back(tp);
+  }
+
+  SplineInterpolationPoints2d s_point;
+  s_point.calcSplineCoefficients(points);
+  s_point.getSplineInterpolatedPoint(0, 0.);
+
+  SplineInterpolationPoints2d s_traj_point;
+  s_traj_point.calcSplineCoefficients(trajectory_points);
+  s_traj_point.getSplineInterpolatedPoint(0, 0.);
 }

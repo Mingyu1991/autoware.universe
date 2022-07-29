@@ -241,6 +241,20 @@ lanelet::ConstPolygons3d query::getAllParkingLots(
   return parking_lots;
 }
 
+lanelet::ConstLineStrings3d query::getAllPartitions(
+  const lanelet::LaneletMapConstPtr & lanelet_map_ptr)
+{
+  lanelet::ConstLineStrings3d partitions;
+  for (const auto & ls : lanelet_map_ptr->lineStringLayer) {
+    const std::string type = ls.attributeOr(lanelet::AttributeName::Type, "none");
+    if (
+      type.compare("guard_rail") == 0 || type.compare("fence") == 0 || type.compare("wall") == 0) {
+      partitions.push_back(ls);
+    }
+  }
+  return partitions;
+}
+
 lanelet::ConstLineStrings3d query::getAllPedestrianMarkings(
   const lanelet::LaneletMapConstPtr & lanelet_map_ptr)
 {
@@ -428,6 +442,22 @@ bool query::getLinkedParkingLot(
   for (const auto & parking_lot : all_parking_lots) {
     const double distance = boost::geometry::distance(
       lanelet.polygon2d().basicPolygon(), to2D(parking_lot).basicPolygon());
+    if (distance < std::numeric_limits<double>::epsilon()) {
+      *linked_parking_lot = parking_lot;
+      return true;
+    }
+  }
+  return false;
+}
+
+// get overlapping parking lot
+bool query::getLinkedParkingLot(
+  const lanelet::BasicPoint2d & current_position, const lanelet::ConstPolygons3d & all_parking_lots,
+  lanelet::ConstPolygon3d * linked_parking_lot)
+{
+  for (const auto & parking_lot : all_parking_lots) {
+    const double distance =
+      boost::geometry::distance(current_position, to2D(parking_lot).basicPolygon());
     if (distance < std::numeric_limits<double>::epsilon()) {
       *linked_parking_lot = parking_lot;
       return true;
@@ -725,6 +755,30 @@ bool query::getClosestLanelet(
   }
 
   return found;
+}
+
+bool query::getCurrentLanelets(
+  const ConstLanelets & lanelets, const geometry_msgs::msg::Pose & search_pose,
+  ConstLanelets * current_lanelets_ptr)
+{
+  if (current_lanelets_ptr == nullptr) {
+    std::cerr << "argument closest_lanelet_ptr is null! Failed to find closest lanelet"
+              << std::endl;
+    return false;
+  }
+
+  if (lanelets.empty()) {
+    return false;
+  }
+
+  lanelet::BasicPoint2d search_point(search_pose.position.x, search_pose.position.y);
+  for (const auto & llt : lanelets) {
+    if (lanelet::geometry::inside(llt, search_point)) {
+      current_lanelets_ptr->push_back(llt);
+    }
+  }
+
+  return !current_lanelets_ptr->empty();  // return found
 }
 
 std::vector<std::deque<lanelet::ConstLanelet>> getSucceedingLaneletSequencesRecursive(

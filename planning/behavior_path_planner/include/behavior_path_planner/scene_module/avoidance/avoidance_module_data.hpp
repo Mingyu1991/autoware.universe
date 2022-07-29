@@ -15,7 +15,7 @@
 #ifndef BEHAVIOR_PATH_PLANNER__SCENE_MODULE__AVOIDANCE__AVOIDANCE_MODULE_DATA_HPP_
 #define BEHAVIOR_PATH_PLANNER__SCENE_MODULE__AVOIDANCE__AVOIDANCE_MODULE_DATA_HPP_
 
-#include "behavior_path_planner/path_shifter/path_shifter.hpp"
+#include "behavior_path_planner/scene_module/utils/path_shifter.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -134,7 +134,7 @@ struct AvoidanceParameters
   // For the compensation of the detection lost. Once an object is observed, it is registered and
   // will be used for planning from the next time. If the object is not observed, it counts up the
   // lost_count and the registered object will be removed when the count exceeds this max count.
-  int object_hold_max_count;
+  double object_last_seen_threshold;
 
   // For velocity planning to avoid acceleration during avoidance.
   // Speeds smaller than this are not inserted.
@@ -148,6 +148,24 @@ struct AvoidanceParameters
   // turn signal is not turned on.
   double avoidance_search_distance;
 
+  // The avoidance path generation is performed when the shift distance of the
+  // avoidance points is greater than this threshold.
+  // In multiple targets case: if there are multiple vehicles in a row to be avoided, no new
+  // avoidance path will be generated unless their lateral margin difference exceeds this value.
+  double avoidance_execution_lateral_threshold;
+
+  // true by default
+  bool avoid_car{true};      // avoidance is performed for type object car
+  bool avoid_truck{true};    // avoidance is performed for type object truck
+  bool avoid_bus{true};      // avoidance is performed for type object bus
+  bool avoid_trailer{true};  // avoidance is performed for type object trailer
+
+  // false by default
+  bool avoid_unknown{false};     // avoidance is performed for type object unknown
+  bool avoid_bicycle{false};     // avoidance is performed for type object bicycle
+  bool avoid_motorcycle{false};  // avoidance is performed for type object motorbike
+  bool avoid_pedestrian{false};  // avoidance is performed for type object pedestrian
+
   // debug
   bool publish_debug_marker = false;
   bool print_debug_info = false;
@@ -156,8 +174,8 @@ struct AvoidanceParameters
 struct ObjectData  // avoidance target
 {
   ObjectData() = default;
-  ObjectData(const PredictedObject & obj, double lat, double lon, double overhang)
-  : object(obj), lateral(lat), longitudinal(lon), overhang_dist(overhang)
+  ObjectData(const PredictedObject & obj, double lat, double lon, double len, double overhang)
+  : object(obj), lateral(lat), longitudinal(lon), length(len), overhang_dist(overhang)
   {
   }
 
@@ -169,11 +187,15 @@ struct ObjectData  // avoidance target
   // longitudinal position of the CoM, in Frenet coordinate from ego-pose
   double longitudinal;
 
+  // longitudinal length of vehicle, in Frenet coordinate
+  double length;
+
   // lateral distance to the closest footprint, in Frenet coordinate
   double overhang_dist;
 
   // count up when object disappeared. Removed when it exceeds threshold.
-  int lost_count = 0;
+  rclcpp::Time last_seen;
+  double lost_time{0.0};
 
   // store the information of the lanelet which the object's overhang is currently occupying
   lanelet::ConstLanelet overhang_lanelet;

@@ -26,9 +26,15 @@
 
 namespace motion_velocity_smoother
 {
-JerkFilteredSmoother::JerkFilteredSmoother(const Param & smoother_param)
-: smoother_param_{smoother_param}
+JerkFilteredSmoother::JerkFilteredSmoother(rclcpp::Node & node) : SmootherBase(node)
 {
+  auto & p = smoother_param_;
+  p.jerk_weight = node.declare_parameter("jerk_weight", 10.0);
+  p.over_v_weight = node.declare_parameter("over_v_weight", 100000.0);
+  p.over_a_weight = node.declare_parameter("over_a_weight", 5000.0);
+  p.over_j_weight = node.declare_parameter("over_j_weight", 2000.0);
+  p.jerk_filter_ds = node.declare_parameter("jerk_filter_ds", 0.1);
+
   qp_solver_.updateMaxIter(20000);
   qp_solver_.updateRhoInterval(0);  // 0 means automatic
   qp_solver_.updateEpsRel(1.0e-4);  // def: 1.0e-4
@@ -40,6 +46,8 @@ void JerkFilteredSmoother::setParam(const Param & smoother_param)
 {
   smoother_param_ = smoother_param;
 }
+
+JerkFilteredSmoother::Param JerkFilteredSmoother::getParam() const { return smoother_param_; }
 
 bool JerkFilteredSmoother::apply(
   const double v0, const double a0, const TrajectoryPoints & input, TrajectoryPoints & output,
@@ -115,7 +123,7 @@ bool JerkFilteredSmoother::apply(
 
   // to avoid getting 0 as a stop point, search zero velocity index from 1.
   // the size of the resampled trajectory must not be less than 2.
-  const auto zero_vel_id = tier4_autoware_utils::searchZeroVelocityIndex(
+  const auto zero_vel_id = motion_utils::searchZeroVelocityIndex(
     *opt_resampled_trajectory, 1, opt_resampled_trajectory->size());
 
   if (!zero_vel_id) {

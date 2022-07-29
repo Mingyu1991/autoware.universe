@@ -44,6 +44,7 @@
 #include <tier4_planning_msgs/msg/path_change_module.hpp>
 #include <tier4_planning_msgs/msg/path_change_module_array.hpp>
 #include <tier4_planning_msgs/msg/path_change_module_id.hpp>
+#include <tier4_planning_msgs/msg/scenario.hpp>
 #include <tier4_planning_msgs/msg/stop_reason_array.hpp>
 
 #include <lanelet2_core/LaneletMap.h>
@@ -51,6 +52,7 @@
 #include <lanelet2_traffic_rules/TrafficRulesFactory.h>
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -73,6 +75,7 @@ using tier4_planning_msgs::msg::AvoidanceDebugMsg;
 using tier4_planning_msgs::msg::AvoidanceDebugMsgArray;
 using tier4_planning_msgs::msg::PathChangeModule;
 using tier4_planning_msgs::msg::PathChangeModuleArray;
+using tier4_planning_msgs::msg::Scenario;
 using visualization_msgs::msg::MarkerArray;
 
 class BehaviorPathPlannerNode : public rclcpp::Node
@@ -84,14 +87,11 @@ private:
   rclcpp::Subscription<HADMapRoute>::SharedPtr route_subscriber_;
   rclcpp::Subscription<HADMapBin>::SharedPtr vector_map_subscriber_;
   rclcpp::Subscription<Odometry>::SharedPtr velocity_subscriber_;
+  rclcpp::Subscription<Scenario>::SharedPtr scenario_subscriber_;
   rclcpp::Subscription<PredictedObjects>::SharedPtr perception_subscriber_;
-  rclcpp::Subscription<ApprovalMsg>::SharedPtr external_approval_subscriber_;
-  rclcpp::Subscription<PathChangeModule>::SharedPtr force_approval_subscriber_;
+  rclcpp::Subscription<OccupancyGrid>::SharedPtr occupancy_grid_subscriber_;
   rclcpp::Publisher<PathWithLaneId>::SharedPtr path_publisher_;
   rclcpp::Publisher<Path>::SharedPtr path_candidate_publisher_;
-  rclcpp::Publisher<PathChangeModuleArray>::SharedPtr force_available_publisher_;
-  rclcpp::Publisher<PathChangeModule>::SharedPtr plan_ready_publisher_;
-  rclcpp::Publisher<PathChangeModuleArray>::SharedPtr plan_running_publisher_;
   rclcpp::Publisher<TurnIndicatorsCommand>::SharedPtr turn_signal_publisher_;
   rclcpp::Publisher<HazardLightsCommand>::SharedPtr hazard_signal_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
@@ -99,8 +99,7 @@ private:
   std::shared_ptr<PlannerData> planner_data_;
   std::shared_ptr<BehaviorTreeManager> bt_manager_;
   tier4_autoware_utils::SelfPoseListener self_pose_listener_{this};
-
-  std::string prev_ready_module_name_ = "NONE";
+  Scenario::SharedPtr current_scenario_{nullptr};
 
   TurnSignalDecider turn_signal_decider_;
 
@@ -123,6 +122,7 @@ private:
   // callback
   void onVelocity(const Odometry::ConstSharedPtr msg);
   void onPerception(const PredictedObjects::ConstSharedPtr msg);
+  void onOccupancyGrid(const OccupancyGrid::ConstSharedPtr msg);
   void onExternalApproval(const ApprovalMsg::ConstSharedPtr msg);
   void onForceApproval(const PathChangeModule::ConstSharedPtr msg);
   void onMap(const HADMapBin::ConstSharedPtr map_msg);
@@ -154,16 +154,16 @@ private:
     const BehaviorModuleOutput & bt_out, const std::shared_ptr<PlannerData> planner_data);
 
   /**
-   * @brief publish behavior module status mainly for the user interface
+   * @brief skip smooth goal connection
    */
-  void publishModuleStatus(
-    const std::vector<std::shared_ptr<SceneModuleStatus>> & statuses,
-    const std::shared_ptr<PlannerData> planner_data);
+  bool skipSmoothGoalConnection(
+    const std::vector<std::shared_ptr<SceneModuleStatus>> & statuses) const;
 
   // debug
 
 private:
   rclcpp::Publisher<OccupancyGrid>::SharedPtr debug_drivable_area_publisher_;
+  rclcpp::Publisher<MarkerArray>::SharedPtr debug_drivable_area_lanelets_publisher_;
   rclcpp::Publisher<Path>::SharedPtr debug_path_publisher_;
   rclcpp::Publisher<AvoidanceDebugMsgArray>::SharedPtr debug_avoidance_msg_array_publisher_;
   rclcpp::Publisher<MarkerArray>::SharedPtr debug_marker_publisher_;

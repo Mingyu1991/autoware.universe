@@ -18,6 +18,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <scene_module/occlusion_spot/occlusion_spot_utils.hpp>
 #include <scene_module/scene_module_interface.hpp>
+#include <tier4_autoware_utils/system/stop_watch.hpp>
 #include <utilization/boost_geometry_helper.hpp>
 
 #include <autoware_auto_perception_msgs/msg/predicted_object.hpp>
@@ -40,24 +41,13 @@ namespace behavior_velocity_planner
 class OcclusionSpotModule : public SceneModuleInterface
 {
   using PlannerParam = occlusion_spot_utils::PlannerParam;
+  using DebugData = occlusion_spot_utils::DebugData;
 
 public:
-  struct DebugData
-  {
-    double z;
-    std::string road_type = "occupancy";
-    std::vector<lanelet::BasicPolygon2d> detection_areas;
-    std::vector<occlusion_spot_utils::PossibleCollisionInfo> possible_collisions;
-    std::vector<geometry_msgs::msg::Point> occlusion_points;
-    PathWithLaneId path_raw;
-    PathWithLaneId interp_path;
-  };
-
   OcclusionSpotModule(
-    const int64_t module_id, std::shared_ptr<const PlannerData> planner_data,
-    const PlannerParam & planner_param, const rclcpp::Logger logger,
-    const rclcpp::Clock::SharedPtr clock,
-    const rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr publisher);
+    const int64_t module_id, const std::shared_ptr<const PlannerData> & planner_data,
+    const PlannerParam & planner_param, const rclcpp::Logger & logger,
+    const rclcpp::Clock::SharedPtr clock);
 
   /**
    * @brief plan occlusion spot velocity at unknown area in occupancy grid
@@ -66,16 +56,16 @@ public:
     autoware_auto_planning_msgs::msg::PathWithLaneId * path,
     tier4_planning_msgs::msg::StopReason * stop_reason) override;
   visualization_msgs::msg::MarkerArray createDebugMarkerArray() override;
+  visualization_msgs::msg::MarkerArray createVirtualWallMarkerArray() override;
 
 private:
-  autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr predicted_objects_array_;
-  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr publisher_;
-
   // Parameter
   PlannerParam param_;
+  tier4_autoware_utils::StopWatch<std::chrono::milliseconds> stop_watch_;
+  std::vector<lanelet::BasicPolygon2d> partition_lanelets_;
 
 protected:
-  int64_t module_id_;
+  int64_t module_id_{};
 
   // Debug
   mutable DebugData debug_data_;

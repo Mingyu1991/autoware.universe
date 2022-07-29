@@ -62,13 +62,38 @@ bool applyMaxVelocity(
 
 namespace motion_velocity_smoother
 {
-AnalyticalJerkConstrainedSmoother::AnalyticalJerkConstrainedSmoother(const Param & smoother_param)
-: smoother_param_(smoother_param)
+AnalyticalJerkConstrainedSmoother::AnalyticalJerkConstrainedSmoother(rclcpp::Node & node)
+: SmootherBase(node)
 {
+  auto & p = smoother_param_;
+  p.resample.ds_resample = node.declare_parameter("resample.ds_resample", 0.1);
+  p.resample.num_resample = node.declare_parameter("resample.num_resample", 1);
+  p.resample.delta_yaw_threshold = node.declare_parameter("resample.delta_yaw_threshold", 0.785);
+  p.latacc.enable_constant_velocity_while_turning =
+    node.declare_parameter("latacc.enable_constant_velocity_while_turning", false);
+  p.latacc.constant_velocity_dist_threshold =
+    node.declare_parameter("latacc.constant_velocity_dist_threshold", 2.0);
+  p.forward.max_acc = node.declare_parameter("forward.max_acc", 1.0);
+  p.forward.min_acc = node.declare_parameter("forward.min_acc", -1.0);
+  p.forward.max_jerk = node.declare_parameter("forward.max_jerk", 0.3);
+  p.forward.min_jerk = node.declare_parameter("forward.min_jerk", -0.3);
+  p.forward.kp = node.declare_parameter("forward.kp", 0.3);
+  p.backward.start_jerk = node.declare_parameter("backward.start_jerk", -0.1);
+  p.backward.min_jerk_mild_stop = node.declare_parameter("backward.min_jerk_mild_stop", -0.3);
+  p.backward.min_jerk = node.declare_parameter("backward.min_jerk", -1.5);
+  p.backward.min_acc_mild_stop = node.declare_parameter("backward.min_acc_mild_stop", -1.0);
+  p.backward.min_acc = node.declare_parameter("backward.min_acc", -2.5);
+  p.backward.span_jerk = node.declare_parameter("backward.span_jerk", -0.01);
 }
+
 void AnalyticalJerkConstrainedSmoother::setParam(const Param & smoother_param)
 {
   smoother_param_ = smoother_param;
+}
+
+AnalyticalJerkConstrainedSmoother::Param AnalyticalJerkConstrainedSmoother::getParam() const
+{
+  return smoother_param_;
 }
 
 bool AnalyticalJerkConstrainedSmoother::apply(
@@ -227,7 +252,7 @@ boost::optional<TrajectoryPoints> AnalyticalJerkConstrainedSmoother::resampleTra
       continue;
     }
 
-    for (size_t j = 0; j < smoother_param_.resample.num_resample; ++j) {
+    for (size_t j = 0; j < static_cast<size_t>(smoother_param_.resample.num_resample); ++j) {
       auto tp = input.at(i);
 
       tp.pose = lerpByPose(tp0.pose, tp1.pose, s);
@@ -248,7 +273,8 @@ boost::optional<TrajectoryPoints> AnalyticalJerkConstrainedSmoother::resampleTra
 }
 
 boost::optional<TrajectoryPoints> AnalyticalJerkConstrainedSmoother::applyLateralAccelerationFilter(
-  const TrajectoryPoints & input) const
+  const TrajectoryPoints & input, [[maybe_unused]] const double v0,
+  [[maybe_unused]] const double a0, [[maybe_unused]] const bool enable_smooth_limit) const
 {
   if (input.empty()) {
     return boost::none;
@@ -278,9 +304,6 @@ boost::optional<TrajectoryPoints> AnalyticalJerkConstrainedSmoother::applyLatera
 
   // Calculate curvature assuming the trajectory points interval is constant
   const auto curvature_v = trajectory_utils::calcTrajectoryCurvatureFrom3Points(*output, idx_dist);
-  if (!curvature_v) {
-    return boost::optional<TrajectoryPoints>(input);
-  }
 
   // Decrease speed according to lateral G
   const size_t before_decel_index =
@@ -295,7 +318,7 @@ boost::optional<TrajectoryPoints> AnalyticalJerkConstrainedSmoother::applyLatera
     const size_t start = i > before_decel_index ? i - before_decel_index : 0;
     const size_t end = std::min(output->size(), i + after_decel_index);
     for (size_t j = start; j < end; ++j) {
-      curvature = std::max(curvature, std::fabs(curvature_v->at(j)));
+      curvature = std::max(curvature, std::fabs(curvature_v.at(j)));
     }
     double v_curvature_max = std::sqrt(max_lateral_accel_abs / std::max(curvature, 1.0E-5));
     v_curvature_max = std::max(v_curvature_max, base_param_.min_curve_velocity);

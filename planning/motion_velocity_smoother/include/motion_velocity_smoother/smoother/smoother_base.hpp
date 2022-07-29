@@ -15,11 +15,11 @@
 #ifndef MOTION_VELOCITY_SMOOTHER__SMOOTHER__SMOOTHER_BASE_HPP_
 #define MOTION_VELOCITY_SMOOTHER__SMOOTHER__SMOOTHER_BASE_HPP_
 
+#include "motion_utils/trajectory/trajectory.hpp"
 #include "motion_velocity_smoother/resample.hpp"
 #include "motion_velocity_smoother/trajectory_utils.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "tier4_autoware_utils/geometry/geometry.hpp"
-#include "tier4_autoware_utils/trajectory/trajectory.hpp"
 
 #include "autoware_auto_planning_msgs/msg/trajectory_point.hpp"
 
@@ -50,6 +50,7 @@ public:
     resampling::ResampleParam resample_param;
   };
 
+  explicit SmootherBase(rclcpp::Node & node);
   virtual ~SmootherBase() = default;
   virtual bool apply(
     const double initial_vel, const double initial_acc, const TrajectoryPoints & input,
@@ -59,7 +60,9 @@ public:
     const TrajectoryPoints & input, const double v_current, const int closest_id) const = 0;
 
   virtual boost::optional<TrajectoryPoints> applyLateralAccelerationFilter(
-    const TrajectoryPoints & input) const;
+    const TrajectoryPoints & input, [[maybe_unused]] const double v0 = 0.0,
+    [[maybe_unused]] const double a0 = 0.0,
+    [[maybe_unused]] const bool enable_smooth_limit = false) const;
 
   double getMaxAccel() const;
   double getMinDecel() const;
@@ -67,6 +70,7 @@ public:
   double getMinJerk() const;
 
   void setParam(const BaseParam & param);
+  BaseParam getBaseParam() const;
 
 protected:
   BaseParam base_param_;

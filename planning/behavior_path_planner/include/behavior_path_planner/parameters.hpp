@@ -15,6 +15,8 @@
 #ifndef BEHAVIOR_PATH_PLANNER__PARAMETERS_HPP_
 #define BEHAVIOR_PATH_PLANNER__PARAMETERS_HPP_
 
+#include <vehicle_info_util/vehicle_info_util.hpp>
+
 struct BehaviorPathPlannerParameters
 {
   double backward_path_length;
@@ -38,6 +40,7 @@ struct BehaviorPathPlannerParameters
   double turn_light_on_threshold_time;
 
   // vehicle info
+  vehicle_info_util::VehicleInfo vehicle_info;
   double wheel_base;
   double front_overhang;
   double rear_overhang;
@@ -48,6 +51,9 @@ struct BehaviorPathPlannerParameters
   double right_over_hang;
   double base_link2front;
   double base_link2rear;
+
+  // drivable area visualization
+  bool visualize_drivable_area_for_shared_linestrings_lanelet;
 };
 
 #endif  // BEHAVIOR_PATH_PLANNER__PARAMETERS_HPP_

@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>lane_departure_checker</name>
   <version>0.1.0</version>
   <description>The lane_departure_checker package</description>
@@ -8,6 +9,8 @@
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
+  <build_depend>autoware_cmake</build_depend>
+
   <depend>autoware_auto_mapping_msgs</depend>
   <depend>autoware_auto_planning_msgs</depend>
   <depend>boost</depend>
@@ -15,6 +18,7 @@
   <depend>eigen</depend>
   <depend>geometry_msgs</depend>
   <depend>lanelet2_extension</depend>
+  <depend>motion_utils</depend>
   <depend>nav_msgs</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>

@@ -18,7 +18,7 @@ In other words, the output trajectory doesn't include both forward and backward 
 | `~input/route`          | autoware_auto_planning_msgs::Route | route and goal pose                                       |
 | `~input/occupancy_grid` | nav_msgs::OccupancyGrid            | costmap, for drivable areas                               |
 | `~input/odometry`       | nav_msgs::Odometry                 | vehicle velocity, for checking whether vehicle is stopped |
-| `~input/scenario`       | tier4_planning_msgs::Scenario   | scenarios to be activated, for node activation            |
+| `~input/scenario`       | tier4_planning_msgs::Scenario      | scenarios to be activated, for node activation            |
 
 ### Output topics
 
@@ -48,6 +48,7 @@ None
 | `th_stopped_time_sec`        | double | threshold time to check if vehicle is stopped                                   |
 | `th_stopped_velocity_mps`    | double | threshold velocity to check if vehicle is stopped                               |
 | `th_course_out_distance_m`   | double | threshold distance to check if vehicle is out of course                         |
+| `vehicle_shape_margin_m`     | double | vehicle margin                                                                  |
 | `replan_when_obstacle_found` | bool   | whether replanning when obstacle has found on the trajectory                    |
 | `replan_when_course_out`     | bool   | whether replanning when vehicle is out of course                                |
 

@@ -30,7 +30,7 @@ LaneFollowingModule::LaneFollowingModule(
 
 void LaneFollowingModule::initParam()
 {
-  approval_handler_.clearWaitApproval();  // no need approval
+  clearWaitingApproval();  // no need approval
 }
 
 bool LaneFollowingModule::isExecutionRequested() const { return true; }
@@ -49,7 +49,10 @@ BehaviorModuleOutput LaneFollowingModule::plan()
   output.path = std::make_shared<PathWithLaneId>(getReferencePath());
   return output;
 }
-PathWithLaneId LaneFollowingModule::planCandidate() const { return getReferencePath(); }
+CandidateOutput LaneFollowingModule::planCandidate() const
+{
+  return CandidateOutput(getReferencePath());
+}
 void LaneFollowingModule::onEntry()
 {
   initParam();
@@ -81,7 +84,8 @@ PathWithLaneId LaneFollowingModule::getReferencePath() const
 
   lanelet::ConstLanelet current_lane;
   if (!planner_data_->route_handler->getClosestLaneletWithinRoute(current_pose, &current_lane)) {
-    RCLCPP_ERROR(getLogger(), "failed to find closest lanelet within route!!!");
+    RCLCPP_ERROR_THROTTLE(
+      getLogger(), *clock_, 5000, "failed to find closest lanelet within route!!!");
     return reference_path;  // TODO(Horibe)
   }
 
@@ -97,11 +101,22 @@ PathWithLaneId LaneFollowingModule::getReferencePath() const
     *route_handler, current_lanes, current_pose, p.backward_path_length, p.forward_path_length, p);
 
   {
+    double optional_lengths{0.0};
+    const auto isInIntersection = util::checkLaneIsInIntersection(
+      *route_handler, reference_path, current_lanes, optional_lengths);
+
+    if (isInIntersection) {
+      reference_path = util::getCenterLinePath(
+        *route_handler, current_lanes, current_pose, p.backward_path_length, p.forward_path_length,
+        p, optional_lengths);
+    }
+
     // buffer for min_lane_change_length
-    const double buffer = p.backward_length_buffer_for_end_of_lane;
+    const double buffer = p.backward_length_buffer_for_end_of_lane + optional_lengths;
     const int num_lane_change =
       std::abs(route_handler->getNumLaneToPreferredLane(current_lanes.back()));
     const double lane_change_buffer = num_lane_change * (p.minimum_lane_change_length + buffer);
+
     reference_path = util::setDecelerationVelocity(
       *route_handler, reference_path, current_lanes, parameters_.lane_change_prepare_duration,
       lane_change_buffer);
