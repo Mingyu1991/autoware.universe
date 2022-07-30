@@ -137,9 +137,9 @@ Point lerpByLength(const std::vector<Point> & array, const double length);
 
 bool lerpByTimeStamp(const PredictedPath & path, const double t, Pose * lerped_pt);
 
-bool lerpByDistance(
-  const behavior_path_planner::PullOutPath & path, const double & s, Pose * lerped_pt,
-  const lanelet::ConstLanelets & road_lanes);
+// bool lerpByDistance(
+//   const behavior_path_planner::PullOutPath & path, const double & s, Pose * lerped_pt,
+//   const lanelet::ConstLanelets & road_lanes);
 
 bool calcObjectPolygon(const PredictedObject & object, Polygon2d * object_polygon);
 
@@ -154,16 +154,32 @@ double getDistanceBetweenPredictedPathAndObject(
   const PredictedObject & object, const PredictedPath & path, const double start_time,
   const double end_time, const double resolution);
 
-double getDistanceBetweenPredictedPathAndObjectPolygon(
-  const PredictedObject & object, const PullOutPath & ego_path,
-  const tier4_autoware_utils::LinearRing2d & vehicle_footprint, double distance_resolution,
-  const lanelet::ConstLanelets & road_lanes);
+// double getDistanceBetweenPredictedPathAndObjectPolygon(
+//   const PredictedObject & object, const PullOutPath & ego_path,
+//   const tier4_autoware_utils::LinearRing2d & vehicle_footprint, double distance_resolution,
+//   const lanelet::ConstLanelets & road_lanes);
+
+/**
+ * @brief Check collision between ego path footprints and objects.
+ * @return Has collision or not
+ */
+bool checkCollisionBetweenPathFootprintsAndObjects(
+  const tier4_autoware_utils::LinearRing2d & vehicle_footprint, const PathWithLaneId & ego_path,
+  const PredictedObjects & dynamic_objects, const double margin);
+
+/**
+ * @brief Check collision between ego footprints and objects.
+ * @return Has collision or not
+ */
+bool checkCollisionBetweenFootprintAndObjects(
+  const tier4_autoware_utils::LinearRing2d & vehicle_footprint, const Pose & ego_pose,
+  const PredictedObjects & dynamic_objects, const double margin);
 
 /**
  * @brief Get index of the obstacles inside the lanelets with start and end length
  * @return Indices corresponding to the obstacle inside the lanelets
  */
-std::vector<size_t> filterObjectsByLanelets(
+std::vector<size_t> filterObjectIndicesByLanelets(
   const PredictedObjects & objects, const lanelet::ConstLanelets & lanelets,
   const double start_arc_length, const double end_arc_length);
 
@@ -171,7 +187,10 @@ std::vector<size_t> filterObjectsByLanelets(
  * @brief Get index of the obstacles inside the lanelets
  * @return Indices corresponding to the obstacle inside the lanelets
  */
-std::vector<size_t> filterObjectsByLanelets(
+std::vector<size_t> filterObjectIndicesByLanelets(
+  const PredictedObjects & objects, const lanelet::ConstLanelets & target_lanelets);
+
+PredictedObjects filterObjectsByLanelets(
   const PredictedObjects & objects, const lanelet::ConstLanelets & target_lanelets);
 
 std::vector<size_t> filterObjectsByPath(
