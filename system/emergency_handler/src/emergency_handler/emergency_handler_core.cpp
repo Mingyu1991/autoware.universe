@@ -132,6 +132,8 @@ void EmergencyHandler::publishControlCommands()
     autoware_auto_control_msgs::msg::AckermannControlCommand msg;
     msg = selectAlternativeControlCommand();
     msg.stamp = stamp;
+    msg.lateral.stamp = stamp;
+    msg.longitudinal.stamp = stamp;
     pub_control_command_->publish(msg);
   }
 
@@ -139,10 +141,14 @@ void EmergencyHandler::publishControlCommands()
   pub_hazard_cmd_->publish(createHazardCmdMsg());
 
   // Publish gear
-  if (param_.use_parking_after_stopped && isStopped()) {
+  {
     GearCommand msg;
     msg.stamp = stamp;
-    msg.command = GearCommand::PARK;
+    if (param_.use_parking_after_stopped && isStopped()) {
+      msg.command = GearCommand::PARK;
+    } else {
+      msg.command = GearCommand::DRIVE;
+    }
     pub_gear_cmd_->publish(msg);
   }
 

@@ -14,22 +14,24 @@
 #ifndef OBJECT_DETECTION__OBJECT_POLYGON_DISPLAY_BASE_HPP_
 #define OBJECT_DETECTION__OBJECT_POLYGON_DISPLAY_BASE_HPP_
 
-#include <autoware_auto_perception_msgs/msg/object_classification.hpp>
-#include <bitset>
 #include <common/color_alpha_property.hpp>
-#include <list>
-#include <memory>
 #include <object_detection/object_polygon_detail.hpp>
 #include <rviz_common/display.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/float_property.hpp>
 #include <rviz_default_plugins/displays/marker/marker_common.hpp>
 #include <rviz_default_plugins/displays/marker_array/marker_array_display.hpp>
-#include <string>
+#include <visibility_control.hpp>
+
+#include <autoware_auto_perception_msgs/msg/object_classification.hpp>
 #include <unique_identifier_msgs/msg/uuid.hpp>
+
+#include <bitset>
+#include <list>
+#include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <visibility_control.hpp>
 
 namespace autoware
 {
@@ -41,9 +43,9 @@ namespace object_detection
 ///        for the plugin and also defines common helper functions that can be used by its derived
 ///        classes.
 /// \tparam MsgT PredictedObjects or TrackedObjects or DetectedObjects type
-template<typename MsgT>
+template <typename MsgT>
 class AUTOWARE_AUTO_PERCEPTION_RVIZ_PLUGIN_PUBLIC ObjectPolygonDisplayBase
-  : public rviz_common::RosTopicDisplay<MsgT>
+: public rviz_common::RosTopicDisplay<MsgT>
 {
 public:
   using Color = std::array<float, 3U>;
@@ -72,6 +74,7 @@ public:
     m_display_path_confidence_property{
       "Display Predicted Path Confidence", true, "Enable/disable predicted paths visualization",
       this},
+    m_line_width_property{"Line Width", 0.03, "Line width of object-shape", this},
     m_default_topic{default_topic}
   {
     // iterate over default values to create and initialize the properties.
@@ -109,7 +112,7 @@ public:
     m_marker_common.load(config);
   }
 
-  void update(float wall_dt, float ros_dt) override {m_marker_common.update(wall_dt, ros_dt);}
+  void update(float wall_dt, float ros_dt) override { m_marker_common.update(wall_dt, ros_dt); }
 
   void reset() override
   {
@@ -117,7 +120,7 @@ public:
     m_marker_common.clearMarkers();
   }
 
-  void clear_markers() {m_marker_common.clearMarkers();}
+  void clear_markers() { m_marker_common.clearMarkers(); }
 
   void add_marker(visualization_msgs::msg::Marker::ConstSharedPtr marker_ptr)
   {
@@ -131,17 +134,18 @@ protected:
   /// \param centroid Centroid position of the shape in Object.header.frame_id frame
   /// \param orientation Orientation of the shape in Object.header.frame_id frame
   /// \param labels List of ObjectClassificationMsg objects
+  /// \param line_width Line thickness around the object
   /// \return Marker ptr. Id and header will have to be set by the caller
-  template<typename ClassificationContainerT>
+  template <typename ClassificationContainerT>
   std::optional<Marker::SharedPtr> get_shape_marker_ptr(
     const autoware_auto_perception_msgs::msg::Shape & shape_msg,
     const geometry_msgs::msg::Point & centroid, const geometry_msgs::msg::Quaternion & orientation,
-    const ClassificationContainerT & labels) const
+    const ClassificationContainerT & labels, const double & line_width) const
   {
     const std_msgs::msg::ColorRGBA color_rgba = get_color_rgba(labels);
 
     if (m_display_3d_property.getBool()) {
-      return detail::get_shape_marker_ptr(shape_msg, centroid, orientation, color_rgba);
+      return detail::get_shape_marker_ptr(shape_msg, centroid, orientation, color_rgba, line_width);
     } else {
       return std::nullopt;
     }
@@ -152,7 +156,7 @@ protected:
   /// \param centroid Centroid position of the shape in Object.header.frame_id frame
   /// \param labels List of ObjectClassificationMsg objects
   /// \return Marker ptr. Id and header will have to be set by the caller
-  template<typename ClassificationContainerT>
+  template <typename ClassificationContainerT>
   std::optional<Marker::SharedPtr> get_label_marker_ptr(
     const geometry_msgs::msg::Point & centroid, const geometry_msgs::msg::Quaternion & orientation,
     const ClassificationContainerT & labels) const
@@ -166,7 +170,7 @@ protected:
     }
   }
 
-  template<typename ClassificationContainerT>
+  template <typename ClassificationContainerT>
   std::optional<Marker::SharedPtr> get_uuid_marker_ptr(
     const unique_identifier_msgs::msg::UUID & uuid, const geometry_msgs::msg::Point & centroid,
     const ClassificationContainerT & labels) const
@@ -190,7 +194,7 @@ protected:
     }
   }
 
-  template<typename ClassificationContainerT>
+  template <typename ClassificationContainerT>
   std::optional<Marker::SharedPtr> get_velocity_text_marker_ptr(
     const geometry_msgs::msg::Twist & twist, const geometry_msgs::msg::Point & vis_pos,
     const ClassificationContainerT & labels) const
@@ -246,7 +250,7 @@ protected:
   /// \param labels list of classifications
   /// \return Color and alpha for the best class in the given list. Unknown class is used in
   ///         degenerate cases
-  template<typename ClassificationContainerT>
+  template <typename ClassificationContainerT>
   std_msgs::msg::ColorRGBA get_color_rgba(const ClassificationContainerT & labels) const
   {
     static const std::string kLoggerName("ObjectPolygonDisplayBase");
@@ -262,7 +266,7 @@ protected:
   /// \tparam ClassificationContainerT Container of ObjectClassification
   /// \param labels list of classifications
   /// \return best label string
-  template<typename ClassificationContainerT>
+  template <typename ClassificationContainerT>
   std::string get_best_label(const ClassificationContainerT & labels) const
   {
     static const std::string kLoggerName("ObjectPolygonDisplayBase");
@@ -287,7 +291,7 @@ protected:
   get_color_from_uuid(const std::string & uuid) const
   {
     int i = (static_cast<int>(uuid.at(0)) * 4 + static_cast<int>(uuid.at(1))) %
-      static_cast<int>(predicted_path_colors.size());
+            static_cast<int>(predicted_path_colors.size());
 
     std_msgs::msg::ColorRGBA color;
     color.r = predicted_path_colors.at(i).r;
@@ -333,6 +337,8 @@ protected:
     colors.push_back(sample_color);  // spring green
   }
 
+  double get_line_width() { return m_line_width_property.getFloat(); }
+
 private:
   // All rviz plugins should have this. Should be initialized with pointer to this class
   MarkerCommon m_marker_common;
@@ -356,6 +362,8 @@ private:
   rviz_common::properties::BoolProperty m_display_predicted_paths_property;
   // Property to enable/disable predicted path confidence visualization
   rviz_common::properties::BoolProperty m_display_path_confidence_property;
+  // Property to decide line width of object shape
+  rviz_common::properties::FloatProperty m_line_width_property;
   // Default topic name to be visualized
   std::string m_default_topic;
 

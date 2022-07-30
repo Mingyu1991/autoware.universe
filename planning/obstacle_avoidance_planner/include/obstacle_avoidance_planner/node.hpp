@@ -147,7 +147,6 @@ private:
   OnSetParametersCallbackHandle::SharedPtr set_param_res_;
   rclcpp::Clock logger_ros_clock_;
   int eb_solved_count_;
-  bool is_driving_forward_{true};
 
   bool is_publishing_debug_visualization_marker_;
   bool is_publishing_area_with_objects_;
@@ -238,6 +237,8 @@ private:
   // functions
   void resetPlanning();
   void resetPrevOptimization();
+
+  bool isBackwardPath(const autoware_auto_planning_msgs::msg::Path & path) const;
 
   std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> generateOptimizedTrajectory(
     const autoware_auto_planning_msgs::msg::Path & input_path);

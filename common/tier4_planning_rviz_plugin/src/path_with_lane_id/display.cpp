@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <path_with_lane_id/display.hpp>
-#include <utils.hpp>
 
 #include <memory>
 #define EIGEN_MPL2_ONLY
@@ -168,8 +167,7 @@ void AutowarePathWithLaneIdDisplay::processMessage(
     // path_manual_object_->begin("BaseWhiteNoLighting", Ogre::RenderOperation::OT_TRIANGLE_STRIP);
     velocity_manual_object_->begin("BaseWhiteNoLighting", Ogre::RenderOperation::OT_LINE_STRIP);
 
-    for (size_t point_idx = 0; point_idx < msg_ptr->points.size(); point_idx++) {
-      const auto & e = msg_ptr->points.at(point_idx);
+    for (auto && e : msg_ptr->points) {
       /*
        * Path
        */
@@ -191,7 +189,7 @@ void AutowarePathWithLaneIdDisplay::processMessage(
           Eigen::Quaternionf quat(
             e.point.pose.orientation.w, e.point.pose.orientation.x, e.point.pose.orientation.y,
             e.point.pose.orientation.z);
-          if (!isDrivingForward(msg_ptr->points, point_idx)) {
+          if (e.point.longitudinal_velocity_mps < 0) {
             quat *= quat_yaw_reverse;
           }
           vec_out = quat * vec_in;
@@ -205,7 +203,7 @@ void AutowarePathWithLaneIdDisplay::processMessage(
           Eigen::Quaternionf quat(
             e.point.pose.orientation.w, e.point.pose.orientation.x, e.point.pose.orientation.y,
             e.point.pose.orientation.z);
-          if (!isDrivingForward(msg_ptr->points, point_idx)) {
+          if (e.point.longitudinal_velocity_mps < 0) {
             quat *= quat_yaw_reverse;
           }
           vec_out = quat * vec_in;

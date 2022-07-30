@@ -152,6 +152,9 @@ SurroundObstacleCheckerNode::SurroundObstacleCheckerNode(const rclcpp::NodeOptio
     p.surround_check_recover_distance =
       this->declare_parameter("surround_check_recover_distance", 2.5);
     p.state_clear_time = this->declare_parameter("state_clear_time", 2.0);
+    p.stop_state_ego_speed = this->declare_parameter("stop_state_ego_speed", 0.1);
+    p.stop_state_entry_duration_time =
+      this->declare_parameter("stop_state_entry_duration_time", 0.1);
   }
 
   vehicle_info_ = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
@@ -179,8 +182,7 @@ SurroundObstacleCheckerNode::SurroundObstacleCheckerNode(const rclcpp::NodeOptio
   timer_ = rclcpp::create_timer(
     this, get_clock(), 100ms, std::bind(&SurroundObstacleCheckerNode::onTimer, this));
 
-  // Stop Checker
-  vehicle_stop_checker_ = std::make_unique<VehicleStopChecker>(this);
+  last_running_time_ = std::make_shared<rclcpp::Time>(this->now());
 
   // Debug
   debug_ptr_ = std::make_shared<SurroundObstacleCheckerDebugNode>(
@@ -208,7 +210,7 @@ void SurroundObstacleCheckerNode::onTimer()
   }
 
   const auto nearest_obstacle = getNearestObstacle();
-  const auto is_vehicle_stopped = vehicle_stop_checker_->isVehicleStopped();
+  const auto is_vehicle_stopped = isVehicleStopped();
 
   switch (state_) {
     case State::PASS: {
@@ -438,6 +440,17 @@ bool SurroundObstacleCheckerNode::isStopRequired(
 
   last_obstacle_found_time_ = {};
   return false;
+}
+
+bool SurroundObstacleCheckerNode::isVehicleStopped()
+{
+  const auto current_velocity = std::abs(odometry_ptr_->twist.twist.linear.x);
+
+  if (node_param_.stop_state_ego_speed < current_velocity) {
+    last_running_time_ = std::make_shared<rclcpp::Time>(this->now());
+  }
+
+  return node_param_.stop_state_entry_duration_time < (this->now() - *last_running_time_).seconds();
 }
 
 }  // namespace surround_obstacle_checker

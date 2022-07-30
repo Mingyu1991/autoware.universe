@@ -257,6 +257,10 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
       // add goal pose because resampling removes it
       PathPointWithLaneId goal_path_point{};
       goal_path_point.point.pose = goal_pose;
+      // z of goal_pose can not be used
+      // https://github.com/autowarefoundation/autoware.universe/issues/711
+      goal_path_point.point.pose.position.z =
+        candidate_path.path.points.back().point.pose.position.z;
       goal_path_point.point.longitudinal_velocity_mps = 0.0;
       goal_path_point.lane_ids = shifted_path.path.points.back().lane_ids;
       candidate_path.path.points.push_back(goal_path_point);
@@ -411,10 +415,10 @@ bool isPullOverPathSafe(
   // find obstacle in pull_over target lanes
   // retrieve lanes that are merging target lanes as well
   const auto target_lane_object_indices =
-    util::filterObjectIndicesByLanelets(*dynamic_objects, target_lanes);
+    util::filterObjectsByLanelets(*dynamic_objects, target_lanes);
 
   // find objects in current lane
-  const auto current_lane_object_indices_lanelet = util::filterObjectIndicesByLanelets(
+  const auto current_lane_object_indices_lanelet = util::filterObjectsByLanelets(
     *dynamic_objects, current_lanes, arc.length, arc.length + check_distance);
   const auto current_lane_object_indices = util::filterObjectsByPath(
     *dynamic_objects, current_lane_object_indices_lanelet, path,

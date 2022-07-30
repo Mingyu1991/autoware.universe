@@ -73,6 +73,12 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
   debug_avoidance_msg_array_publisher_ =
     create_publisher<AvoidanceDebugMsgArray>("~/debug/avoidance_debug_message_array", 1);
 
+  // For remote operation
+  plan_ready_publisher_ = create_publisher<PathChangeModule>("~/output/ready", 1);
+  plan_running_publisher_ = create_publisher<PathChangeModuleArray>("~/output/running", 1);
+  force_available_publisher_ =
+    create_publisher<PathChangeModuleArray>("~/output/force_available", 1);
+
   // Debug
   debug_marker_publisher_ = create_publisher<MarkerArray>("~/debug/markers", 1);
 
@@ -98,6 +104,13 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
     [this](const Scenario::ConstSharedPtr msg) {
       current_scenario_ = std::make_shared<Scenario>(*msg);
     },
+    createSubscriptionOptions(this));
+  external_approval_subscriber_ = create_subscription<ApprovalMsg>(
+    "~/input/external_approval", 1,
+    std::bind(&BehaviorPathPlannerNode::onExternalApproval, this, _1),
+    createSubscriptionOptions(this));
+  force_approval_subscriber_ = create_subscription<PathChangeModule>(
+    "~/input/force_approval", 1, std::bind(&BehaviorPathPlannerNode::onForceApproval, this, _1),
     createSubscriptionOptions(this));
 
   // route_handler
@@ -437,24 +450,24 @@ PullOutParameters BehaviorPathPlannerNode::getPullOutParam()
 
   PullOutParameters p;
 
-  p.enable_shift_pull_out = dp("enable_shift_pull_out", true);
-  p.enable_geometric_pull_out = dp("enable_geometric_pull_out", true);
-  p.enable_back = dp("enable_back", true);
-  p.th_arrived_distance_m = dp("th_arrived_distance_m", 1.0);
-  p.th_stopped_velocity_mps = dp("th_stopped_velocity_mps", 0.01);
-  p.th_stopped_time_sec = dp("th_stopped_time_sec", 1.0);
-  p.collision_check_margin = dp("collision_check_margin", 1.0);
+  p.min_stop_distance = dp("min_stop_distance", 5.0);
+  p.stop_time = dp("stop_time", 2.0);
+  p.hysteresis_buffer_distance = dp("hysteresis_buffer_distance", 2.0);
+  p.pull_out_prepare_duration = dp("pull_out_prepare_duration", 2.0);
+  p.pull_out_duration = dp("pull_out_duration", 4.0);
   p.pull_out_finish_judge_buffer = dp("pull_out_finish_judge_buffer", 1.0);
-  // search start pose backward
-  p.max_back_distance = dp("max_back_distance", 15.0);
-  p.backward_search_resolution = dp("backward_search_resolution", 2.0);
-  p.min_stop_distance = dp("min_stop_distance", 2.0);
-  // geometric pull out
-  p.geometric_pull_out_velocity = dp("geometric_pull_out_velocity", 1.0);
-  p.arc_path_interval = dp("arc_path_interval", 1.0);
-  // shift pull out
-  p.shift_pull_out_velocity = dp("shift_pull_out_velocity", 8.3);
+  p.minimum_pull_out_velocity = dp("minimum_pull_out_velocity", 8.3);
+  p.prediction_duration = dp("prediction_duration", 8.0);
+  p.prediction_time_resolution = dp("prediction_time_resolution", 0.5);
+  p.static_obstacle_velocity_thresh = dp("static_obstacle_velocity_thresh", 0.1);
+  p.maximum_deceleration = dp("maximum_deceleration", 1.0);
   p.pull_out_sampling_num = dp("pull_out_sampling_num", 4);
+  p.enable_collision_check_at_prepare_phase = dp("enable_collision_check_at_prepare_phase", true);
+  p.use_predicted_path_outside_lanelet = dp("use_predicted_path_outside_lanelet", true);
+  p.use_all_predicted_path = dp("use_all_predicted_path", false);
+  p.use_dynamic_object = dp("use_dynamic_object", false);
+  p.enable_blocked_by_obstacle = dp("enable_blocked_by_obstacle", false);
+  p.pull_out_search_distance = dp("pull_out_search_distance", 30.0);
   p.after_pull_out_straight_distance = dp("after_pull_out_straight_distance", 3.0);
   p.before_pull_out_straight_distance = dp("before_pull_out_straight_distance", 3.0);
   p.maximum_lateral_jerk = dp("maximum_lateral_jerk", 3.0);
@@ -466,6 +479,13 @@ PullOutParameters BehaviorPathPlannerNode::getPullOutParam()
     RCLCPP_FATAL_STREAM(
       get_logger(), "pull_out_sampling_num must be positive integer. Given parameter: "
                       << p.pull_out_sampling_num << std::endl
+                      << "Terminating the program...");
+    exit(EXIT_FAILURE);
+  }
+  if (p.maximum_deceleration < 0.0) {
+    RCLCPP_FATAL_STREAM(
+      get_logger(), "maximum_deceleration cannot be negative value. Given parameter: "
+                      << p.maximum_deceleration << std::endl
                       << "Terminating the program...");
     exit(EXIT_FAILURE);
   }
@@ -549,13 +569,12 @@ void BehaviorPathPlannerNode::run()
   mutex_pd_.unlock();
 
   PathWithLaneId clipped_path;
-  bool skip = skipSmoothGoalConnection(bt_manager_->getModulesStatus());
-  if (skip) {
+  if (skipSmoothGoalConnection(bt_manager_->getModulesStatus())) {
     clipped_path = *path;
   } else {
     clipped_path = modifyPathForSmoothGoalConnection(*path);
   }
-  // clipPathLength(clipped_path);
+  clipPathLength(clipped_path);
   if (!clipped_path.points.empty()) {
     path_publisher_->publish(clipped_path);
   } else {

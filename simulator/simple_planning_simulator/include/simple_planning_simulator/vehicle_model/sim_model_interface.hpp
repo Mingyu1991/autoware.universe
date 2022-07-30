@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,13 +15,14 @@
 #ifndef SIMPLE_PLANNING_SIMULATOR__VEHICLE_MODEL__SIM_MODEL_INTERFACE_HPP_
 #define SIMPLE_PLANNING_SIMULATOR__VEHICLE_MODEL__SIM_MODEL_INTERFACE_HPP_
 
-#include "eigen3/Eigen/Core"
-#include "autoware_auto_vehicle_msgs/msg/gear_command.hpp"
 #include "common/types.hpp"
+#include "eigen3/Eigen/Core"
 
+#include "autoware_auto_vehicle_msgs/msg/gear_command.hpp"
+
+using autoware::common::types::bool8_t;
 using autoware::common::types::float32_t;
 using autoware::common::types::float64_t;
-using autoware::common::types::bool8_t;
 
 /**
  * @class SimModelInterface
@@ -127,7 +128,7 @@ public:
   virtual float64_t getVy() = 0;
 
   /**
-   * @brief get vehicle longiudinal acceleration
+   * @brief get vehicle longitudinal acceleration
    */
   virtual float64_t getAx() = 0;
 
@@ -142,14 +143,19 @@ public:
   virtual float64_t getSteer() = 0;
 
   /**
-   * @brief get state vector dimension
+   * @brief get vehicle gear
    */
-  inline int getDimX() {return dim_x_;}
+  uint8_t getGear() const;
 
   /**
-   * @brief get input vector demension
+   * @brief get state vector dimension
    */
-  inline int getDimU() {return dim_u_;}
+  inline int getDimX() { return dim_x_; }
+
+  /**
+   * @brief get input vector dimension
+   */
+  inline int getDimU() { return dim_u_; }
 
   /**
    * @brief calculate derivative of states with vehicle model

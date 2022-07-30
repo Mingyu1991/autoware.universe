@@ -92,7 +92,6 @@ struct ObstacleCruisePlannerData
   double current_vel;
   double current_acc;
   std::vector<TargetObstacle> target_obstacles;
-  bool is_driving_forward;
 };
 
 struct LongitudinalInfo

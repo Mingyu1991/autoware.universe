@@ -14,8 +14,9 @@
 //
 // Co-developed by Tier IV, Inc. and Apex.AI, Inc.
 
-#include <memory>
 #include <object_detection/tracked_objects_display.hpp>
+
+#include <memory>
 
 namespace autoware
 {
@@ -23,8 +24,7 @@ namespace rviz_plugins
 {
 namespace object_detection
 {
-TrackedObjectsDisplay::TrackedObjectsDisplay()
-: ObjectPolygonDisplayBase("tracks") {}
+TrackedObjectsDisplay::TrackedObjectsDisplay() : ObjectPolygonDisplayBase("tracks") {}
 
 void TrackedObjectsDisplay::processMessage(TrackedObjects::ConstSharedPtr msg)
 {
@@ -35,7 +35,8 @@ void TrackedObjectsDisplay::processMessage(TrackedObjects::ConstSharedPtr msg)
     // Get marker for shape
     auto shape_marker = get_shape_marker_ptr(
       object.shape, object.kinematics.pose_with_covariance.pose.position,
-      object.kinematics.pose_with_covariance.pose.orientation, object.classification);
+      object.kinematics.pose_with_covariance.pose.orientation, object.classification,
+      get_line_width());
     if (shape_marker) {
       auto shape_marker_ptr = shape_marker.value();
       shape_marker_ptr->header = msg->header;

@@ -76,11 +76,10 @@ bool transformDetectedObjects(
       }
       tf2::fromMsg(*ros_target2objects_world, tf_target2objects_world);
     }
-    for (size_t i = 0; i < output_msg.objects.size(); ++i) {
-      tf2::fromMsg(
-        output_msg.objects.at(i).kinematics.pose_with_covariance.pose, tf_objects_world2objects);
+    for (auto & object : output_msg.objects) {
+      tf2::fromMsg(object.kinematics.pose_with_covariance.pose, tf_objects_world2objects);
       tf_target2objects = tf_target2objects_world * tf_objects_world2objects;
-      tf2::toMsg(tf_target2objects, output_msg.objects.at(i).kinematics.pose_with_covariance.pose);
+      tf2::toMsg(tf_target2objects, object.kinematics.pose_with_covariance.pose);
       // TODO(yukkysaito) transform covariance
     }
   }
@@ -196,6 +195,20 @@ MultiObjectTracker::MultiObjectTracker(const rclcpp::NodeOptions & node_options)
   const auto max_rad_matrix = this->declare_parameter<std::vector<double>>("max_rad_matrix");
   const auto min_iou_matrix = this->declare_parameter<std::vector<double>>("min_iou_matrix");
 
+  // tracker map
+  tracker_map_.insert(
+    std::make_pair(Label::CAR, this->declare_parameter<std::string>("car_tracker")));
+  tracker_map_.insert(
+    std::make_pair(Label::TRUCK, this->declare_parameter<std::string>("truck_tracker")));
+  tracker_map_.insert(
+    std::make_pair(Label::BUS, this->declare_parameter<std::string>("bus_tracker")));
+  tracker_map_.insert(
+    std::make_pair(Label::PEDESTRIAN, this->declare_parameter<std::string>("pedestrian_tracker")));
+  tracker_map_.insert(
+    std::make_pair(Label::BICYCLE, this->declare_parameter<std::string>("bicycle_tracker")));
+  tracker_map_.insert(
+    std::make_pair(Label::MOTORCYCLE, this->declare_parameter<std::string>("motorcycle_tracker")));
+
   data_association_ = std::make_unique<DataAssociation>(
     can_assign_matrix, max_dist_matrix, max_area_matrix, min_area_matrix, max_rad_matrix,
     min_iou_matrix);
@@ -252,7 +265,9 @@ void MultiObjectTracker::onMeasurement(
     if (reverse_assignment.find(i) != reverse_assignment.end()) {  // found
       continue;
     }
-    list_tracker_.push_back(createNewTracker(transformed_objects.objects.at(i), measurement_time));
+    std::shared_ptr<Tracker> tracker =
+      createNewTracker(transformed_objects.objects.at(i), measurement_time);
+    if (tracker) list_tracker_.push_back(tracker);
   }
 
   if (publish_timer_ == nullptr) {
@@ -265,15 +280,26 @@ std::shared_ptr<Tracker> MultiObjectTracker::createNewTracker(
   const rclcpp::Time & time) const
 {
   const std::uint8_t label = utils::getHighestProbLabel(object.classification);
-  if (label == Label::CAR || label == Label::TRUCK || label == Label::BUS) {
-    return std::make_shared<MultipleVehicleTracker>(time, object);
-  } else if (label == Label::PEDESTRIAN) {
-    return std::make_shared<PedestrianAndBicycleTracker>(time, object);
-  } else if (label == Label::BICYCLE || label == Label::MOTORCYCLE) {
-    return std::make_shared<PedestrianAndBicycleTracker>(time, object);
-  } else {
-    return std::make_shared<UnknownTracker>(time, object);
+  if (tracker_map_.count(label) != 0) {
+    const auto tracker = tracker_map_.at(label);
+
+    if (tracker == "bicycle_tracker") {
+      return std::make_shared<BicycleTracker>(time, object);
+    } else if (tracker == "big_vehicle_tracker") {
+      return std::make_shared<BigVehicleTracker>(time, object);
+    } else if (tracker == "multi_vehicle_tracker") {
+      return std::make_shared<MultipleVehicleTracker>(time, object);
+    } else if (tracker == "normal_vehicle_tracker") {
+      return std::make_shared<NormalVehicleTracker>(time, object);
+    } else if (tracker == "pass_through_tracker") {
+      return std::make_shared<PassThroughTracker>(time, object);
+    } else if (tracker == "pedestrian_and_bicycle_tracker") {
+      return std::make_shared<PedestrianAndBicycleTracker>(time, object);
+    } else if (tracker == "pedestrian_tracker") {
+      return std::make_shared<PedestrianTracker>(time, object);
+    }
   }
+  return std::make_shared<UnknownTracker>(time, object);
 }
 
 void MultiObjectTracker::onTimer()
@@ -316,6 +342,7 @@ void MultiObjectTracker::sanitizeTracker(
   std::list<std::shared_ptr<Tracker>> & list_tracker, const rclcpp::Time & time)
 {
   constexpr float min_iou = 0.1;
+  constexpr float min_iou_for_unknown_object = 0.001;
   constexpr double distance_threshold = 5.0;
   /* delete collision tracker */
   for (auto itr1 = list_tracker.begin(); itr1 != list_tracker.end(); ++itr1) {
@@ -332,15 +359,46 @@ void MultiObjectTracker::sanitizeTracker(
       if (distance_threshold < distance) {
         continue;
       }
-      if (min_iou < utils::get2dIoU(object1, object2)) {
-        if ((*itr1)->getTotalMeasurementCount() < (*itr2)->getTotalMeasurementCount()) {
-          itr1 = list_tracker.erase(itr1);
-          --itr1;
-          break;
-        } else {
-          itr2 = list_tracker.erase(itr2);
-          --itr2;
+
+      const auto iou = utils::get2dIoU(object1, object2);
+      const auto & label1 = (*itr1)->getHighestProbLabel();
+      const auto & label2 = (*itr2)->getHighestProbLabel();
+      bool should_delete_tracker1 = false;
+      bool should_delete_tracker2 = false;
+
+      // If at least one of them is UNKNOWN, delete the one with lower IOU. Because the UNKNOWN
+      // objects are not reliable.
+      if (label1 == Label::UNKNOWN || label2 == Label::UNKNOWN) {
+        if (min_iou_for_unknown_object < iou) {
+          if (label1 == Label::UNKNOWN && label2 == Label::UNKNOWN) {
+            if ((*itr1)->getTotalMeasurementCount() < (*itr2)->getTotalMeasurementCount()) {
+              should_delete_tracker1 = true;
+            } else {
+              should_delete_tracker2 = true;
+            }
+          } else if (label1 == Label::UNKNOWN) {
+            should_delete_tracker1 = true;
+          } else if (label2 == Label::UNKNOWN) {
+            should_delete_tracker2 = true;
+          }
         }
+      } else {  // If neither is UNKNOWN, delete the one with lower IOU.
+        if (min_iou < iou) {
+          if ((*itr1)->getTotalMeasurementCount() < (*itr2)->getTotalMeasurementCount()) {
+            should_delete_tracker1 = true;
+          } else {
+            should_delete_tracker2 = true;
+          }
+        }
+      }
+
+      if (should_delete_tracker1) {
+        itr1 = list_tracker.erase(itr1);
+        --itr1;
+        break;
+      } else if (should_delete_tracker2) {
+        itr2 = list_tracker.erase(itr2);
+        --itr2;
       }
     }
   }

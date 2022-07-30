@@ -138,10 +138,11 @@ TRAJECTORY_FOLLOWER_PUBLIC void dynamicSmoothingVelocity(
 /**
  * @brief calculate yaw angle in MPCTrajectory from xy vector
  * @param [inout] traj object trajectory
- * @param [in] shift is forward or not
+ * @param [in] nearest_idx trajectory index nearest to ego
+ * @param [in] ego_yaw yaw of the ego vehicle
  */
 TRAJECTORY_FOLLOWER_PUBLIC void calcTrajectoryYawFromXY(
-  MPCTrajectory * traj, const bool is_forward_shift);
+  MPCTrajectory * traj, const int64_t nearest_idx, const float64_t ego_yaw);
 /**
  * @brief Calculate path curvature by 3-points circle fitting with smoothing num (use nearest 3
  * points when num = 1)

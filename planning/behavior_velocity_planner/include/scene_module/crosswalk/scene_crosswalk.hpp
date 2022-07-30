@@ -106,10 +106,10 @@ public:
 private:
   int64_t module_id_;
 
-  boost::optional<geometry_msgs::msg::Point> findRTCStopPoint(
+  boost::optional<std::pair<size_t, PathPointWithLaneId>> findRTCStopPoint(
     const PathWithLaneId & ego_path, StopFactor & stop_factor);
 
-  boost::optional<geometry_msgs::msg::Point> findNearestStopPoint(
+  boost::optional<std::pair<size_t, PathPointWithLaneId>> findNearestStopPoint(
     const PathWithLaneId & ego_path, StopFactor & stop_factor);
 
   boost::optional<std::pair<double, geometry_msgs::msg::Point>> getStopLine(
@@ -122,7 +122,7 @@ private:
   std::pair<double, double> getAttentionRange(const PathWithLaneId & ego_path);
 
   void insertDecelPoint(
-    const geometry_msgs::msg::Point & stop_point, const float target_velocity,
+    const std::pair<size_t, PathPointWithLaneId> & stop_point, const float target_velocity,
     PathWithLaneId & output);
 
   void clampAttentionRangeByNeighborCrosswalks(
@@ -136,7 +136,7 @@ private:
   CollisionPointState getCollisionPointState(const double ttc, const double ttv) const;
 
   float calcTargetVelocity(
-    const geometry_msgs::msg::Point & stop_point, const PathWithLaneId & ego_path) const;
+    const PathPointWithLaneId & stop_point, const PathWithLaneId & ego_path) const;
 
   bool isStuckVehicle(const PathWithLaneId & ego_path, const PredictedObject & object) const;
 

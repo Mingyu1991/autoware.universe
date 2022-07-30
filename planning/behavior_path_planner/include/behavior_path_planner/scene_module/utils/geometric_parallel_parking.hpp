@@ -54,7 +54,6 @@ struct ParallelParkingParameters
   double after_backward_parking_straight_distance;
   double forward_parking_velocity;
   double backward_parking_velocity;
-  double departing_velocity;
   double arc_path_interval;
   double min_acc;
 };
@@ -63,18 +62,12 @@ class GeometricParallelParking
 {
 public:
   bool isParking() const;
-  bool plan(const Pose & goal_pose, const lanelet::ConstLanelets & lanes, const bool is_forward);
-  bool planDeparting(
-    const Pose & start_pose, const Pose & goal_pose, const lanelet::ConstLanelets & road_lanes,
-    const lanelet::ConstLanelets & shoulder_lanes);
-  void setData(
-    const std::shared_ptr<const PlannerData> & planner_data,
-    const ParallelParkingParameters & parameters);
+  bool plan(const Pose goal_pose, lanelet::ConstLanelets lanes, const bool is_forward);
+  void setParams(
+    const std::shared_ptr<const PlannerData> & planner_data, ParallelParkingParameters parameters);
   void incrementPathIndex();
+  void clear();
 
-  std::vector<PathWithLaneId> getArcPaths() const { return arc_paths_; }
-  std::vector<PathWithLaneId> getPaths() const { return paths_; }
-  PathWithLaneId getPathByIdx(size_t const idx) const;
   PathWithLaneId getCurrentPath() const;
   PathWithLaneId getFullPath() const;
   PathWithLaneId getArcPath() const;
@@ -82,6 +75,7 @@ public:
   PoseStamped getCl() const { return Cl_; }
   PoseStamped getStartPose() const { return start_pose_; }
   PoseStamped getArcEndPose() const { return arc_end_pose_; }
+
   PoseArray getPathPoseArray() const { return path_pose_array_; }
 
 private:
@@ -90,35 +84,27 @@ private:
 
   // todo: use vehicle info after merging
   // https://github.com/autowarefoundation/autoware.universe/pull/740
-  double max_steer_deg_ = 40.0;  // max steering angle [deg].
-  double max_steer_rad_;
-  double R_E_min_;   // base_link
-  double R_Bl_min_;  // front_left
+  float max_steer_deg_ = 40.0;  // max steering angle [deg].
+  float max_steer_rad_;
+  float R_E_min_;   // base_link
+  float R_Bl_min_;  // front_left
 
-  std::vector<PathWithLaneId> arc_paths_;
   std::vector<PathWithLaneId> paths_;
   size_t current_path_idx_ = 0;
 
-  void clearPaths();
-  bool isEnoughDistanceToStart(const Pose & start_pose) const;
-  std::vector<PathWithLaneId> planOneTraial(
-    const Pose & start_pose, const Pose & goal_pose, const double R_E_r,
-    const lanelet::ConstLanelets & lanes, const bool is_forward, const double end_pose_offset);
+  bool planOneTraial(
+    const Pose goal_pose, const double start_pose_offset, const double R_E_r,
+    const lanelet::ConstLanelets lanes, const bool is_forward);
   PathWithLaneId generateArcPath(
-    const Pose & center, const double radius, const double start_yaw, double end_yaw,
+    const Pose & center, const float radius, const float start_rad, float end_rad,
     const bool is_left_turn, const bool is_forward);
   PathPointWithLaneId generateArcPathPoint(
-    const Pose & center, const double radius, const double yaw, const bool is_left_turn,
+    const Pose & center, const float radius, const float yaw, const bool is_left_turn,
     const bool is_forward);
   Pose calcStartPose(
-    const Pose & goal_pose, const double start_pose_offset, const double R_E_r,
+    const Pose goal_pose, const double start_pose_offset, const double R_E_r,
     const bool is_forward);
-  std::vector<PathWithLaneId> generateParkingPaths(
-    const Pose & start_pose, const Pose & goal_pose, const double R_E_r,
-    const lanelet::ConstLanelets lanes, const bool is_forward, const double end_pose_offset,
-    const double velocity);
-  PathWithLaneId generateStraightPath(const Pose & start_pose);
-  void setVelocityToArcPaths(std::vector<PathWithLaneId> & arc_paths, const double velocity);
+  void generateStraightPath(const Pose start_pose);
 
   PoseStamped Cr_;
   PoseStamped Cl_;

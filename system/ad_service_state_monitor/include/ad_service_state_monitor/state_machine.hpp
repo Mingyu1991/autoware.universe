@@ -31,8 +31,6 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 
-#include <tf2/utils.h>
-
 #include <deque>
 #include <string>
 #include <vector>
@@ -47,6 +45,7 @@ struct StateInput
 
   geometry_msgs::msg::PoseStamped::ConstSharedPtr current_pose;
   geometry_msgs::msg::Pose::ConstSharedPtr goal_pose;
+  geometry_msgs::msg::PoseStamped::ConstSharedPtr modified_goal_pose;
 
   autoware_auto_vehicle_msgs::msg::Engage::ConstSharedPtr autoware_engage;
   autoware_auto_vehicle_msgs::msg::ControlModeReport::ConstSharedPtr control_mode_;

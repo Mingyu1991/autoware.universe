@@ -100,7 +100,7 @@ void CropBoxFilterComponent::filter(
   const PointCloud2ConstPtr & input, [[maybe_unused]] const IndicesPtr & indices,
   PointCloud2 & output)
 {
-  boost::mutex::scoped_lock lock(mutex_);
+  std::scoped_lock lock(mutex_);
   stop_watch_ptr_->toc("processing_time", true);
   output.data.resize(input->data.size());
   Eigen::Vector3f pt(Eigen::Vector3f::Zero());
@@ -133,7 +133,7 @@ void CropBoxFilterComponent::filter(
 
   output.data.resize(j);
   output.header.frame_id = input->header.frame_id;
-  output.height = input->height;
+  output.height = 1;
   output.fields = input->fields;
   output.is_bigendian = input->is_bigendian;
   output.point_step = input->point_step;
@@ -207,7 +207,7 @@ void CropBoxFilterComponent::publishCropBoxPolygon()
 rcl_interfaces::msg::SetParametersResult CropBoxFilterComponent::paramCallback(
   const std::vector<rclcpp::Parameter> & p)
 {
-  boost::mutex::scoped_lock lock(mutex_);
+  std::scoped_lock lock(mutex_);
 
   CropBoxParam new_param{};
 

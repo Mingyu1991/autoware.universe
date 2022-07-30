@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,54 +15,52 @@
 #ifndef SIMPLE_PLANNING_SIMULATOR__SIMPLE_PLANNING_SIMULATOR_CORE_HPP_
 #define SIMPLE_PLANNING_SIMULATOR__SIMPLE_PLANNING_SIMULATOR_CORE_HPP_
 
+#include "common/types.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "simple_planning_simulator/vehicle_model/sim_model_interface.hpp"
+#include "simple_planning_simulator/visibility_control.hpp"
+#include "tier4_api_utils/tier4_api_utils.hpp"
+
+#include "autoware_auto_control_msgs/msg/ackermann_control_command.hpp"
+#include "autoware_auto_geometry_msgs/msg/complex32.hpp"
+#include "autoware_auto_planning_msgs/msg/trajectory.hpp"
+#include "autoware_auto_vehicle_msgs/msg/control_mode_report.hpp"
+#include "autoware_auto_vehicle_msgs/msg/engage.hpp"
+#include "autoware_auto_vehicle_msgs/msg/gear_command.hpp"
+#include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
+#include "autoware_auto_vehicle_msgs/msg/hazard_lights_command.hpp"
+#include "autoware_auto_vehicle_msgs/msg/hazard_lights_report.hpp"
+#include "autoware_auto_vehicle_msgs/msg/steering_report.hpp"
+#include "autoware_auto_vehicle_msgs/msg/turn_indicators_command.hpp"
+#include "autoware_auto_vehicle_msgs/msg/turn_indicators_report.hpp"
+#include "autoware_auto_vehicle_msgs/msg/vehicle_control_command.hpp"
+#include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
+#include "geometry_msgs/msg/accel_with_covariance_stamped.hpp"
+#include "geometry_msgs/msg/pose.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/msg/twist.hpp"
+#include "nav_msgs/msg/odometry.hpp"
+#include "tier4_external_api_msgs/srv/initialize_pose.hpp"
+#include "tier4_vehicle_msgs/msg/control_mode.hpp"
+#include "tier4_vehicle_msgs/srv/control_mode_request.hpp"
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
 #include <memory>
-#include <string>
 #include <random>
-
-#include "rclcpp/rclcpp.hpp"
-
-#include "simple_planning_simulator/visibility_control.hpp"
-
-#include "geometry_msgs/msg/pose.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
-#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
-#include "geometry_msgs/msg/twist.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "nav_msgs/msg/odometry.hpp"
-
-#include "autoware_auto_control_msgs/msg/ackermann_control_command.hpp"
-#include "autoware_auto_planning_msgs/msg/trajectory.hpp"
-#include "autoware_auto_vehicle_msgs/msg/steering_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/control_mode_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/engage.hpp"
-#include "autoware_auto_vehicle_msgs/msg/gear_command.hpp"
-#include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/turn_indicators_command.hpp"
-#include "autoware_auto_vehicle_msgs/msg/turn_indicators_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/hazard_lights_command.hpp"
-#include "autoware_auto_vehicle_msgs/msg/hazard_lights_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/vehicle_control_command.hpp"
-#include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
-#include "autoware_auto_geometry_msgs/msg/complex32.hpp"
-#include "common/types.hpp"
-
-#include "tier4_api_utils/tier4_api_utils.hpp"
-#include "tier4_external_api_msgs/srv/initialize_pose.hpp"
-
-#include "simple_planning_simulator/vehicle_model/sim_model_interface.hpp"
-
+#include <string>
+#include <vector>
 
 namespace simulation
 {
 namespace simple_planning_simulator
 {
+using autoware::common::types::bool8_t;
 using autoware::common::types::float32_t;
 using autoware::common::types::float64_t;
-using autoware::common::types::bool8_t;
 
 using autoware_auto_control_msgs::msg::AckermannControlCommand;
 using autoware_auto_geometry_msgs::msg::Complex32;
@@ -71,26 +69,28 @@ using autoware_auto_vehicle_msgs::msg::ControlModeReport;
 using autoware_auto_vehicle_msgs::msg::Engage;
 using autoware_auto_vehicle_msgs::msg::GearCommand;
 using autoware_auto_vehicle_msgs::msg::GearReport;
-using autoware_auto_vehicle_msgs::msg::TurnIndicatorsCommand;
-using autoware_auto_vehicle_msgs::msg::TurnIndicatorsReport;
 using autoware_auto_vehicle_msgs::msg::HazardLightsCommand;
 using autoware_auto_vehicle_msgs::msg::HazardLightsReport;
 using autoware_auto_vehicle_msgs::msg::SteeringReport;
+using autoware_auto_vehicle_msgs::msg::TurnIndicatorsCommand;
+using autoware_auto_vehicle_msgs::msg::TurnIndicatorsReport;
 using autoware_auto_vehicle_msgs::msg::VehicleControlCommand;
 using autoware_auto_vehicle_msgs::msg::VelocityReport;
-using tier4_external_api_msgs::srv::InitializePose;
+using geometry_msgs::msg::AccelWithCovarianceStamped;
 using geometry_msgs::msg::Pose;
 using geometry_msgs::msg::PoseStamped;
 using geometry_msgs::msg::PoseWithCovarianceStamped;
 using geometry_msgs::msg::TransformStamped;
 using geometry_msgs::msg::Twist;
 using nav_msgs::msg::Odometry;
+using tier4_external_api_msgs::srv::InitializePose;
+using tier4_vehicle_msgs::msg::ControlMode;
+using tier4_vehicle_msgs::srv::ControlModeRequest;
 
 class DeltaTime
 {
 public:
-  DeltaTime()
-  : prev_updated_time_ptr_(nullptr) {}
+  DeltaTime() : prev_updated_time_ptr_(nullptr) {}
   float64_t get_dt(const rclcpp::Time & now)
   {
     if (prev_updated_time_ptr_ == nullptr) {
@@ -128,6 +128,7 @@ private:
   rclcpp::Publisher<VelocityReport>::SharedPtr pub_velocity_;
   rclcpp::Publisher<Odometry>::SharedPtr pub_odom_;
   rclcpp::Publisher<SteeringReport>::SharedPtr pub_steer_;
+  rclcpp::Publisher<AccelWithCovarianceStamped>::SharedPtr pub_acc_;
   rclcpp::Publisher<ControlModeReport>::SharedPtr pub_control_mode_report_;
   rclcpp::Publisher<GearReport>::SharedPtr pub_gear_report_;
   rclcpp::Publisher<TurnIndicatorsReport>::SharedPtr pub_turn_indicators_report_;
@@ -136,18 +137,22 @@ private:
   rclcpp::Publisher<PoseStamped>::SharedPtr pub_current_pose_;
 
   rclcpp::Subscription<GearCommand>::SharedPtr sub_gear_cmd_;
+  rclcpp::Subscription<GearCommand>::SharedPtr sub_manual_gear_cmd_;
   rclcpp::Subscription<TurnIndicatorsCommand>::SharedPtr sub_turn_indicators_cmd_;
   rclcpp::Subscription<HazardLightsCommand>::SharedPtr sub_hazard_lights_cmd_;
   rclcpp::Subscription<VehicleControlCommand>::SharedPtr sub_vehicle_cmd_;
   rclcpp::Subscription<AckermannControlCommand>::SharedPtr sub_ackermann_cmd_;
+  rclcpp::Subscription<AckermannControlCommand>::SharedPtr sub_manual_ackermann_cmd_;
   rclcpp::Subscription<PoseWithCovarianceStamped>::SharedPtr sub_init_pose_;
   rclcpp::Subscription<Trajectory>::SharedPtr sub_trajectory_;
   rclcpp::Subscription<Engage>::SharedPtr sub_engage_;
 
+  rclcpp::Service<ControlModeRequest>::SharedPtr srv_mode_req_;
+
   rclcpp::CallbackGroup::SharedPtr group_api_service_;
   tier4_api_utils::Service<InitializePose>::SharedPtr srv_set_pose_;
 
-  uint32_t timer_sampling_time_ms_;  //!< @brief timer sampling time
+  uint32_t timer_sampling_time_ms_;        //!< @brief timer sampling time
   rclcpp::TimerBase::SharedPtr on_timer_;  //!< @brief timer for simulation
 
   OnSetParametersCallbackHandle::SharedPtr set_param_res_;
@@ -162,17 +167,19 @@ private:
   VelocityReport current_velocity_;
   Odometry current_odometry_;
   SteeringReport current_steer_;
-  VehicleControlCommand::ConstSharedPtr current_vehicle_cmd_ptr_;
-  AckermannControlCommand::ConstSharedPtr current_ackermann_cmd_ptr_;
-  GearCommand::ConstSharedPtr current_gear_cmd_ptr_;
+  AckermannControlCommand current_ackermann_cmd_;
+  AckermannControlCommand current_manual_ackermann_cmd_;
+  GearCommand current_gear_cmd_;
+  GearCommand current_manual_gear_cmd_;
   TurnIndicatorsCommand::ConstSharedPtr current_turn_indicators_cmd_ptr_;
   HazardLightsCommand::ConstSharedPtr current_hazard_lights_cmd_ptr_;
   Trajectory::ConstSharedPtr current_trajectory_ptr_;
-  bool current_engage_;
+  bool simulate_motion_;  //!< stop vehicle motion simulation if false
+  ControlMode current_control_mode_;
 
   /* frame_id */
   std::string simulated_frame_id_;  //!< @brief simulated vehicle frame id
-  std::string origin_frame_id_;  //!< @brief map frame_id
+  std::string origin_frame_id_;     //!< @brief map frame_id
 
   /* flags */
   bool8_t is_initialized_;         //!< @brief flag to check the initial position is set
@@ -186,8 +193,7 @@ private:
   float64_t y_stddev_;  //!< @brief y standard deviation for dummy covariance in map coordinate
 
   /* vehicle model */
-  enum class VehicleModelType
-  {
+  enum class VehicleModelType {
     IDEAL_STEER_ACC = 0,
     IDEAL_STEER_ACC_GEARED = 1,
     DELAY_STEER_ACC = 2,
@@ -203,28 +209,18 @@ private:
   void on_vehicle_cmd(const VehicleControlCommand::ConstSharedPtr msg);
 
   /**
-   * @brief set current_ackermann_cmd_ptr_ with received message
-   */
-  void on_ackermann_cmd(const AckermannControlCommand::ConstSharedPtr msg);
-
-  /**
    * @brief set input steering, velocity, and acceleration of the vehicle model
    */
-  void set_input(const float steer, const float vel, const float accel);
+  void set_input(const AckermannControlCommand & cmd);
 
   /**
    * @brief set current_vehicle_state_ with received message
    */
-  void on_gear_cmd(const GearCommand::ConstSharedPtr msg);
-
-  /**
- * @brief set current_vehicle_state_ with received message
- */
   void on_turn_indicators_cmd(const TurnIndicatorsCommand::ConstSharedPtr msg);
 
   /**
- * @brief set current_vehicle_state_ with received message
- */
+   * @brief set current_vehicle_state_ with received message
+   */
   void on_hazard_lights_cmd(const HazardLightsCommand::ConstSharedPtr msg);
 
   /**
@@ -248,6 +244,13 @@ private:
    * @brief subscribe autoware engage
    */
   void on_engage(const Engage::ConstSharedPtr msg);
+
+  /**
+   * @brief ControlModeRequest server
+   */
+  void on_control_mode_request(
+    const ControlModeRequest::Request::SharedPtr request,
+    const ControlModeRequest::Response::SharedPtr response);
 
   /**
    * @brief get z-position from trajectory
@@ -316,6 +319,11 @@ private:
   void publish_steering(const SteeringReport & steer);
 
   /**
+   * @brief publish acceleration
+   */
+  void publish_acceleration();
+
+  /**
    * @brief publish control_mode report
    */
   void publish_control_mode_report();
@@ -331,8 +339,8 @@ private:
   void publish_turn_indicators_report();
 
   /**
- * @brief publish hazard lights report
- */
+   * @brief publish hazard lights report
+   */
   void publish_hazard_lights_report();
 
   /**

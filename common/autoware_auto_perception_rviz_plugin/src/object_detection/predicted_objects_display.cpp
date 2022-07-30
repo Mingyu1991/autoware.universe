@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <memory>
 #include <object_detection/predicted_objects_display.hpp>
+
+#include <memory>
 
 namespace autoware
 {
@@ -21,8 +22,7 @@ namespace rviz_plugins
 {
 namespace object_detection
 {
-PredictedObjectsDisplay::PredictedObjectsDisplay()
-: ObjectPolygonDisplayBase("tracks") {}
+PredictedObjectsDisplay::PredictedObjectsDisplay() : ObjectPolygonDisplayBase("tracks") {}
 
 void PredictedObjectsDisplay::processMessage(PredictedObjects::ConstSharedPtr msg)
 {
@@ -33,7 +33,8 @@ void PredictedObjectsDisplay::processMessage(PredictedObjects::ConstSharedPtr ms
     // Get marker for shape
     auto shape_marker = get_shape_marker_ptr(
       object.shape, object.kinematics.initial_pose_with_covariance.pose.position,
-      object.kinematics.initial_pose_with_covariance.pose.orientation, object.classification);
+      object.kinematics.initial_pose_with_covariance.pose.orientation, object.classification,
+      get_line_width());
     if (shape_marker) {
       auto shape_marker_ptr = shape_marker.value();
       shape_marker_ptr->header = msg->header;

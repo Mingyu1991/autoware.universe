@@ -14,8 +14,6 @@
 
 #include "ad_service_state_monitor/ad_service_state_monitor_node.hpp"
 
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-
 #include <string>
 #include <vector>
 
@@ -50,6 +48,7 @@ void AutowareStateMonitorNode::checkTopicStatus(
 {
   int8_t level = diagnostic_msgs::msg::DiagnosticStatus::OK;
 
+  std::lock_guard<std::mutex> lock(lock_state_input_);
   const auto & topic_stats = state_input_.topic_stats;
 
   // OK
@@ -125,6 +124,7 @@ void AutowareStateMonitorNode::checkTFStatus(
 {
   int8_t level = diagnostic_msgs::msg::DiagnosticStatus::OK;
 
+  std::lock_guard<std::mutex> lock(lock_state_input_);
   const auto & tf_stats = state_input_.tf_stats;
 
   // OK
