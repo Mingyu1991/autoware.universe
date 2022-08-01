@@ -58,13 +58,13 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include <cuda_utils.hpp>
-#include <yolo_layer.hpp>
+#include <stdio.h>
+#include <stdexcept>
 
 #include <math_constants.h>
-#include <stdio.h>
 
-#include <stdexcept>
+#include <cuda_utils.hpp>
+#include <yolo_layer.hpp>
 
 namespace yolo
 {

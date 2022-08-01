@@ -65,7 +65,8 @@ void Net::load(const std::string & path)
   file.read(buffer, size);
   file.close();
   if (runtime_) {
-    engine_ = unique_ptr<nvinfer1::ICudaEngine>(runtime_->deserializeCudaEngine(buffer, size));
+    engine_ =
+      unique_ptr<nvinfer1::ICudaEngine>(runtime_->deserializeCudaEngine(buffer, size, nullptr));
   }
   delete[] buffer;
 }
@@ -252,15 +253,9 @@ Net::Net(
 
   // Build engine
   std::cout << "Applying optimizations and building TRT CUDA engine..." << std::endl;
-  plan_ = unique_ptr<nvinfer1::IHostMemory>(builder->buildSerializedNetwork(*network, *config));
-  if (!plan_) {
-    std::cout << "Fail to create serialized network" << std::endl;
-    return;
-  }
-  engine_ = unique_ptr<nvinfer1::ICudaEngine>(
-    runtime_->deserializeCudaEngine(plan_->data(), plan_->size()));
+  engine_ = unique_ptr<nvinfer1::ICudaEngine>(builder->buildEngineWithConfig(*network, *config));
   if (!prepare()) {
-    std::cout << "Fail to create engine" << std::endl;
+    std::cout << "Fail to prepare engine" << std::endl;
     return;
   }
 }
@@ -268,8 +263,9 @@ Net::Net(
 void Net::save(const std::string & path) const
 {
   std::cout << "Writing to " << path << "..." << std::endl;
+  auto serialized = unique_ptr<nvinfer1::IHostMemory>(engine_->serialize());
   std::ofstream file(path, std::ios::out | std::ios::binary);
-  file.write(reinterpret_cast<const char *>(plan_->data()), plan_->size());
+  file.write(reinterpret_cast<const char *>(serialized->data()), serialized->size());
 }
 
 void Net::infer(std::vector<void *> & buffers, const int batch_size)

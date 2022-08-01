@@ -36,10 +36,11 @@
  * SOFTWARE.
  */
 
-#include <mish.hpp>
+#include <stdio.h>
 
 #include <cuda_runtime_api.h>
-#include <stdio.h>
+
+#include <mish.hpp>
 
 namespace yolo
 {

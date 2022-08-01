@@ -100,7 +100,7 @@ trtNet::trtNet(const std::string & engineFile)
 
   mTrtRunTime = createInferRuntime(gLogger);
   assert(mTrtRunTime != nullptr);
-  mTrtEngine = mTrtRunTime->deserializeCudaEngine(data.get(), length);
+  mTrtEngine = mTrtRunTime->deserializeCudaEngine(data.get(), length, nullptr);
   assert(mTrtEngine != nullptr);
 
   InitEngine();

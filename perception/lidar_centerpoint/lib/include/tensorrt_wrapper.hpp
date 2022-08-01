@@ -1,4 +1,4 @@
-// Copyright 2020 Tier IV, Inc.
+// Copyright 2021 Tier IV, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef TRT_SSD_HPP_
-#define TRT_SSD_HPP_
+#ifndef TENSORRT_WRAPPER_HPP_
+#define TENSORRT_WRAPPER_HPP_
 
-#include <./cuda_runtime.h>
 #include <NvInfer.h>
 
 #include <iostream>
 #include <memory>
 #include <string>
-#include <vector>
 
-namespace ssd
+namespace centerpoint
 {
 struct Deleter
 {
@@ -55,46 +53,38 @@ private:
   bool verbose_{false};
 };
 
-class Net
+class TensorRTWrapper
 {
 public:
-  // Create engine from engine path
-  explicit Net(const std::string & engine_path, bool verbose = false);
+  explicit TensorRTWrapper(bool verbose);
 
-  // Create engine from serialized onnx model
-  Net(
-    const std::string & onnx_file_path, const std::string & precision, const int max_batch_size,
-    bool verbose = false, size_t workspace_size = (1ULL << 30));
+  bool init(
+    const std::string & onnx_path, const std::string & engine_path, const std::string & precision);
 
-  ~Net();
+  unique_ptr<nvinfer1::IExecutionContext> context_ = nullptr;
 
-  // Save model to path
-  void save(const std::string & path);
+protected:
+  virtual bool setProfile(
+    nvinfer1::IBuilder & builder, nvinfer1::INetworkDefinition & network,
+    nvinfer1::IBuilderConfig & config) = 0;
 
-  // Infer using pre-allocated GPU buffers {data, scores, boxes}
-  void infer(std::vector<void *> & buffers, const int batch_size);
-
-  // Get (c, h, w) size of the fixed input
-  std::vector<int> getInputSize();
-
-  std::vector<int> getOutputScoreSize();
-
-  // Get max allowed batch size
-  int getMaxBatchSize();
-
-  // Get max number of detections
-  int getMaxDetections();
+  Logger logger_;
 
 private:
+  bool parseONNX(
+    const std::string & onnx_path, const std::string & engine_path, const std::string & precision,
+    size_t workspace_size = (1ULL << 30));
+
+  bool saveEngine(const std::string & engine_path);
+
+  bool loadEngine(const std::string & engine_path);
+
+  bool createContext();
+
   unique_ptr<nvinfer1::IRuntime> runtime_ = nullptr;
   unique_ptr<nvinfer1::ICudaEngine> engine_ = nullptr;
-  unique_ptr<nvinfer1::IExecutionContext> context_ = nullptr;
-  cudaStream_t stream_ = nullptr;
-
-  void load(const std::string & path);
-  void prepare();
 };
 
-}  // namespace ssd
+}  // namespace centerpoint
 
-#endif  // TRT_SSD_HPP_
+#endif  // TENSORRT_WRAPPER_HPP_
