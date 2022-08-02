@@ -179,10 +179,10 @@ boost::optional<LateralOutput> MpcLateralController::run()
   }
 
   // no steer rate limit when stopped
-  const float64_t current_vel = m_current_odometry_ptr->twist.twist.linear.x;
-  const bool is_stopped = std::fabs(current_vel) < m_stop_state_entry_ego_speed;
-  constexpr float64_t max_m_steer_rate_lim = std::numeric_limits<float64_t>::max();
-  m_mpc.m_steer_rate_lim = is_stopped ? max_m_steer_rate_lim : m_steer_rate_lim_rps;
+  // const float64_t current_vel = m_current_odometry_ptr->twist.twist.linear.x;
+  // const bool is_stopped = std::fabs(current_vel) < m_stop_state_entry_ego_speed;
+  // constexpr float64_t max_m_steer_rate_lim = std::numeric_limits<float64_t>::max();
+  // m_mpc.m_steer_rate_lim = is_stopped ? max_m_steer_rate_lim : m_steer_rate_lim_rps;
 
   const bool8_t is_mpc_solved = m_mpc.calculateMPC(
     *m_current_steering_ptr, m_current_odometry_ptr->twist.twist.linear.x, m_current_pose_ptr->pose,
@@ -194,11 +194,11 @@ boost::optional<LateralOutput> MpcLateralController::run()
   const auto createLateralOutput = [this](const auto & cmd) {
     LateralOutput output;
     output.control_cmd = createCtrlCmdMsg(cmd);
-    output.sync_data.is_steer_converged = isSteerConverged(cmd);
+    output.sync_data.is_steer_converged = isSteerConverged(*m_ctrl_cmd_prev_ptr, cmd);
     return boost::optional<LateralOutput>(output);
   };
 
-  if (isStoppedState()) {
+  if (isStoppedState(ctrl_cmd)) {
     // Reset input buffer
     for (auto & value : m_mpc.m_input_buffer) {
       // value = m_ctrl_cmd_prev.steering_tire_angle;
@@ -236,19 +236,26 @@ void MpcLateralController::setInputData(InputData const & input_data)
 }
 
 bool MpcLateralController::isSteerConverged(
+  const autoware_auto_control_msgs::msg::AckermannLateralCommand & prev_cmd,
   const autoware_auto_control_msgs::msg::AckermannLateralCommand & cmd) const
 {
   // wait for a while to propagate the trajectory shape to the output command when the trajectory
   // shape is changed.
   if (!m_has_received_first_trajectory || isTrajectoryShapeChanged()) {
-    std::cerr << "trajectory shape chnage" << std::endl;
     return false;
   }
-  std::cerr << "in isSteerConverged, cmd: " << static_cast<double>(cmd.steering_tire_angle)
-            << ", current: " << m_current_steering_ptr->steering_tire_angle << std::endl;
-  const bool is_converged =
-    std::abs(cmd.steering_tire_angle - m_current_steering_ptr->steering_tire_angle) <
+
+  // check if cmd steering rate is small
+  const float64_t steer_cmd_diff = std::abs(cmd.steering_tire_angle - prev_cmd.steering_tire_angle);
+  const float64_t steer_cmd_rate = steer_cmd_diff / m_mpc.m_ctrl_period;
+  const bool is_small_diff = steer_cmd_rate < m_steer_rate_lim_rps / 2;
+
+  // check if current steering and command steering are close
+  const bool is_close_to_cmd =
+    std::abs(prev_cmd.steering_tire_angle - m_current_steering_ptr->steering_tire_angle) <
     static_cast<float>(m_converged_steer_rad);
+
+  const bool is_converged = is_small_diff && is_close_to_cmd;
 
   return is_converged;
 }
@@ -372,7 +379,8 @@ MpcLateralController::getInitialControlCommand() const
   return cmd;
 }
 
-bool8_t MpcLateralController::isStoppedState() const
+bool8_t MpcLateralController::isStoppedState(
+  autoware_auto_control_msgs::msg::AckermannLateralCommand ctrl_cmd) const
 {
   // Note: This function used to take into account the distance to the stop line
   // for the stop state judgement. However, it has been removed since the steering
@@ -390,11 +398,8 @@ bool8_t MpcLateralController::isStoppedState() const
   const float64_t target_vel =
     m_current_trajectory_ptr->points.at(static_cast<size_t>(nearest)).longitudinal_velocity_mps;
 
-  const auto latest_published_cmd =
-    m_ctrl_cmd_prev_ptr;  // use prev_cmd as a latest published command
   const bool is_steer_converged =
-    latest_published_cmd != nullptr && isSteerConverged(*latest_published_cmd);
-  std::cerr << "is_steer_converged " << static_cast<int>(is_steer_converged) << std::endl;
+    m_ctrl_cmd_prev_ptr != nullptr && isSteerConverged(*m_ctrl_cmd_prev_ptr, ctrl_cmd);
   if (m_keep_steer_control_until_converged && !is_steer_converged) {
     return false;  // not stopState: keep control
   }

@@ -203,17 +203,28 @@ private:
 
   /**
    * @brief check ego car is in stopped state
+   * @param [in] ctrl_cmd current control command
    */
-  bool8_t isStoppedState() const;
+  bool8_t isStoppedState(autoware_auto_control_msgs::msg::AckermannLateralCommand ctrl_cmd) const;
 
   /**
    * @brief check if the trajectory has valid value
    */
   bool8_t isValidTrajectory(const autoware_auto_planning_msgs::msg::Trajectory & traj) const;
 
+  /**
+   * @brief check if the trajectory shape is changed
+   */
   bool8_t isTrajectoryShapeChanged() const;
 
-  bool isSteerConverged(const autoware_auto_control_msgs::msg::AckermannLateralCommand & cmd) const;
+  /**
+   * @brief check if steer is converged
+   * @param [in] prev_cmd previous control command
+   * @param [in] cmd current control command
+   */
+  bool isSteerConverged(
+    const autoware_auto_control_msgs::msg::AckermannLateralCommand & prev_cmd,
+    const autoware_auto_control_msgs::msg::AckermannLateralCommand & cmd) const;
 
   rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr m_set_param_res;
 
