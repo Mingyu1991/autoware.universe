@@ -82,10 +82,10 @@ MpcLateralController::MpcLateralController(rclcpp::Node & node) : node_{&node}
   /* mpc parameters */
   const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*node_).getVehicleInfo();
   const float64_t wheelbase = vehicle_info.wheel_base_m;
-  const float64_t steer_rate_lim_dps = node_->declare_parameter<float64_t>("steer_rate_lim_dps");
-  constexpr float64_t deg2rad = static_cast<float64_t>(autoware::common::types::PI) / 180.0;
+  m_steer_rate_lim_rps =
+    tier4_autoware_utils::deg2rad(node_->declare_parameter<float64_t>("steer_rate_lim_dps"));
+  m_mpc.m_steer_rate_lim = m_steer_rate_lim_rps;
   m_mpc.m_steer_lim = vehicle_info.max_steer_angle_rad;
-  m_mpc.m_steer_rate_lim = steer_rate_lim_dps * deg2rad;
 
   /* vehicle model setup */
   const std::string vehicle_model_type =
@@ -177,6 +177,12 @@ boost::optional<LateralOutput> MpcLateralController::run()
     m_ctrl_cmd_prev = getInitialControlCommand();
     m_is_ctrl_cmd_prev_initialized = true;
   }
+
+  // no steer rate limit when stopped
+  const float64_t current_vel = m_current_odometry_ptr->twist.twist.linear.x;
+  const bool is_stopped = std::fabs(current_vel) < m_stop_state_entry_ego_speed;
+  constexpr float64_t max_m_steer_rate_lim = std::numeric_limits<float64_t>::max();
+  m_mpc.m_steer_rate_lim = is_stopped ? max_m_steer_rate_lim : m_steer_rate_lim_rps;
 
   const bool8_t is_mpc_solved = m_mpc.calculateMPC(
     *m_current_steering_ptr, m_current_odometry_ptr->twist.twist.linear.x, m_current_pose_ptr->pose,
@@ -384,7 +390,8 @@ bool8_t MpcLateralController::isStoppedState() const
   const float64_t target_vel =
     m_current_trajectory_ptr->points.at(static_cast<size_t>(nearest)).longitudinal_velocity_mps;
 
-  const auto latest_published_cmd = m_ctrl_cmd_prev_ptr;  // use prev_cmd as a latest published command
+  const auto latest_published_cmd =
+    m_ctrl_cmd_prev_ptr;  // use prev_cmd as a latest published command
   const bool is_steer_converged =
     latest_published_cmd != nullptr && isSteerConverged(*latest_published_cmd);
   std::cerr << "is_steer_converged " << static_cast<int>(is_steer_converged) << std::endl;

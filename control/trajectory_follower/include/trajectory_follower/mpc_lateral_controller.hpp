@@ -109,6 +109,9 @@ private:
   float64_t m_new_traj_end_angle;      // check trajectory shape change
   bool m_keep_steer_control_until_converged;
 
+  /* parameters for mpc */
+  float64_t m_steer_rate_lim_rps;
+
   // trajectory buffer for detecting new trajectory
   std::deque<autoware_auto_planning_msgs::msg::Trajectory> m_trajectory_buffer;
 
