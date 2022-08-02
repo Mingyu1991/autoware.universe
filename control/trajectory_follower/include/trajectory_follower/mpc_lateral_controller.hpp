@@ -130,6 +130,7 @@ private:
   bool8_t m_is_ctrl_cmd_prev_initialized = false;
   //!< @brief previous control command
   autoware_auto_control_msgs::msg::AckermannLateralCommand m_ctrl_cmd_prev;
+  autoware_auto_control_msgs::msg::AckermannLateralCommand::SharedPtr m_ctrl_cmd_prev_ptr;
 
   //!< @brief flag whether the first trajectory has been received
   bool m_has_received_first_trajectory = false;

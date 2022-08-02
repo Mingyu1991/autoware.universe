@@ -194,11 +194,14 @@ boost::optional<LateralOutput> MpcLateralController::run()
   if (isStoppedState()) {
     // Reset input buffer
     for (auto & value : m_mpc.m_input_buffer) {
-      value = m_ctrl_cmd_prev.steering_tire_angle;
+      // value = m_ctrl_cmd_prev.steering_tire_angle;
+      value = m_ctrl_cmd_prev_ptr->steering_tire_angle;
     }
     // Use previous command value as previous raw steer command
-    m_mpc.m_raw_steer_cmd_prev = m_ctrl_cmd_prev.steering_tire_angle;
-    return createLateralOutput(m_ctrl_cmd_prev);
+    // m_mpc.m_raw_steer_cmd_prev = m_ctrl_cmd_prev.steering_tire_angle;
+    m_mpc.m_raw_steer_cmd_prev = m_ctrl_cmd_prev_ptr->steering_tire_angle;
+    // return createLateralOutput(m_ctrl_cmd_prev);
+    return createLateralOutput(*m_ctrl_cmd_prev_ptr);
   }
 
   if (!is_mpc_solved) {
@@ -209,6 +212,12 @@ boost::optional<LateralOutput> MpcLateralController::run()
   }
 
   m_ctrl_cmd_prev = ctrl_cmd;
+  m_ctrl_cmd_prev_ptr =
+    std::make_shared<autoware_auto_control_msgs::msg::AckermannLateralCommand>(ctrl_cmd);
+
+  std::cerr << "not stopped, cmd: " << static_cast<double>(ctrl_cmd.steering_tire_angle)
+            << ", current: " << m_current_steering_ptr->steering_tire_angle << std::endl;
+
   return createLateralOutput(ctrl_cmd);
 }
 
@@ -225,9 +234,11 @@ bool MpcLateralController::isSteerConverged(
   // wait for a while to propagate the trajectory shape to the output command when the trajectory
   // shape is changed.
   if (!m_has_received_first_trajectory || isTrajectoryShapeChanged()) {
+    std::cerr << "trajectory shape chnage" << std::endl;
     return false;
   }
-
+  std::cerr << "in isSteerConverged, cmd: " << static_cast<double>(cmd.steering_tire_angle)
+            << ", current: " << m_current_steering_ptr->steering_tire_angle << std::endl;
   const bool is_converged =
     std::abs(cmd.steering_tire_angle - m_current_steering_ptr->steering_tire_angle) <
     static_cast<float>(m_converged_steer_rad);
@@ -296,18 +307,18 @@ void MpcLateralController::setTrajectory(
 
   // update trajectory buffer to check the trajectory shape change.
   m_trajectory_buffer.push_back(*m_current_trajectory_ptr);
+  constexpr float64_t first_trajectory_duration_time = 5.0;
+  const float64_t duration_time =
+    m_has_received_first_trajectory ? m_new_traj_duration_time : first_trajectory_duration_time;
   while (rclcpp::ok()) {
     const auto time_diff = rclcpp::Time(m_trajectory_buffer.back().header.stamp) -
                            rclcpp::Time(m_trajectory_buffer.front().header.stamp);
 
-    const float64_t first_trajectory_duration_time = 5.0;
-    const float64_t duration_time =
-      m_has_received_first_trajectory ? m_new_traj_duration_time : first_trajectory_duration_time;
     if (time_diff.seconds() < duration_time) {
-      m_has_received_first_trajectory = true;
       break;
     }
     m_trajectory_buffer.pop_front();
+    m_has_received_first_trajectory = true;
   }
 }
 
@@ -372,8 +383,11 @@ bool8_t MpcLateralController::isStoppedState() const
   const float64_t target_vel =
     m_current_trajectory_ptr->points.at(static_cast<size_t>(nearest)).longitudinal_velocity_mps;
 
-  const auto latest_published_cmd = m_ctrl_cmd_prev;  // use prev_cmd as a latest published command
-  if (m_keep_steer_control_until_converged && !isSteerConverged(latest_published_cmd)) {
+  const auto latest_published_cmd = m_ctrl_cmd_prev_ptr;  // use prev_cmd as a latest published command
+  const bool is_steer_converged =
+    latest_published_cmd != nullptr && isSteerConverged(*latest_published_cmd);
+  std::cerr << "is_steer_converged " << static_cast<int>(is_steer_converged) << std::endl;
+  if (m_keep_steer_control_until_converged && !is_steer_converged) {
     return false;  // not stopState: keep control
   }
 
