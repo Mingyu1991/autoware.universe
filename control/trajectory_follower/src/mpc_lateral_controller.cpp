@@ -77,6 +77,7 @@ MpcLateralController::MpcLateralController(rclcpp::Node & node) : node_{&node}
     node_->declare_parameter<bool8_t>("keep_steer_control_until_converged");
   m_new_traj_duration_time = node_->declare_parameter<float64_t>("new_traj_duration_time");  // [s]
   m_new_traj_end_dist = node_->declare_parameter<float64_t>("new_traj_end_dist");            // [m]
+  m_new_traj_end_angle = node_->declare_parameter<float64_t>("new_traj_end_angle");  // [rad]
 
   /* mpc parameters */
   const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*node_).getVehicleInfo();
