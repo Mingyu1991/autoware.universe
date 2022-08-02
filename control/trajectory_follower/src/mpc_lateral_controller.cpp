@@ -222,9 +222,6 @@ boost::optional<LateralOutput> MpcLateralController::run()
   m_ctrl_cmd_prev_ptr =
     std::make_shared<autoware_auto_control_msgs::msg::AckermannLateralCommand>(ctrl_cmd);
 
-  std::cerr << "not stopped, cmd: " << static_cast<double>(ctrl_cmd.steering_tire_angle)
-            << ", current: " << m_current_steering_ptr->steering_tire_angle << std::endl;
-
   return createLateralOutput(ctrl_cmd);
 }
 
