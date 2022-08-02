@@ -545,11 +545,15 @@ bool MpcLateralController::isTrajectoryShapeChanged() const
 {
   // TODO(Horibe): update implementation to check trajectory shape around ego vehicle.
   // Now temporally check the goal position.
+  const auto & current_traj_end = m_current_trajectory_ptr->points.back().pose;
   for (const auto & trajectory : m_trajectory_buffer) {
-    if (
-      tier4_autoware_utils::calcDistance2d(
-        trajectory.points.back().pose, m_current_trajectory_ptr->points.back().pose) >
-      m_new_traj_end_dist) {
+    const auto & prev_traj_end = trajectory.points.back().pose;
+    const bool is_near =
+      tier4_autoware_utils::calcDistance2d(current_traj_end, prev_traj_end) < m_new_traj_end_dist;
+    const bool is_close_yaw =
+      std::abs(tf2::getYaw(current_traj_end.orientation) - tf2::getYaw(prev_traj_end.orientation)) <
+      m_new_traj_end_angle;
+    if (!is_near && !is_close_yaw) {
       return true;
     }
   }

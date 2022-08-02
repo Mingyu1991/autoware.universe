@@ -106,6 +106,7 @@ private:
   float64_t m_converged_steer_rad;
   float64_t m_new_traj_duration_time;  // check trajectory shape change
   float64_t m_new_traj_end_dist;       // check trajectory shape change
+  float64_t m_new_traj_end_angle;      // check trajectory shape change
   bool m_keep_steer_control_until_converged;
 
   // trajectory buffer for detecting new trajectory

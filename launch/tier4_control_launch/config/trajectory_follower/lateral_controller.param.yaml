@@ -61,6 +61,7 @@
     keep_steer_control_until_converged: false
     new_traj_duration_time: 1.0
     new_traj_end_dist: 0.3
+    new_traj_end_angle: 0.52  # rad (30deg)
 
     # vehicle parameters
     vehicle:
