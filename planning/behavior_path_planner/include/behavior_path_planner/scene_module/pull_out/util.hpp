@@ -42,7 +42,7 @@ using geometry_msgs::msg::Twist;
 PathWithLaneId combineReferencePath(const PathWithLaneId path1, const PathWithLaneId path2);
 PathWithLaneId getBackwardPath(
   const RouteHandler & route_handler, const lanelet::ConstLanelets & target_lanelets,
-  const Pose & current_pose, const Pose & backed_pose);
+  const Pose & current_pose, const Pose & backed_pose, const double velocity);
 lanelet::ConstLanelets getPullOutLanes(
   const lanelet::ConstLanelets & current_lanes,
   const std::shared_ptr<const PlannerData> & planner_data);

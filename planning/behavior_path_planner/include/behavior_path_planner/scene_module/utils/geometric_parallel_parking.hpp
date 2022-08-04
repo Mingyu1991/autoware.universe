@@ -55,6 +55,7 @@ struct ParallelParkingParameters
   double forward_parking_velocity;
   double backward_parking_velocity;
   double departing_velocity;
+  double lane_departure_margin;
   double arc_path_interval;
   double min_acc;
 };
@@ -103,7 +104,8 @@ private:
   bool isEnoughDistanceToStart(const Pose & start_pose) const;
   std::vector<PathWithLaneId> planOneTrial(
     const Pose & start_pose, const Pose & goal_pose, const double R_E_r,
-    const lanelet::ConstLanelets & lanes, const bool is_forward, const double end_pose_offset);
+    const lanelet::ConstLanelets & lanes, const bool is_forward, const double end_pose_offset,
+    const double lane_departure_margin);
   PathWithLaneId generateArcPath(
     const Pose & center, const double radius, const double start_yaw, double end_yaw,
     const bool is_left_turn, const bool is_forward);

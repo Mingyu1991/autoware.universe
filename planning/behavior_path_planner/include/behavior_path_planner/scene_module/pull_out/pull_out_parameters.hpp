@@ -35,6 +35,8 @@ struct PullOutParameters
   // geometric pull out
   double geometric_pull_out_velocity;
   double arc_path_interval;
+  double lane_departure_margin;
+  double backward_velocity;
   // shift pull out
   double shift_pull_out_velocity;
   int pull_out_sampling_num;

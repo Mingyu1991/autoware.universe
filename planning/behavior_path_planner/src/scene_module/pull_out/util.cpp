@@ -54,10 +54,8 @@ PathWithLaneId combineReferencePath(const PathWithLaneId path1, const PathWithLa
 
 PathWithLaneId getBackwardPath(
   const RouteHandler & route_handler, const lanelet::ConstLanelets & shoulder_lanelets,
-  const Pose & current_pose, const Pose & backed_pose)
+  const Pose & current_pose, const Pose & backed_pose, const double velocity)
 {
-  const double backward_velocity = -2.0;
-
   const auto current_pose_arc_coords =
     lanelet::utils::getArcCoordinates(shoulder_lanelets, current_pose);
   const auto backed_pose_arc_coords =
@@ -74,7 +72,7 @@ PathWithLaneId getBackwardPath(
     // backward center line path
     std::reverse(backward_path.points.begin(), backward_path.points.end());
     for (auto & p : backward_path.points) {
-      p.point.longitudinal_velocity_mps = backward_velocity;
+      p.point.longitudinal_velocity_mps = velocity;
     }
     backward_path.points.back().point.longitudinal_velocity_mps = 0.0;
 

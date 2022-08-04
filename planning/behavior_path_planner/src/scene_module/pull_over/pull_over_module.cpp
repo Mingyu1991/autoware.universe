@@ -172,7 +172,6 @@ bool PullOverModule::isExecutionRequested() const
 
   // check if goal_pose is far
   const double goal_arc_length = lanelet::utils::getArcCoordinates(current_lanes, goal_pose).length;
-  debug(goal_arc_length);
   if (std::abs(goal_arc_length) < std::numeric_limits<double>::epsilon()) {
     // can not caluculate arc langth correctly, maybe lane loop.
     return false;

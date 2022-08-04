@@ -254,6 +254,7 @@ ParallelParkingParameters PullOutModule::getGeometricPullOutParameters() const
   params.th_stopped_velocity_mps = parameters_.th_stopped_velocity_mps;
   params.arc_path_interval = parameters_.arc_path_interval;
   params.departing_velocity = parameters_.geometric_pull_out_velocity;
+  params.lane_departure_margin = parameters_.lane_departure_margin;
 
   return params;
 }
@@ -326,7 +327,8 @@ void PullOutModule::updatePullOutStatus()
   checkBackFinished();
   if (!status_.back_finished) {
     status_.backward_path = pull_out_utils::getBackwardPath(
-      *route_handler, pull_out_lanes, current_pose, status_.pull_out_start_pose);
+      *route_handler, pull_out_lanes, current_pose, status_.pull_out_start_pose,
+      parameters_.backward_velocity);
     status_.backward_path.drivable_area = util::generateDrivableArea(
       pull_out_lanes, common_parameters.drivable_area_resolution, common_parameters.vehicle_length,
       planner_data_);
