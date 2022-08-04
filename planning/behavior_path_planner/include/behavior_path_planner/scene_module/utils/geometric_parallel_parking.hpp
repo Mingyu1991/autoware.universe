@@ -101,7 +101,7 @@ private:
 
   void clearPaths();
   bool isEnoughDistanceToStart(const Pose & start_pose) const;
-  std::vector<PathWithLaneId> planOneTraial(
+  std::vector<PathWithLaneId> planOneTrial(
     const Pose & start_pose, const Pose & goal_pose, const double R_E_r,
     const lanelet::ConstLanelets & lanes, const bool is_forward, const double end_pose_offset);
   PathWithLaneId generateArcPath(
@@ -110,7 +110,7 @@ private:
   PathPointWithLaneId generateArcPathPoint(
     const Pose & center, const double radius, const double yaw, const bool is_left_turn,
     const bool is_forward);
-  Pose calcStartPose(
+  boost::optional<Pose> calcStartPose(
     const Pose & goal_pose, const double start_pose_offset, const double R_E_r,
     const bool is_forward);
   std::vector<PathWithLaneId> generateParkingPaths(

@@ -521,10 +521,8 @@ boost::optional<int64_t> getNearestLaneId(
   }
 
   lanelet::ConstLanelets current_lanes;
-  if (
-    lanelet::utils::query::getCurrentLanelets(
-      lanelet::utils::query::laneletLayer(lanelet_map), current_pose, &current_lanes) &&
-    nearest_segment_idx) {
+  if (lanelet::utils::query::getCurrentLanelets(
+        lanelet::utils::query::laneletLayer(lanelet_map), current_pose, &current_lanes)) {
     for (const auto & ll : current_lanes) {
       if (ll.id() == path.points.at(*nearest_segment_idx).lane_ids.at(0)) {
         nearest_lane_id = ll.id();
@@ -534,11 +532,13 @@ boost::optional<int64_t> getNearestLaneId(
 
     // if the lane_id of nearest_segment_idx does not involved in current_lanes,
     // search the lane_id of nearest_segment_idx + 1
-    *nearest_segment_idx += 1;
-    for (const auto & ll : current_lanes) {
-      if (ll.id() == path.points.at(*nearest_segment_idx).lane_ids.at(0)) {
-        nearest_lane_id = ll.id();
-        return nearest_lane_id;
+    if (*nearest_segment_idx + 1 < path.points.size()) {
+      *nearest_segment_idx += 1;
+      for (const auto & ll : current_lanes) {
+        if (ll.id() == path.points.at(*nearest_segment_idx).lane_ids.at(0)) {
+          nearest_lane_id = ll.id();
+          return nearest_lane_id;
+        }
       }
     }
   }

@@ -44,7 +44,11 @@ boost::optional<PullOutPath> GeometricPullOut::plan(Pose start_pose, Pose goal_p
 
   // todo: set params only once?
   planner_.setData(planner_data_, parallel_parking_parameters_);
-  planner_.planDeparting(start_pose, goal_pose, road_lanes, shoulder_lanes);
+  const bool found_safe_path =
+    planner_.planDeparting(start_pose, goal_pose, road_lanes, shoulder_lanes);
+  if (!found_safe_path) {
+    return {};
+  }
 
   // collsion check with objects in shoulder lanes
   const double collision_margin = 1.0;  // todo: make param
@@ -53,7 +57,7 @@ boost::optional<PullOutPath> GeometricPullOut::plan(Pose start_pose, Pose goal_p
     util::filterObjectsByLanelets(*(planner_data_->dynamic_object), shoulder_lanes);
   if (util::checkCollisionBetweenPathFootprintsAndObjects(
         vehicle_footprint_, arc_path, shoulder_lane_objects, collision_margin)) {
-    return boost::none;
+    return {};
   }
 
   output.partial_paths = planner_.getPaths();

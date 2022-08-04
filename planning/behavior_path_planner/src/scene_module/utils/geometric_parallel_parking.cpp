@@ -147,7 +147,7 @@ std::vector<PathWithLaneId> GeometricParallelParking::generateParkingPaths(
     return std::vector<PathWithLaneId>{};
   }
 
-  auto arc_paths = planOneTraial(start_pose, goal_pose, R_E_r, lanes, is_forward, end_pose_offset);
+  auto arc_paths = planOneTrial(start_pose, goal_pose, R_E_r, lanes, is_forward, end_pose_offset);
   if (arc_paths.empty()) {
     return std::vector<PathWithLaneId>{};
   }
@@ -196,11 +196,14 @@ bool GeometricParallelParking::plan(
     constexpr double min_steer_rad = 0.05;
     constexpr double steer_interval = 0.1;
     for (double steer = max_steer_rad_; steer > min_steer_rad; steer -= steer_interval) {
-      paths_.clear();
       const double R_E_r = common_params.wheel_base / std::tan(steer);
-      const Pose start_pose = calcStartPose(arc_end_pose, start_pose_offset, R_E_r, is_forward);
+      const auto start_pose = calcStartPose(arc_end_pose, start_pose_offset, R_E_r, is_forward);
+      if (!start_pose) {
+        continue;
+      }
+
       const auto paths = generateParkingPaths(
-        start_pose, goal_pose, R_E_r, lanes, is_forward, end_pose_offset,
+        *start_pose, goal_pose, R_E_r, lanes, is_forward, end_pose_offset,
         parameters_.forward_parking_velocity);
       if (!paths.empty()) {
         paths_ = paths;
@@ -215,9 +218,13 @@ bool GeometricParallelParking::plan(
     constexpr double offset_interval = 1.0;
     for (double start_pose_offset = 0; start_pose_offset < max_offset;
          start_pose_offset += offset_interval) {
-      const Pose start_pose = calcStartPose(arc_end_pose, start_pose_offset, R_E_min_, is_forward);
+      const auto start_pose = calcStartPose(arc_end_pose, start_pose_offset, R_E_min_, is_forward);
+      if (!start_pose) {
+        continue;
+      }
+
       const auto paths = generateParkingPaths(
-        start_pose, goal_pose, R_E_min_, lanes, is_forward, end_pose_offset,
+        *start_pose, goal_pose, R_E_min_, lanes, is_forward, end_pose_offset,
         parameters_.backward_parking_velocity);
       if (!paths.empty()) {
         paths_ = paths;
@@ -247,12 +254,16 @@ bool GeometricParallelParking::planDeparting(
   for (double end_pose_offset = 0; end_pose_offset < max_offset;
        end_pose_offset += offset_interval) {
     // departing end pose which is the second arc path end
-    const Pose end_pose = calcStartPose(start_pose, end_pose_offset, R_E_min_, is_forward);
+    const auto end_pose = calcStartPose(start_pose, end_pose_offset, R_E_min_, is_forward);
+    if (!end_pose) {
+      continue;
+    }
 
     // plan reverse path of parking. end_pose <-> start_pose
     auto arc_paths =
-      planOneTraial(end_pose, start_pose, R_E_min_, lanes, is_forward, start_pose_offset);
+      planOneTrial(*end_pose, start_pose, R_E_min_, lanes, is_forward, start_pose_offset);
     if (arc_paths.empty()) {
+      // not found path
       continue;
     }
 
@@ -268,8 +279,7 @@ bool GeometricParallelParking::planDeparting(
     // get road center line path from departing end to goal, and conbine after the second arc path
     PathWithLaneId road_center_line_path;
     {
-      const Pose end_pose = calcStartPose(start_pose, end_pose_offset, R_E_min_, is_forward);
-      const double s_start = getArcCoordinates(road_lanes, end_pose).length + 1.0;  // need buffer?
+      const double s_start = getArcCoordinates(road_lanes, *end_pose).length + 1.0;  // need buffer?
       const double s_end = getArcCoordinates(road_lanes, goal_pose).length;
       road_center_line_path =
         planner_data_->route_handler->getCenterLinePath(road_lanes, s_start, s_end, true);
@@ -289,7 +299,7 @@ bool GeometricParallelParking::planDeparting(
   return false;
 }
 
-Pose GeometricParallelParking::calcStartPose(
+boost::optional<Pose> GeometricParallelParking::calcStartPose(
   const Pose & goal_pose, const double start_pose_offset, const double R_E_r, const bool is_forward)
 {
   // Not use shoulder lanes.
@@ -297,12 +307,19 @@ Pose GeometricParallelParking::calcStartPose(
   const auto arc_coordinates = lanelet::utils::getArcCoordinates(current_lanes, goal_pose);
 
   // todo
-  // When forwarding, the turning radius of the right and left are the same.
+  // When forwarding, the turning radius of the right and left will be the same.
   // But the left turn should also have a minimum turning radius.
-  double dx =
-    2 * std::sqrt(std::pow(R_E_r, 2) - std::pow(-arc_coordinates.distance / 2 + R_E_r, 2));
-  dx = is_forward ? -dx : dx;
-  Pose start_pose = calcOffsetPose(goal_pose, dx + start_pose_offset, -arc_coordinates.distance, 0);
+  // see https://www.sciencedirect.com/science/article/pii/S1474667016436852 for the dx detail
+  const double squared_distacne_to_arc_connect =
+    std::pow(R_E_r, 2) - std::pow(-arc_coordinates.distance / 2 + R_E_r, 2);
+  if (squared_distacne_to_arc_connect < 0) {
+    // may be current_pose is behind the lane
+    return boost::none;
+  }
+  const double dx_sign = is_forward ? -1 : 1;
+  const double dx = 2 * std::sqrt(squared_distacne_to_arc_connect) * dx_sign;
+  const Pose start_pose =
+    calcOffsetPose(goal_pose, dx + start_pose_offset, -arc_coordinates.distance, 0);
 
   return start_pose;
 }
@@ -330,7 +347,7 @@ PathWithLaneId GeometricParallelParking::generateStraightPath(const Pose & start
   return path;
 }
 
-std::vector<PathWithLaneId> GeometricParallelParking::planOneTraial(
+std::vector<PathWithLaneId> GeometricParallelParking::planOneTrial(
   const Pose & start_pose, const Pose & goal_pose, const double R_E_r,
   const lanelet::ConstLanelets & lanes, const bool is_forward, const double end_pose_offset)
 {
