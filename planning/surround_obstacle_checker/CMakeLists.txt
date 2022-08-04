@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(surround_obstacle_checker)
 
+set(CMAKE_BUILD_TYPE "Debug")
+
 ### Compile options
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -25,6 +27,7 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
 
 target_link_libraries(${PROJECT_NAME}
   ${PCL_LIBRARIES}
+  glog
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}

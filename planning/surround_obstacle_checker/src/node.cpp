@@ -30,6 +30,8 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
+#include <glog/logging.h>
+
 SurroundObstacleCheckerNode::SurroundObstacleCheckerNode(const rclcpp::NodeOptions & node_options)
 : Node("surround_obstacle_checker_node", node_options),
   tf_buffer_(this->get_clock()),
@@ -68,6 +70,10 @@ SurroundObstacleCheckerNode::SurroundObstacleCheckerNode(const rclcpp::NodeOptio
   current_velocity_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
     "~/input/odometry", 1,
     std::bind(&SurroundObstacleCheckerNode::currentVelocityCallback, this, std::placeholders::_1));
+
+    // glog
+    google::InitGoogleLogging("surround_obstacle_checker_node");
+    google::InstallFailureSignalHandler();
 }
 
 void SurroundObstacleCheckerNode::pathCallback(
