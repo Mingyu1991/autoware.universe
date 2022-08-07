@@ -111,7 +111,6 @@ bool PullOutModule::isExecutionRequested() const
                           parameters_.th_arrived_distance_m;
 
   lanelet::Lanelet closest_shoulder_lanelet;
-
   if (
     lanelet::utils::query::getClosestLanelet(
       planner_data_->route_handler->getShoulderLanelets(), planner_data_->self_pose->pose,
@@ -442,6 +441,10 @@ bool PullOutModule::isLongEnough(const lanelet::ConstLanelets & lanelets) const
 
 bool PullOutModule::hasFinishedPullOut() const
 {
+  if (!status_.back_finished) {
+    return false;
+  }
+
   // check ego car is close enough to goal pose
   const auto current_pose = planner_data_->self_pose->pose;
   const auto arclength_current =
