@@ -393,6 +393,7 @@ PullOverParameters BehaviorPathPlannerNode::getPullOverParam()
   p.forward_parking_velocity = dp("forward_parking_velocity", 1.0);
   p.backward_parking_velocity = dp("backward_parking_velocity", -0.5);
   p.arc_path_interval = dp("arc_path_interval", 1.0);
+  p.max_steer_rad = dp("max_steer_rad", 0.35);  // 20deg
   // hazard
   p.hazard_on_threshold_dis = dp("hazard_on_threshold_dis", 1.0);
   p.hazard_on_threshold_vel = dp("hazard_on_threshold_vel", 0.5);
@@ -454,6 +455,7 @@ PullOutParameters BehaviorPathPlannerNode::getPullOutParam()
   p.arc_path_interval = dp("arc_path_interval", 1.0);
   p.lane_departure_margin = dp("lane_departure_margin", 0.2);
   p.backward_velocity = dp("backward_velocity", -0.3);
+  p.max_steer_rad = dp("max_steer_rad", -0.26);  // 15deg
   // shift pull out
   p.shift_pull_out_velocity = dp("shift_pull_out_velocity", 8.3);
   p.pull_out_sampling_num = dp("pull_out_sampling_num", 4);

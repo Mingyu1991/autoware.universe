@@ -106,6 +106,7 @@ ParallelParkingParameters PullOverModule::getGeometricPullOutParameters() const
   params.backward_parking_velocity = parameters_.backward_parking_velocity;
   params.arc_path_interval = parameters_.arc_path_interval;
   params.min_acc = parameters_.min_acc;
+  params.max_steer_rad = parameters_.max_steer_rad;
 
   return params;
 }

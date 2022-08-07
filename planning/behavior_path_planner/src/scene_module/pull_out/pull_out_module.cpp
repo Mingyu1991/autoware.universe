@@ -255,6 +255,7 @@ ParallelParkingParameters PullOutModule::getGeometricPullOutParameters() const
   params.arc_path_interval = parameters_.arc_path_interval;
   params.departing_velocity = parameters_.geometric_pull_out_velocity;
   params.lane_departure_margin = parameters_.lane_departure_margin;
+  params.max_steer_rad = parameters_.max_steer_rad;
 
   return params;
 }

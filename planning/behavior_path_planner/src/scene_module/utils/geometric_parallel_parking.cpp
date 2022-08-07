@@ -196,7 +196,7 @@ bool GeometricParallelParking::plan(
     constexpr double start_pose_offset = 0.0;
     constexpr double min_steer_rad = 0.05;
     constexpr double steer_interval = 0.1;
-    for (double steer = max_steer_rad_; steer > min_steer_rad; steer -= steer_interval) {
+    for (double steer = parameters_.max_steer_rad; steer > min_steer_rad; steer -= steer_interval) {
       const double R_E_r = common_params.wheel_base / std::tan(steer);
       const auto start_pose = calcStartPose(arc_end_pose, start_pose_offset, R_E_r, is_forward);
       if (!start_pose) {
@@ -513,9 +513,8 @@ void GeometricParallelParking::setData(
   parameters_ = parameters;
 
   auto common_params = planner_data_->parameters;
-  max_steer_rad_ = deg2rad(max_steer_deg_);
 
-  R_E_min_ = common_params.wheel_base / std::tan(max_steer_rad_);
+  R_E_min_ = common_params.wheel_base / std::tan(parameters_.max_steer_rad);
   R_Bl_min_ = std::hypot(
     R_E_min_ + common_params.wheel_tread / 2 + common_params.left_over_hang,
     common_params.wheel_base + common_params.front_overhang);

@@ -58,6 +58,7 @@ struct ParallelParkingParameters
   double lane_departure_margin;
   double arc_path_interval;
   double min_acc;
+  double max_steer_rad;
 };
 
 class GeometricParallelParking
@@ -89,10 +90,6 @@ private:
   std::shared_ptr<const PlannerData> planner_data_;
   ParallelParkingParameters parameters_;
 
-  // todo: use vehicle info after merging
-  // https://github.com/autowarefoundation/autoware.universe/pull/740
-  double max_steer_deg_ = 40.0;  // max steering angle [deg].
-  double max_steer_rad_;
   double R_E_min_;   // base_link
   double R_Bl_min_;  // front_left
 
