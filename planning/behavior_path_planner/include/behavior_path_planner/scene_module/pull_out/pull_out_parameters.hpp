@@ -28,6 +28,7 @@ struct PullOutParameters
   double th_stopped_time_sec;
   double collision_check_margin;
   double pull_out_finish_judge_buffer;
+  double back_update_duration;
   // search start pose backward
   double max_back_distance;
   double backward_search_resolution;

@@ -273,10 +273,22 @@ PathWithLaneId PullOutModule::getCurrentPath() const
 // running only when waiting approval
 void PullOutModule::updatePullOutStatus()
 {
+  // for preventing chattering between back and pull_out
+  if (!status_.back_finished) {
+    if (last_pull_out_start_update_time_ == nullptr) {
+      last_pull_out_start_update_time_ = std::make_unique<rclcpp::Time>(clock_->now());
+    }
+    const auto elpased_time = (clock_->now() - *last_pull_out_start_update_time_).seconds();
+    if (elpased_time < parameters_.back_update_duration) {
+      return;
+    }
+    last_pull_out_start_update_time_ = std::make_unique<rclcpp::Time>(clock_->now());
+  }
+
   const auto & route_handler = planner_data_->route_handler;
-  const auto common_parameters = planner_data_->parameters;
-  const auto current_pose = planner_data_->self_pose->pose;
-  const auto goal_pose = planner_data_->route_handler->getGoalPose();
+  const auto & common_parameters = planner_data_->parameters;
+  const auto & current_pose = planner_data_->self_pose->pose;
+  const auto & goal_pose = planner_data_->route_handler->getGoalPose();
 
   const auto current_lanes = getCurrentLanes();
   status_.current_lanes = current_lanes;
@@ -471,7 +483,6 @@ void PullOutModule::checkBackFinished()
   if (!status_.back_finished && is_near && is_stopped) {
     RCLCPP_INFO(getLogger(), "back finished");
     status_.back_finished = true;
-    last_back_finished_time_ = std::make_unique<rclcpp::Time>(clock_->now());
 
     // requst pull_out approval
     waitApproval();

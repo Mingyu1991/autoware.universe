@@ -446,6 +446,7 @@ PullOutParameters BehaviorPathPlannerNode::getPullOutParam()
   p.th_stopped_time_sec = dp("th_stopped_time_sec", 1.0);
   p.collision_check_margin = dp("collision_check_margin", 1.0);
   p.pull_out_finish_judge_buffer = dp("pull_out_finish_judge_buffer", 1.0);
+  p.back_update_duration = dp("back_update_duration", 3.0);
   // search start pose backward
   p.max_back_distance = dp("max_back_distance", 15.0);
   p.backward_search_resolution = dp("backward_search_resolution", 2.0);

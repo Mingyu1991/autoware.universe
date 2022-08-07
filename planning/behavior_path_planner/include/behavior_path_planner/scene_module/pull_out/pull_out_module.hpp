@@ -89,13 +89,13 @@ private:
   std::vector<Pose> backed_pose_candidates_;
   PoseStamped backed_pose_;
   vehicle_info_util::VehicleInfo vehicle_info_;
-  std::unique_ptr<rclcpp::Time> last_back_finished_time_;
   std::deque<nav_msgs::msg::Odometry::ConstSharedPtr> odometry_buffer_;
 
   rclcpp::Publisher<PoseStamped>::SharedPtr pull_out_start_pose_pub_;
   rclcpp::Publisher<PoseArray>::SharedPtr full_path_pose_array_pub_;
   rclcpp::Clock::SharedPtr clock_;
   std::unique_ptr<rclcpp::Time> last_route_received_time_;
+  std::unique_ptr<rclcpp::Time> last_pull_out_start_update_time_;
 
   std::shared_ptr<PullOutPlannerBase> getCurrentPlanner() const;
   lanelet::ConstLanelets getCurrentLanes() const;
