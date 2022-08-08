@@ -3,7 +3,7 @@
     pull_out:
       enable_shift_pull_out: true
       enable_geometric_pull_out: true
-      eable_back: true
+      enable_back: true
       th_arrived_distance_m: 1.0
       th_stopped_velocity_mps: 0.01
       th_stopped_time_sec: 1.0
