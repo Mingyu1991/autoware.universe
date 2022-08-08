@@ -105,7 +105,7 @@ ParallelParkingParameters PullOverModule::getGeometricPullOutParameters() const
   params.forward_parking_velocity = parameters_.forward_parking_velocity;
   params.backward_parking_velocity = parameters_.backward_parking_velocity;
   params.arc_path_interval = parameters_.arc_path_interval;
-  params.min_acc = parameters_.min_acc;
+  params.max_deceleration = parameters_.max_deceleration;
   params.max_steer_rad = parameters_.max_steer_rad;
 
   return params;
@@ -329,7 +329,7 @@ bool PullOverModule::isLongEnoughToParkingStart(
 
   const double current_vel = planner_data_->self_odometry->twist.twist.linear.x;
   const double current_to_stop_distance =
-    std::pow(current_vel, 2) / std::abs(parameters_.min_acc) / 2;
+    std::pow(current_vel, 2) / parameters_.max_deceleration / 2;
 
   // once stopped, it cannot start again if start_pose is close.
   // so need enough distance to restart
@@ -725,7 +725,7 @@ PathWithLaneId PullOverModule::getStopPath()
 
   const double current_vel = planner_data_->self_odometry->twist.twist.linear.x;
   const double current_to_stop_distance =
-    std::pow(current_vel, 2) / std::abs(parameters_.min_acc) / 2;
+    std::pow(current_vel, 2) / parameters_.max_deceleration / 2;
   const auto arclength_current_pose =
     lanelet::utils::getArcCoordinates(status_.current_lanes, current_pose).length;
 

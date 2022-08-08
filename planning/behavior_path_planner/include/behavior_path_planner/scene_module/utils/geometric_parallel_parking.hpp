@@ -57,7 +57,7 @@ struct ParallelParkingParameters
   double departing_velocity;
   double lane_departure_margin;
   double arc_path_interval;
-  double min_acc;
+  double max_deceleration;
   double max_steer_rad;
 };
 

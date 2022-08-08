@@ -56,7 +56,7 @@ struct PullOverParameters
   double th_stopped_time_sec;
   double margin_from_boundary;
   double decide_path_distance;
-  double min_acc;
+  double max_deceleration;
   bool enable_shift_parking;
   bool enable_arc_forward_parking;
   bool enable_arc_backward_parking;
