@@ -58,9 +58,21 @@ Eigen::MatrixXd EBPathOptimizer::makePMatrix()
   for (int r = 0; r < num_points * 2; ++r) {
     for (int c = 0; c < num_points * 2; ++c) {
       if (r == c) {
-        P(r, c) = 6.0;
+        if (r == 0 || r == num_points - 1 || r == num_point || r == num_points * 2 - 1) {
+          P(r, c) = 1.0;
+        } else if (r == 1 || r == num_points - 2 || r == num_point + 1|| r == num_points * 2 - 2) {
+          P(r, c) = 5.0;
+        } else {
+          P(r, c) = 6.0;
+        }
       } else if (std::abs(c - r) == 1) {
-        P(r, c) = -4.0;
+        if (r == 0 || r == num_points - 1 || r == num_point || r == num_points * 2 - 1) {
+          P(r, c) = -2.0;
+        } else if (c == 0 || c == num_points - 1 || c == num_point || c == num_points * 2 - 1) {
+          P(r, c) = -2.0;
+        } else {
+          P(r, c) = -4.0;
+        }
       } else if (std::abs(c - r) == 2) {
         P(r, c) = 1.0;
       } else {
@@ -68,6 +80,14 @@ Eigen::MatrixXd EBPathOptimizer::makePMatrix()
       }
     }
   }
+
+  for (int r = 0; r < num_points * 2; ++r) {
+    for (int c = 0; c < num_points * 2; ++c) {
+      std::cerr << P(r, c) << " ";
+    }
+    std::ceerr << std::endl;
+  }
+  std::ceerr << std::endl;
   return P;
 }
 
