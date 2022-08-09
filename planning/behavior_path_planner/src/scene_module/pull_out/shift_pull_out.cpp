@@ -213,16 +213,18 @@ std::vector<PullOutPath> ShiftPullOut::getPullOutPaths(
     }
 
     // check lane departure to shift end point
-    PathWithLaneId path_to_shift_end;
+    PathWithLaneId path_current_to_shift_end;
     {
       const auto & path_to_goal = candidate_path.partial_paths.front();
-      path_to_shift_end.points.insert(
-        path_to_shift_end.points.begin(), path_to_goal.points.begin(),
+      const auto current_idx =
+        findNearestIndex(path_to_goal.points, planner_data_->self_pose->pose);
+      path_current_to_shift_end.points.insert(
+        path_current_to_shift_end.points.begin(), path_to_goal.points.begin() + *current_idx,
         path_to_goal.points.begin() + *pull_out_end_idx + 1);
     }
     auto lanes = road_lanelets;
     lanes.insert(lanes.end(), shoulder_lanelets.begin(), shoulder_lanelets.end());
-    if (lane_departure_checker_->checkPathWillLeaveLane(lanes, path_to_shift_end)) {
+    if (lane_departure_checker_->checkPathWillLeaveLane(lanes, path_current_to_shift_end)) {
       continue;
     }
 
