@@ -139,8 +139,10 @@ std::vector<PullOutPath> ShiftPullOut::getPullOutPaths(
       road_lane_reference_path = route_handler.getCenterLinePath(road_lanelets, s_start, s_end);
     }
 
-    const double pull_out_distance = path_shifter.calcLongitudinalDistFromJerk(
-      abs(distance_to_road_center), lateral_jerk, shift_pull_out_velocity);
+    constexpr double min_pull_out_distance = 20.0;  // todo make param
+    const double pull_out_distance_tmp = path_shifter.calcLongitudinalDistFromJerk(
+        abs(distance_to_road_center), lateral_jerk, shift_pull_out_velocity);
+    const double pull_out_distance = std::max(pull_out_distance_tmp, min_pull_out_distance);
 
     // get shift point start/end
     const auto shift_point_start = shoulder_reference_path.points.back();
@@ -149,7 +151,7 @@ std::vector<PullOutPath> ShiftPullOut::getPullOutPaths(
         lanelet::utils::getArcCoordinates(road_lanelets, shift_point_start.point.pose);
       const double s_start = arc_position_shift_start.length + pull_out_distance;
       const double s_end = s_start + std::numeric_limits<double>::epsilon();
-      const auto path = route_handler.getCenterLinePath(shoulder_lanelets, s_start, s_end, true);
+      const auto path = route_handler.getCenterLinePath(road_lanelets, s_start, s_end, true);
       return path.points.front();
     }();
 
