@@ -27,8 +27,6 @@ struct PullOutPath
   std::vector<PathWithLaneId> partial_paths;
   Pose start_pose;
   Pose end_pose;
-  ShiftedPath shifted_path;
-  ShiftPoint shift_point;
   double acceleration = 0.0;
   double preparation_length = 0.0;
   double pull_out_length = 0.0;

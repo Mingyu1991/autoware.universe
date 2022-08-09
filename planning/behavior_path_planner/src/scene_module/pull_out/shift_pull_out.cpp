@@ -38,10 +38,11 @@ boost::optional<PullOutPath> ShiftPullOut::plan(Pose start_pose, Pose goal_pose)
   PullOutPath safe_path;
   std::vector<PullOutPath> valid_paths;
   const auto & route_handler = planner_data_->route_handler;
-  const auto common_parameters = planner_data_->parameters;
-  const auto dynamic_objects = planner_data_->dynamic_object;
-  const auto road_lanes = util::getCurrentLanes(planner_data_);
-  const auto shoulder_lanes = getPullOutLanes(road_lanes, planner_data_);
+  const auto & common_parameters = planner_data_->parameters;
+  const auto & dynamic_objects = planner_data_->dynamic_object;
+  const auto & road_lanes = util::getCurrentLanes(planner_data_);
+  const auto & shoulder_lanes = getPullOutLanes(road_lanes, planner_data_);
+  const auto & current_pose = planner_data_->self_pose->pose;
 
   lanelet::ConstLanelets lanes;
   lanes.insert(lanes.end(), road_lanes.begin(), road_lanes.end());
@@ -68,8 +69,25 @@ boost::optional<PullOutPath> ShiftPullOut::plan(Pose start_pose, Pose goal_pose)
     for (auto & pull_out_path : valid_paths) {
       auto & shift_path =
         pull_out_path.partial_paths.front();  // shift path is not separate but only one.
+
+      // check lane_depature and collsion with path between current to pull_out_end
+      PathWithLaneId path_current_to_shift_end;
+      {
+        const auto current_idx = findNearestIndex(shift_path.points, current_pose);
+        const auto pull_out_end_idx = findNearestIndex(shift_path.points, pull_out_path.end_pose);
+        path_current_to_shift_end.points.insert(
+          path_current_to_shift_end.points.begin(), shift_path.points.begin() + *current_idx,
+          shift_path.points.begin() + *pull_out_end_idx + 1);
+      }
+
+      // check lane departure
+      if (lane_departure_checker_->checkPathWillLeaveLane(lanes, path_current_to_shift_end)) {
+        continue;
+      }
+
+      // check collision
       if (util::checkCollisionBetweenPathFootprintsAndObjects(
-            vehicle_footprint_, pull_out_path.partial_paths.front(), shoulder_lane_objects,
+            vehicle_footprint_, path_current_to_shift_end, shoulder_lane_objects,
             parameters_.collision_check_margin)) {
         continue;
       }
@@ -194,8 +212,6 @@ std::vector<PullOutPath> ShiftPullOut::getPullOutPaths(
 
       const auto combined_path = combineReferencePath(shoulder_reference_path, shifted_path.path);
       candidate_path.partial_paths.push_back(util::resamplePathWithSpline(combined_path, 1.0));
-      candidate_path.shifted_path = shifted_path;
-      candidate_path.shift_point = shift_point;
       candidate_path.start_pose = shift_point.start;
       candidate_path.end_pose = shift_point.end;
 
@@ -209,22 +225,6 @@ std::vector<PullOutPath> ShiftPullOut::getPullOutPaths(
       RCLCPP_ERROR_STREAM(
         rclcpp::get_logger("behavior_path_planner").get_child("pull_out").get_child("util"),
         "lane change end idx not found on target path.");
-      continue;
-    }
-
-    // check lane departure to shift end point
-    PathWithLaneId path_current_to_shift_end;
-    {
-      const auto & path_to_goal = candidate_path.partial_paths.front();
-      const auto current_idx =
-        findNearestIndex(path_to_goal.points, planner_data_->self_pose->pose);
-      path_current_to_shift_end.points.insert(
-        path_current_to_shift_end.points.begin(), path_to_goal.points.begin() + *current_idx,
-        path_to_goal.points.begin() + *pull_out_end_idx + 1);
-    }
-    auto lanes = road_lanelets;
-    lanes.insert(lanes.end(), shoulder_lanelets.begin(), shoulder_lanelets.end());
-    if (lane_departure_checker_->checkPathWillLeaveLane(lanes, path_current_to_shift_end)) {
       continue;
     }
 
