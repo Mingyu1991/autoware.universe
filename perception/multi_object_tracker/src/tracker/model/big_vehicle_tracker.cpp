@@ -51,7 +51,7 @@ BigVehicleTracker::BigVehicleTracker(
   float r_stddev_x = 1.5;                                     // [m]
   float r_stddev_y = 0.5;                                     // [m]
   float r_stddev_yaw = tier4_autoware_utils::deg2rad(30);     // [rad]
-  float r_stddev_vx = 1.0;                                    // [m/s]
+  float r_stddev_vx = 0.3;                                    // [m/s]
   float p0_stddev_x = 1.5;                                    // [m]
   float p0_stddev_y = 0.5;                                    // [m]
   float p0_stddev_yaw = tier4_autoware_utils::deg2rad(30);    // [rad]
