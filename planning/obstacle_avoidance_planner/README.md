@@ -192,7 +192,7 @@ $$
 \begin{align}
 \ J & = \min \sum_{k=1}^{n-1} ||(\boldsymbol{p}_{k+1} - \boldsymbol{p}_{k}) - (\boldsymbol{p}_{k} - \boldsymbol{p}_{k-1})||^2 \\
 \ & = \min \sum_{k=1}^{n-1} ||\boldsymbol{p}_{k+1} - 2 \boldsymbol{p}_{k} + \boldsymbol{p}_{k-1}||^2 \\
-\ & = \min \sum_{k=1}^{n-1} \{(x_{k+1} - x_k + x_{k-1})^2 + (y_{k+1} - y_k + y_{k-1})^2\} \\
+\ & = \min \sum_{k=1}^{n-1} \{(x_{k+1} - 2 x_k + x_{k-1})^2 + (y_{k+1} - 2 y_k + y_{k-1})^2\} \\
 \ & = \min
     \begin{pmatrix}
         \ x_0 \\

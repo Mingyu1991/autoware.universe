@@ -115,6 +115,110 @@ std::vector<geometry_msgs::msg::Pose> resamplePath(
   return resampled_points;
 }
 
+std::vector<geometry_msgs::msg::Pose> resamplePath(
+  const std::vector<geometry_msgs::msg::Pose> & points,
+  const double resample_interval, const bool use_lerp_for_xy,
+  const bool use_lerp_for_z)
+{
+  // Check vector size and if out_arclength have the end point of the path
+  const double input_path_len = motion_utils::calcArcLength(points);
+  if (points.size() < 2) {
+    std::cerr
+      << "[motion_utils]: input points size is wrong"
+      << std::endl;
+    return points;
+  }
+
+  std::vector<double> resampled_arclength;
+  for (double s = 0.0; s < input_path_len; s += resample_interval) {
+    resampled_arclength.push_back(s);
+  }
+  if (resampled_arclength.empty()) {
+    std::cerr << "[motion_utils]: resampled arclength is empty" << std::endl;
+    return points;
+  }
+
+  // Input Path Information
+  std::vector<double> input_arclength(points.size());
+  std::vector<double> x(points.size());
+  std::vector<double> y(points.size());
+  std::vector<double> z(points.size());
+
+  input_arclength.front() = 0.0;
+  x.front() = points.front().position.x;
+  y.front() = points.front().position.y;
+  z.front() = points.front().position.z;
+  for (size_t i = 1; i < points.size(); ++i) {
+    const auto & prev_pt = points.at(i - 1);
+    const auto & curr_pt = points.at(i);
+    const double ds = tier4_autoware_utils::calcDistance2d(prev_pt.position, curr_pt.position);
+    input_arclength.at(i) = ds + input_arclength.at(i - 1);
+    x.at(i) = curr_pt.position.x;
+    y.at(i) = curr_pt.position.y;
+    z.at(i) = curr_pt.position.z;
+  }
+
+  // Interpolate
+  const auto lerp = [&](const auto & input) {
+    return interpolation::lerp(input_arclength, input, resampled_arclength);
+  };
+  const auto slerp = [&](const auto & input) {
+    return interpolation::slerp(input_arclength, input, resampled_arclength);
+  };
+
+  const auto interpolated_x = use_lerp_for_xy ? lerp(x) : slerp(x);
+  const auto interpolated_y = use_lerp_for_xy ? lerp(y) : slerp(y);
+  const auto interpolated_z = use_lerp_for_z ? lerp(z) : slerp(z);
+
+  std::vector<geometry_msgs::msg::Pose> resampled_points;
+  resampled_points.resize(interpolated_x.size());
+
+  // Insert Position, Velocity and Heading Rate
+  for (size_t i = 0; i < resampled_points.size(); ++i) {
+    geometry_msgs::msg::Pose pose;
+    pose.position.x = interpolated_x.at(i);
+    pose.position.y = interpolated_y.at(i);
+    pose.position.z = interpolated_z.at(i);
+    resampled_points.at(i) = pose;
+  }
+
+  const bool is_driving_forward =
+    tier4_autoware_utils::isDrivingForward(points.at(0), points.at(1));
+  // Insert Orientation
+  if (is_driving_forward) {
+    for (size_t i = 0; i < resampled_points.size() - 1; ++i) {
+      const auto & src_point = resampled_points.at(i).position;
+      const auto & dst_point = resampled_points.at(i + 1).position;
+      const double pitch = tier4_autoware_utils::calcElevationAngle(src_point, dst_point);
+      const double yaw = tier4_autoware_utils::calcAzimuthAngle(src_point, dst_point);
+      resampled_points.at(i).orientation =
+        tier4_autoware_utils::createQuaternionFromRPY(0.0, pitch, yaw);
+      if (i == resampled_points.size() - 2) {
+        // Terminal Orientation is same as the point before it
+        resampled_points.at(i + 1).orientation = resampled_points.at(i).orientation;
+      }
+    }
+  } else {
+    for (size_t i = resampled_points.size() - 1; i >= 1; --i) {
+      const auto & src_point = resampled_points.at(i).position;
+      const auto & dst_point = resampled_points.at(i - 1).position;
+      const double pitch = tier4_autoware_utils::calcElevationAngle(src_point, dst_point);
+      const double yaw = tier4_autoware_utils::calcAzimuthAngle(src_point, dst_point);
+      resampled_points.at(i).orientation =
+        tier4_autoware_utils::createQuaternionFromRPY(0.0, pitch, yaw);
+    }
+
+    // Initial Orientation is depend on the initial value of the resampled_arclength
+    if (resampled_arclength.front() < 1e-3) {
+      resampled_points.at(0).orientation = points.at(0).orientation;
+    } else {
+      resampled_points.at(0).orientation = resampled_points.at(1).orientation;
+    }
+  }
+
+  return resampled_points;
+}
+
 autoware_auto_planning_msgs::msg::PathWithLaneId resamplePath(
   const autoware_auto_planning_msgs::msg::PathWithLaneId & input_path,
   const std::vector<double> & resampled_arclength, const bool use_lerp_for_xy,

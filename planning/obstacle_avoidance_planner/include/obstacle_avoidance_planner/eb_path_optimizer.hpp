@@ -35,6 +35,29 @@
 
 class EBPathOptimizer
 {
+public:
+  struct ConstrainLines
+  {
+    struct Constrain
+    {
+      Eigen::Vector2d coef;
+      double upper_bound;
+      double lower_bound;
+    };
+
+    Constrain x;
+    Constrain y;
+  };
+
+  EBPathOptimizer(
+    const bool is_showing_debug_info, const TrajectoryParam & traj_param, const EBParam & eb_param,
+    const VehicleParam & vehicle_param);
+
+  boost::optional<std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint>> getEBTrajectory(
+    const geometry_msgs::msg::Pose & ego_pose, const autoware_auto_planning_msgs::msg::Path & path,
+    const std::unique_ptr<Trajectories> & prev_trajs, const double current_ego_vel,
+    std::shared_ptr<DebugData> debug_data_ptr);
+
 private:
   struct CandidatePoints
   {
@@ -44,54 +67,12 @@ private:
     int end_path_idx;
   };
 
-  struct Anchor
-  {
-    geometry_msgs::msg::Pose pose;
-  };
-
-  struct ConstrainRectangles
-  {
-    ConstrainRectangle object_constrain_rectangle;
-    ConstrainRectangle road_constrain_rectangle;
-  };
-
-  struct ConstrainLines
-  {
-    double x_coef;
-    double y_coef;
-    double lower_bound;
-    double upper_bound;
-  };
-
-  struct Constrain
-  {
-    ConstrainLines top_and_bottom;
-    ConstrainLines left_and_right;
-  };
-
-  struct Rectangle
-  {
-    geometry_msgs::msg::Point top_left;
-    geometry_msgs::msg::Point top_right;
-    geometry_msgs::msg::Point bottom_left;
-    geometry_msgs::msg::Point bottom_right;
-  };
-
-  struct OccupancyMaps
-  {
-    std::vector<std::vector<int>> object_occupancy_map;
-    std::vector<std::vector<int>> road_occupancy_map;
-  };
-
   const bool is_showing_debug_info_;
-  const double epsilon_;
-
   const QPParam qp_param_;
   const TrajectoryParam traj_param_;
   const EBParam eb_param_;
   const VehicleParam vehicle_param_;
 
-  Eigen::MatrixXd default_a_matrix_;
   std::unique_ptr<autoware::common::osqp::OSQPInterface> osqp_solver_ptr_;
 
   double current_ego_vel_;
@@ -100,57 +81,42 @@ private:
     std::chrono::milliseconds, std::chrono::microseconds, std::chrono::steady_clock>
     stop_watch_;
 
-  Eigen::MatrixXd makePMatrix();
 
-  Eigen::MatrixXd makeAMatrix();
+  std::vector<double> getRectangleSizeVector(
+    const std::vector<geometry_msgs::msg::Pose> & interpolated_points, const int num_fixed_points,
+    const int farthest_point_idx);
 
-  Anchor getAnchor(
-    const std::vector<geometry_msgs::msg::Point> & interpolated_points, const int interpolated_idx,
-    const std::vector<autoware_auto_planning_msgs::msg::PathPoint> & path_points) const;
+  void updateConstrain(
+    const std::vector<geometry_msgs::msg::Pose> & interpolated_points,
+    const std::vector<double> & rect_size_vec);
 
-  Constrain getConstrainFromConstrainRectangle(
-    const geometry_msgs::msg::Point & interpolated_point,
-    const ConstrainRectangle & constrain_range);
+  ConstrainLines getConstrainLinesFromConstrainRectangle(
+    const geometry_msgs::msg::Pose & interpolated_point,
+    const double rect_size);
 
-  ConstrainLines getConstrainLines(
-    const double dx, const double dy, const geometry_msgs::msg::Point & point,
-    const geometry_msgs::msg::Point & opposite_point);
+  boost::optional<std::vector<double>>
+  optimizeTrajectory(
+    const std::vector<geometry_msgs::msg::Pose> & padded_interpolated_points,
+    std::shared_ptr<DebugData> debug_data_ptr);
 
-  ConstrainRectangle getConstrainRectangle(const Anchor & anchor, const double clearance) const;
+  std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint>
+  convertOptimizedPointsToTrajectory(
+    const std::vector<double> optimized_points, const int farthest_idx);
 
-  ConstrainRectangle getConstrainRectangle(
-    const Anchor & anchor, const double min_x, const double max_x, const double min_y,
-    const double max_y) const;
 
-  int getStraightLineIdx(
-    const std::vector<geometry_msgs::msg::Point> & interpolated_points,
-    const int farthest_point_idx,
-    std::vector<geometry_msgs::msg::Point> & debug_detected_straight_points);
 
-  boost::optional<std::vector<ConstrainRectangle>> getConstrainRectangleVec(
-    const autoware_auto_planning_msgs::msg::Path & path,
-    const std::vector<geometry_msgs::msg::Point> & interpolated_points, const int num_fixed_points,
-    const int farthest_point_idx, const int straight_idx);
 
-  std::vector<geometry_msgs::msg::Point> getPaddedInterpolatedPoints(
-    const std::vector<geometry_msgs::msg::Point> & interpolated_points, const int farthest_idx);
+  std::vector<geometry_msgs::msg::Pose> getPaddedInterpolatedPoints(
+    const std::vector<geometry_msgs::msg::Pose> & interpolated_points, const int farthest_idx);
 
   int getNumFixedPoints(
     const std::vector<geometry_msgs::msg::Pose> & fixed_points,
-    const std::vector<geometry_msgs::msg::Point> & interpolated_points, const int farthest_idx);
+    const std::vector<geometry_msgs::msg::Pose> & interpolated_points, const int farthest_idx);
 
   boost::optional<std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint>>
   getOptimizedTrajectory(
     const autoware_auto_planning_msgs::msg::Path & path, const CandidatePoints & candidate_points,
     std::shared_ptr<DebugData> debug_data_ptr);
-
-  void updateConstrain(
-    const std::vector<geometry_msgs::msg::Point> & interpolated_points,
-    const std::vector<ConstrainRectangle> & rectangle_points);
-
-  std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> convertOptimizedPointsToTrajectory(
-    const std::vector<double> optimized_points, const std::vector<ConstrainRectangle> & constraint,
-    const int farthest_idx);
 
   std::vector<geometry_msgs::msg::Pose> getFixedPoints(
     const geometry_msgs::msg::Pose & ego_pose,
@@ -164,24 +130,6 @@ private:
 
   CandidatePoints getDefaultCandidatePoints(
     const std::vector<autoware_auto_planning_msgs::msg::PathPoint> & path_points);
-
-  std::pair<std::vector<double>, int64_t> solveQP();
-
-  boost::optional<std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint>>
-  calculateTrajectory(
-    const std::vector<geometry_msgs::msg::Point> & padded_interpolated_points,
-    const std::vector<ConstrainRectangle> & constrain_rectangles, const int farthest_idx,
-    std::shared_ptr<DebugData> debug_data_ptr);
-
-public:
-  EBPathOptimizer(
-    const bool is_showing_debug_info, const TrajectoryParam & traj_param, const EBParam & eb_param,
-    const VehicleParam & vehicle_param);
-
-  boost::optional<std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint>> getEBTrajectory(
-    const geometry_msgs::msg::Pose & ego_pose, const autoware_auto_planning_msgs::msg::Path & path,
-    const std::unique_ptr<Trajectories> & prev_trajs, const double current_ego_vel,
-    std::shared_ptr<DebugData> debug_data_ptr);
 };
 
 #endif  // OBSTACLE_AVOIDANCE_PLANNER__EB_PATH_OPTIMIZER_HPP_

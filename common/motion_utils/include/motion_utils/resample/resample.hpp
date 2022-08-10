@@ -56,6 +56,11 @@ std::vector<geometry_msgs::msg::Pose> resamplePath(
   const std::vector<double> & resampled_arclength, const bool use_lerp_for_xy = false,
   const bool use_lerp_for_z = true);
 
+std::vector<geometry_msgs::msg::Pose> resamplePath(
+  const std::vector<geometry_msgs::msg::Pose> & points,
+  const double resample_interval, const bool use_lerp_for_xy = false,
+  const bool use_lerp_for_z = true);
+
 /**
  * @brief A resampling function for a path with lane id. Note that in a default setting, position xy
  * are resampled by spline interpolation, position z are resampled by linear interpolation,

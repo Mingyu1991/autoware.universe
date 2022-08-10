@@ -85,9 +85,6 @@ struct ConstrainRectangle
   geometry_msgs::msg::Point top_right;
   geometry_msgs::msg::Point bottom_left;
   geometry_msgs::msg::Point bottom_right;
-  double velocity;
-  bool is_empty_driveable_area = false;
-  bool is_including_only_smooth_range = true;
 };
 
 struct DebugData
