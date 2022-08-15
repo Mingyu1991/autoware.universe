@@ -2161,6 +2161,7 @@ BehaviorModuleOutput AvoidanceModule::plan()
       util::resamplePathWithSpline(avoidance_path.path, parameters_.resample_interval_for_output);
   }
   output.path = std::make_shared<PathWithLaneId>(avoidance_path.path);
+  output.path->points = avoidance_data_.reference_path.points;
 
   clipPathLength(*output.path);
 

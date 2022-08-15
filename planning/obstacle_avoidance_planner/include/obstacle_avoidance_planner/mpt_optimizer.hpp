@@ -294,6 +294,19 @@ private:
     const std::vector<ReferencePoint> & ref_points,
     std::shared_ptr<DebugData> debug_data_ptr) const;
 
+  Eigen::MatrixXd H_;
+  Eigen::MatrixXd A_;
+  std::vector<double> f_;
+  std::vector<double> upper_bound_;
+  std::vector<double> lower_bound_;
+
+  mutable Eigen::MatrixXd B_;
+  mutable Eigen::MatrixXd QB_;
+  mutable Eigen::MatrixXd R_;
+  mutable MPTMatrix mpt_mat_;
+  mutable ValueMatrix val_mat_;
+  mutable std::vector<ReferencePoint> ref_points_;
+
 public:
   MPTOptimizer(
     const bool is_showing_debug_info, const TrajectoryParam & traj_param,

@@ -608,6 +608,41 @@ MPTOptimizer::MPTMatrix MPTOptimizer::generateMPTMatrix(
 
   debug_data_ptr->msg_stream << "        " << __func__ << ":= " << stop_watch_.toc(__func__)
                              << " [ms]\n";
+
+  int k_cnt = 0;
+  int x_cnt = 0;
+  int y_cnt = 0;
+  int s_cnt = 0;
+  int f_cnt = 0;
+  for (size_t i = 0; i < std::min(ref_points.size(), ref_points_.size()); ++i) {
+    if (0.0001 < std::abs(ref_points.at(i).k - ref_points_.at(i).k)) {
+      k_cnt++;
+    }
+    if (0.0001 < std::abs(ref_points.at(i).p.x - ref_points_.at(i).p.x)) {
+      x_cnt++;
+    }
+    if (0.0001 < std::abs(ref_points.at(i).p.y - ref_points_.at(i).p.y)) {
+      y_cnt++;
+    }
+    if (0.0001 < std::abs(ref_points.at(i).s - ref_points_.at(i).s)) {
+      s_cnt++;
+    }
+    if (
+      (ref_points.at(i).fix_kinematic_state != boost::none &&
+       ref_points_.at(i).fix_kinematic_state == boost::none) ||
+      (ref_points.at(i).fix_kinematic_state == boost::none &&
+       ref_points_.at(i).fix_kinematic_state != boost::none)) {
+      f_cnt++;
+    }
+  }
+  std::cerr << "ref_points.k " << k_cnt << std::endl;
+  std::cerr << "ref_points.x " << x_cnt << std::endl;
+  std::cerr << "ref_points.y " << y_cnt << std::endl;
+  std::cerr << "ref_points.s " << s_cnt << std::endl;
+  std::cerr << "ref_points.size " << ref_points.size() - ref_points_.size() << std::endl;
+  std::cerr << "ref_points.fix_kinematic_state " << f_cnt << std::endl;
+  ref_points_ = ref_points;
+
   return m;
 }
 
@@ -650,6 +685,7 @@ MPTOptimizer::ValueMatrix MPTOptimizer::generateValueMatrix(
 
     const auto adaptive_error_weight = [&]() -> std::array<double, 2> {
       if (ref_points.at(i).near_objects) {
+        std::cerr << "======================= object ===========================" << std::endl;
         return {
           mpt_param_.obstacle_avoid_lat_error_weight, mpt_param_.obstacle_avoid_yaw_error_weight};
       } else if (i == N_ref - 1 && is_containing_path_terminal_point) {
@@ -763,6 +799,42 @@ boost::optional<Eigen::VectorXd> MPTOptimizer::executeOptimization(
     lower_bound = eigenVectorToStdVector(const_m.lower_bound);
   }
 
+  /*
+  std::cerr << "================================================ H
+  =======================================================" << std::endl; std::cerr << H - H_ <<
+  std::endl;
+  */
+  /*
+  std::cerr << "================================================ A
+  =======================================================" << std::endl; std::cerr << A - A_ <<
+  std::endl;
+  */
+  /*
+  std::cerr << "================================================ f
+  =======================================================" << std::endl; for (size_t i = 0; i <
+  std::min(f.size(), f_.size()); ++i) { std::cerr << f.at(i) - f_.at(i) << " ";
+  }
+  std::cerr << std::endl;
+  std::cerr << "================================================ upper_bound
+  =======================================================" << std::endl; for (size_t i = 0; i <
+  std::min(upper_bound.size(), upper_bound_.size()); ++i) { std::cerr << upper_bound.at(i) -
+  upper_bound_.at(i) << " ";
+  }
+  std::cerr << std::endl;
+  std::cerr << "================================================ lower_bound
+  =======================================================" << std::endl; for (size_t i = 0; i <
+  std::min(lower_bound.size(), lower_bound_.size()); ++i) { std::cerr << lower_bound.at(i) -
+  lower_bound_.at(i) << " ";
+  }
+  std::cerr << std::endl;
+*/
+
+  H_ = H;
+  A_ = A;
+  f_ = f;
+  upper_bound_ = upper_bound;
+  lower_bound_ = lower_bound;
+
   // initialize or update solver with warm start
   stop_watch_.tic("initOsqp");
   autoware::common::osqp::CSC_Matrix P_csc = autoware::common::osqp::calCSCMatrixTrapezoidal(H);
@@ -838,6 +910,7 @@ MPTOptimizer::ObjectiveMatrix MPTOptimizer::getObjectiveMatrix(
   const size_t D_x = vehicle_model_ptr_->getDimX();
   const size_t D_u = vehicle_model_ptr_->getDimU();
   const size_t N_ref = ref_points.size();
+  std::cerr << N_ref << std::endl;
 
   const size_t D_xn = D_x * N_ref;
   const size_t D_v = D_x + (N_ref - 1) * D_u;
@@ -864,6 +937,27 @@ MPTOptimizer::ObjectiveMatrix MPTOptimizer::getObjectiveMatrix(
   const Eigen::MatrixXd B = sparse_T_mat * mpt_mat.Bex;
   const Eigen::MatrixXd QB = val_mat.Qex * B;
   const Eigen::MatrixXd R = val_mat.Rex;
+
+  std::cerr << "================================================ HOGE "
+               "======================================================="
+            << std::endl;
+  std::cerr << "mpt_mat.Bex " << (0.0001 < (mpt_mat.Bex - mpt_mat_.Bex).array()).count()
+            << std::endl;
+  std::cerr
+    << "sparse_T_mat "
+    << (0.0001 < (Eigen::MatrixXd(sparse_T_mat) - Eigen::MatrixXd(sparse_T_mat)).array()).count()
+    << std::endl;
+  std::cerr
+    << "val_mat.Qex "
+    << (0.0001 < (Eigen::MatrixXd(val_mat.Qex) - Eigen::MatrixXd(val_mat_.Qex)).array()).count()
+    << std::endl;
+  std::cerr << "R " << (0.0001 < (R - R_).array()).count() << std::endl;
+
+  mpt_mat_ = mpt_mat;
+  val_mat_ = val_mat;
+  B_ = B;
+  QB_ = QB;
+  R_ = R;
 
   // min J(v) = min (v'Hv + v'f)
   Eigen::MatrixXd H = Eigen::MatrixXd::Zero(D_v, D_v);
