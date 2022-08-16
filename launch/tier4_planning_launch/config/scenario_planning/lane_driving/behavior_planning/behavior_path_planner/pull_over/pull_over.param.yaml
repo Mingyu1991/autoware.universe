@@ -18,9 +18,13 @@
       goal_search_interval: 1.0
       goal_to_obj_margin: 2.0
       # occupancy grid map
-      collision_check_margin: 0.5
+      use_occupancy_grid: true
+      occupancy_grid_collision_check_margin: 0.0
       theta_size: 360
       obstacle_threshold: 60
+      # object recognition
+      use_object_recognition: true
+      object_recognition_collision_check_margin: 1.0
       # shift path
       enable_shift_parking: true
       pull_over_sampling_num: 4
@@ -31,7 +35,7 @@
       before_pull_over_straight_distance: 5.0
       # parallel parking path
       enable_arc_forward_parking: true
-      enable_arc_backward_parking: false
+      enable_arc_backward_parking: true
       after_forward_parking_straight_distance: 2.0
       after_backward_parking_straight_distance: 2.0
       forward_parking_velocity: 0.3
