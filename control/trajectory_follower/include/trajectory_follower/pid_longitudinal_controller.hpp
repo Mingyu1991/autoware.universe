@@ -34,6 +34,7 @@
 #include "autoware_auto_control_msgs/msg/longitudinal_command.hpp"
 #include "autoware_auto_planning_msgs/msg/trajectory.hpp"
 #include "autoware_auto_system_msgs/msg/float32_multi_array_diagnostic.hpp"
+#include "autoware_auto_vehicle_msgs/msg/control_mode_report.hpp"
 #include "autoware_auto_vehicle_msgs/msg/vehicle_odometry.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -55,6 +56,7 @@ namespace trajectory_follower
 {
 using autoware::common::types::bool8_t;
 using autoware::common::types::float64_t;
+using autoware_auto_vehicle_msgs::msg::ControlModeReport;
 namespace trajectory_follower = ::autoware::motion::control::trajectory_follower;
 namespace motion_common = ::autoware::motion::motion_common;
 
@@ -104,6 +106,7 @@ private:
   std::shared_ptr<nav_msgs::msg::Odometry> m_current_velocity_ptr{nullptr};
   std::shared_ptr<nav_msgs::msg::Odometry> m_prev_velocity_ptr{nullptr};
   std::shared_ptr<autoware_auto_planning_msgs::msg::Trajectory> m_trajectory_ptr{nullptr};
+  std::shared_ptr<const ControlModeReport> m_control_mode_ptr{nullptr};
 
   // vehicle info
   float64_t m_wheel_base;
@@ -219,6 +222,12 @@ private:
    * @param [in] msg trajectory message
    */
   void setTrajectory(const autoware_auto_planning_msgs::msg::Trajectory::ConstSharedPtr msg);
+
+  /**
+   * @brief set current control_mode (Manual/Auto) to reset I-term in PID control in Manual driving
+   * @param [in] msg current control mode message
+   */
+  void setControlMode(const autoware_auto_vehicle_msgs::msg::ControlModeReport::ConstSharedPtr msg);
 
   /**
    * @brief compute control command, and publish periodically
@@ -350,6 +359,11 @@ private:
    */
   float64_t applyVelocityFeedback(
     const Motion target_motion, const float64_t dt, const float64_t current_vel);
+
+  /**
+   * @brief reset I-term of PID control in Manual mode.
+   */
+  void resetIntegralOnManualMode();
 
   /**
    * @brief update variables for debugging about pitch

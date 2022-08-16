@@ -16,6 +16,7 @@
 #define TRAJECTORY_FOLLOWER__INPUT_DATA_HPP_
 
 #include "autoware_auto_planning_msgs/msg/trajectory.hpp"
+#include "autoware_auto_vehicle_msgs/msg/control_mode_report.hpp"
 #include "autoware_auto_vehicle_msgs/msg/steering_report.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 
@@ -32,6 +33,7 @@ struct InputData
   autoware_auto_planning_msgs::msg::Trajectory::SharedPtr current_trajectory_ptr;
   nav_msgs::msg::Odometry::SharedPtr current_odometry_ptr;
   autoware_auto_vehicle_msgs::msg::SteeringReport::SharedPtr current_steering_ptr;
+  autoware_auto_vehicle_msgs::msg::ControlModeReport::ConstSharedPtr current_control_mode_ptr;
 };
 }  // namespace trajectory_follower
 }  // namespace control

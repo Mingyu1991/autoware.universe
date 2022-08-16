@@ -36,6 +36,7 @@
 #include "autoware_auto_control_msgs/msg/longitudinal_command.hpp"
 #include "autoware_auto_planning_msgs/msg/trajectory.hpp"
 #include "autoware_auto_system_msgs/msg/float32_multi_array_diagnostic.hpp"
+#include "autoware_auto_vehicle_msgs/msg/control_mode_report.hpp"
 #include "autoware_auto_vehicle_msgs/msg/vehicle_odometry.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -58,6 +59,7 @@ namespace trajectory_follower_nodes
 {
 using autoware::common::types::bool8_t;
 using autoware::common::types::float64_t;
+using autoware_auto_vehicle_msgs::msg::ControlModeReport;
 namespace trajectory_follower = ::autoware::motion::control::trajectory_follower;
 namespace motion_common = ::autoware::motion::motion_common;
 
@@ -82,6 +84,7 @@ private:
   rclcpp::Subscription<autoware_auto_planning_msgs::msg::Trajectory>::SharedPtr sub_ref_path_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
   rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::SteeringReport>::SharedPtr sub_steering_;
+  rclcpp::Subscription<ControlModeReport>::SharedPtr sub_control_mode_;
   rclcpp::Publisher<autoware_auto_control_msgs::msg::AckermannControlCommand>::SharedPtr
     control_cmd_pub_;
 

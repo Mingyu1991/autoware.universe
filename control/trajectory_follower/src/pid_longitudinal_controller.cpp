@@ -197,6 +197,7 @@ void PidLongitudinalController::setInputData(InputData const & input_data)
 {
   setTrajectory(input_data.current_trajectory_ptr);
   setCurrentVelocity(input_data.current_odometry_ptr);
+  setControlMode(input_data.current_control_mode_ptr);
 }
 
 void PidLongitudinalController::setCurrentVelocity(
@@ -228,6 +229,14 @@ void PidLongitudinalController::setTrajectory(
   }
 
   m_trajectory_ptr = std::make_shared<autoware_auto_planning_msgs::msg::Trajectory>(*msg);
+}
+
+void PidLongitudinalController::setControlMode(
+  const autoware_auto_vehicle_msgs::msg::ControlModeReport::ConstSharedPtr msg)
+{
+  if (!msg) return;
+
+  m_control_mode_ptr = msg;
 }
 
 rcl_interfaces::msg::SetParametersResult PidLongitudinalController::paramCallback(
@@ -357,7 +366,7 @@ boost::optional<LongitudinalOutput> PidLongitudinalController::run()
 {
   // wait for initial pointers
   if (
-    !m_current_velocity_ptr || !m_prev_velocity_ptr || !m_trajectory_ptr ||
+    !m_current_velocity_ptr || !m_prev_velocity_ptr || !m_trajectory_ptr || !m_control_mode_ptr ||
     !m_tf_buffer.canTransform(m_trajectory_ptr->header.frame_id, "base_link", tf2::TimePointZero)) {
     return boost::none;
   }
@@ -374,6 +383,9 @@ boost::optional<LongitudinalOutput> PidLongitudinalController::run()
   current_pose.orientation = tf.transform.rotation;
 
   const auto control_data = getControlData(current_pose);
+
+  // Do not accumulate error when the longitudinal motion is not controlled
+  resetIntegralOnManualMode();
 
   // self pose is far from trajectory
   if (control_data.is_far_from_trajectory) {
@@ -920,6 +932,14 @@ float64_t PidLongitudinalController::applyVelocityFeedback(
     DebugValues::TYPE::ACC_CMD_FB_D_CONTRIBUTION, pid_contributions.at(2));  // D
 
   return feedback_acc;
+}
+
+void PidLongitudinalController::resetIntegralOnManualMode()
+{
+  if (m_control_mode_ptr->mode == ControlModeReport::MANUAL) {
+    m_pid_vel.reset();
+  }
+  return;
 }
 
 void PidLongitudinalController::updatePitchDebugValues(
