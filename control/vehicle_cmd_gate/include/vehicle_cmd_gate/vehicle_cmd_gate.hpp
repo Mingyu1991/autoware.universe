@@ -29,6 +29,7 @@
 #include <autoware_auto_vehicle_msgs/msg/hazard_lights_command.hpp>
 #include <autoware_auto_vehicle_msgs/msg/steering_report.hpp>
 #include <autoware_auto_vehicle_msgs/msg/turn_indicators_command.hpp>
+#include <geometry_msgs/msg/accel_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <tier4_control_msgs/msg/gate_mode.hpp>
 #include <tier4_debug_msgs/msg/bool_stamped.hpp>
@@ -58,6 +59,7 @@ using tier4_system_msgs::msg::OperationMode;
 using tier4_vehicle_msgs::msg::VehicleEmergencyStamped;
 
 using diagnostic_msgs::msg::DiagnosticStatus;
+using geometry_msgs::msg::AccelWithCovarianceStamped;
 using nav_msgs::msg::Odometry;
 
 using EngageMsg = autoware_auto_vehicle_msgs::msg::Engage;
@@ -97,6 +99,8 @@ private:
   rclcpp::Subscription<GateMode>::SharedPtr gate_mode_sub_;
   rclcpp::Subscription<SteeringReport>::SharedPtr steer_sub_;
   rclcpp::Subscription<OperationMode>::SharedPtr operation_mode_sub_;
+  rclcpp::Subscription<Odometry>::SharedPtr current_twist_sub_;
+  rclcpp::Subscription<AccelWithCovarianceStamped>::SharedPtr current_accel_sub_;
 
   void onGateMode(GateMode::ConstSharedPtr msg);
   void onEmergencyState(EmergencyState::ConstSharedPtr msg);
@@ -216,6 +220,10 @@ private:
   OperationMode current_operation_mode_;
   VehicleCmdFilter filter_on_transition_;
 
+  AckermannControlCommand getCurrentControlMotion();
+  Odometry current_twist_;
+  AccelWithCovarianceStamped current_accel_;
+
   // Start request service
   struct StartRequest
   {
@@ -230,6 +238,7 @@ private:
     void publishStartAccepted();
     void checkStopped(const ControlCommandStamped & control);
     void checkStartRequest(const ControlCommandStamped & control);
+    void setTwist(Odometry & msg) { current_twist_ = msg; }
 
   private:
     bool use_start_request_;
@@ -244,8 +253,6 @@ private:
     rclcpp::Node * node_;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr request_start_cli_;
     rclcpp::Publisher<tier4_debug_msgs::msg::BoolStamped>::SharedPtr request_start_pub_;
-    rclcpp::Subscription<Odometry>::SharedPtr current_twist_sub_;
-    void onCurrentTwist(Odometry::ConstSharedPtr msg);
   };
 
   std::unique_ptr<StartRequest> start_request_;

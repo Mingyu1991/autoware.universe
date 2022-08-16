@@ -64,6 +64,7 @@ struct Data
   Odometry kinematics;
   Trajectory trajectory;
   AckermannControlCommand control_cmd;
+  AckermannControlCommand auto_control_cmd;
   ControlModeReport current_control_mode;
   OperationMode current_gate_operation_mode;
   vehicle_info_util::VehicleInfo vehicle_info;

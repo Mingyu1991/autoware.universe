@@ -51,6 +51,10 @@ OperationModeTransitionManager::OperationModeTransitionManager(const rclcpp::Nod
     "control_cmd", 1,
     [this](const AckermannControlCommand::SharedPtr msg) { data_->control_cmd = *msg; });
 
+  sub_auto_control_cmd_ = create_subscription<AckermannControlCommand>(
+    "trajectory_follower/control_cmd", 1,
+    [this](const AckermannControlCommand::SharedPtr msg) { data_->auto_control_cmd = *msg; });
+
   sub_control_mode_ = create_subscription<ControlModeReport>(
     "control_mode_report", 1,
     [this](const ControlModeReport::SharedPtr msg) { data_->current_control_mode = *msg; });
@@ -164,15 +168,15 @@ void OperationModeTransitionManager::publishData()
 
 bool OperationModeTransitionManager::hasDangerAcceleration()
 {
-  debug_info_.target_control_acceleration = data_->control_cmd.longitudinal.acceleration;
+  debug_info_.target_control_acceleration = data_->auto_control_cmd.longitudinal.acceleration;
 
   const bool is_stopping = std::abs(data_->kinematics.twist.twist.linear.x) < 0.01;
   if (is_stopping) {
     return false;  // any acceleration is ok when stopped
   }
 
-  const bool has_large_acc =
-    std::abs(data_->control_cmd.longitudinal.acceleration) > engage_acceptable_param_.acc_threshold;
+  const bool has_large_acc = std::abs(data_->auto_control_cmd.longitudinal.acceleration) >
+                             engage_acceptable_param_.acc_threshold;
   return has_large_acc;
 }
 
@@ -185,7 +189,7 @@ std::pair<bool, bool> OperationModeTransitionManager::hasDangerLateralAccelerati
   // Calculate angular velocity from kinematics model.
   // Use current_vx to focus on the steering behavior.
   const auto target_wz =
-    curr_vx * std::tan(data_->control_cmd.lateral.steering_tire_angle) / wheelbase;
+    curr_vx * std::tan(data_->auto_control_cmd.lateral.steering_tire_angle) / wheelbase;
 
   const auto curr_lat_acc = curr_vx * curr_wz;
   const auto target_lat_acc = curr_vx * target_wz;
@@ -207,7 +211,8 @@ bool OperationModeTransitionManager::checkEngageAvailable()
   constexpr auto yaw_max = M_PI_4;
 
   const auto current_speed = data_->kinematics.twist.twist.linear.x;
-  const auto target_control_speed = data_->control_cmd.longitudinal.speed;
+  const auto target_auto_control_speed = data_->auto_control_cmd.longitudinal.speed;
+  const auto target_gate_control_speed = data_->auto_control_cmd.longitudinal.speed;
   const auto & param = engage_acceptable_param_;
 
   if (data_->trajectory.points.size() < 2) {
@@ -242,7 +247,9 @@ bool OperationModeTransitionManager::checkEngageAvailable()
   const bool speed_lower_deviation_ok = speed_deviation >= param.speed_lower_threshold;
 
   // No engagement if the vehicle is moving but the target speed is zero.
-  const bool stop_ok = !(std::abs(current_speed) > 0.1 && std::abs(target_control_speed) < 0.01);
+  const bool is_stop_planned =
+    (std::abs(target_auto_control_speed) < 0.01) || (std::abs(target_gate_control_speed) < 0.01);
+  const bool stop_ok = !(std::abs(current_speed) > 0.1 && is_stop_planned);
 
   // No engagement if the large acceleration is commanded.
   const bool large_acceleration_ok = !hasDangerAcceleration();
@@ -273,7 +280,8 @@ bool OperationModeTransitionManager::checkEngageAvailable()
     debug_info_.large_lateral_acceleration_diff_ok = large_lateral_acceleration_diff_ok;
 
     debug_info_.current_speed = current_speed;
-    debug_info_.target_control_speed = target_control_speed;
+    debug_info_.target_auto_control_speed = target_auto_control_speed;
+    debug_info_.target_gate_control_speed = target_gate_control_speed;
     debug_info_.target_planning_speed = target_planning_speed;
 
     debug_info_.lateral_deviation = lateral_deviation;

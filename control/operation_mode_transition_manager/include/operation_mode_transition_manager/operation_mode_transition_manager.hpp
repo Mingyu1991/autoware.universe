@@ -49,6 +49,7 @@ private:
   rclcpp::Subscription<Odometry>::SharedPtr sub_vehicle_kinematics_;
   rclcpp::Subscription<Trajectory>::SharedPtr sub_trajectory_;
   rclcpp::Subscription<AckermannControlCommand>::SharedPtr sub_control_cmd_;
+  rclcpp::Subscription<AckermannControlCommand>::SharedPtr sub_auto_control_cmd_;
   rclcpp::Subscription<ControlModeReport>::SharedPtr sub_control_mode_;
   rclcpp::Subscription<OperationMode>::SharedPtr sub_gate_operation_mode_;
   rclcpp::Service<OperationModeRequest>::SharedPtr srv_mode_change_server_;

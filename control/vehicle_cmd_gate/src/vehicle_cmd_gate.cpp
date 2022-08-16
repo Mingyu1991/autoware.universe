@@ -44,6 +44,15 @@ const char * getGateModeName(const GateMode::_data_type & gate_mode)
 VehicleCmdGate::VehicleCmdGate(const rclcpp::NodeOptions & node_options)
 : Node("vehicle_cmd_gate", node_options), is_engaged_(false), updater_(this)
 {
+  // Start Request
+  {
+    const auto use_start_request = declare_parameter("use_start_request", false);
+    const auto stopped_state_entry_duration_time =
+      declare_parameter("stopped_state_entry_duration_time", 0.1);
+    start_request_ =
+      std::make_unique<StartRequest>(this, use_start_request, stopped_state_entry_duration_time);
+  }
+
   using std::placeholders::_1;
   using std::placeholders::_2;
   using std::placeholders::_3;
@@ -84,6 +93,14 @@ VehicleCmdGate::VehicleCmdGate(const rclcpp::NodeOptions & node_options)
     "input/operation_mode", 1, [this](const tier4_system_msgs::msg::OperationMode::SharedPtr msg) {
       current_operation_mode_ = *msg;
     });
+  current_twist_sub_ = create_subscription<Odometry>(
+    "/localization/kinematic_state", rclcpp::QoS(1), [this](Odometry::ConstSharedPtr msg) {
+      current_twist_ = *msg;
+      start_request_->setTwist(current_twist_);
+    });
+  current_accel_sub_ = create_subscription<AccelWithCovarianceStamped>(
+    "/localization/acceleration", rclcpp::QoS(1),
+    [this](AccelWithCovarianceStamped::ConstSharedPtr msg) { current_accel_ = *msg; });
 
   // Subscriber for auto
   auto_control_cmd_sub_ = this->create_subscription<AckermannControlCommand>(
@@ -184,13 +201,6 @@ VehicleCmdGate::VehicleCmdGate(const rclcpp::NodeOptions & node_options)
     stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "Alive");
   });
   updater_.add("emergency_stop_operation", this, &VehicleCmdGate::checkExternalEmergencyStop);
-
-  // Start Request
-  const auto use_start_request = declare_parameter("use_start_request", false);
-  const auto stopped_state_entry_duration_time =
-    declare_parameter("stopped_state_entry_duration_time", 0.1);
-  start_request_ =
-    std::make_unique<StartRequest>(this, use_start_request, stopped_state_entry_duration_time);
 
   // Timer
   const auto period_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -512,17 +522,25 @@ AckermannControlCommand VehicleCmdGate::filterControlCommand(const AckermannCont
   const auto mode = current_operation_mode_.mode;
 
   // Apply transition_filter when transiting from MANUAL to AUTO.
-  if (mode == OperationMode::TRANSITION_TO_AUTO) {
+  if (mode == OperationMode::TRANSITION_TO_AUTO || mode == OperationMode::MANUAL_DIRECT) {
     filter_on_transition_.filterAll(dt, current_steer_, out);
   } else {
     filter_.filterAll(dt, current_steer_, out);
   }
 
   // set prev value for both to keep consistency over switching
-  // TODO(Horibe): prev value should be actual steer, vel, acc when Manual mode to keep
-  // consistency when switching from Manual to Auto.
-  filter_.setPrevCmd(out);
-  filter_on_transition_.setPrevCmd(out);
+  if (mode == OperationMode::MANUAL_DIRECT) {
+    // Not under Autoware control. Since the actual values could be very far from the control
+    // command, set an actual value to the filters as a previous command to prevent sudden changes
+    // of control signals when switching from Manual to Auto.
+    const auto current_motion = getCurrentControlMotion();
+    filter_.setPrevCmd(current_motion);
+    filter_on_transition_.setPrevCmd(current_motion);
+  } else {
+    // Under Autoware control. Set previous command to prevent sudden changes of control signals.
+    filter_.setPrevCmd(out);
+    filter_on_transition_.setPrevCmd(out);
+  }
 
   return out;
 }
@@ -684,6 +702,21 @@ void VehicleCmdGate::checkExternalEmergencyStop(diagnostic_updater::DiagnosticSt
   stat.summary(status.level, status.message);
 }
 
+AckermannControlCommand VehicleCmdGate::getCurrentControlMotion()
+{
+  const auto now = get_clock()->now();
+  AckermannControlCommand current_motion;
+  current_motion.lateral.stamp = now;
+  current_motion.lateral.steering_tire_angle = 0.0;
+  current_motion.lateral.steering_tire_rotation_rate = 0.0;
+  current_motion.longitudinal.stamp = now;
+  current_motion.longitudinal.speed = current_twist_.twist.twist.linear.x;
+  current_motion.lateral.steering_tire_angle = current_steer_;
+  // TODO(horibe): set rate. (this is not used in the filter now.)
+  current_motion.lateral.steering_tire_rotation_rate = 0.0;
+  return current_motion;
+}
+
 VehicleCmdGate::StartRequest::StartRequest(
   rclcpp::Node * node, bool use_start_request, double stopped_state_entry_duration_time)
 {
@@ -703,17 +736,9 @@ VehicleCmdGate::StartRequest::StartRequest(
     node_->create_client<std_srvs::srv::Trigger>("/api/autoware/set/start_request");
   request_start_pub_ = node_->create_publisher<tier4_debug_msgs::msg::BoolStamped>(
     "/api/autoware/get/start_accepted", rclcpp::QoS(1));
-  current_twist_sub_ = node_->create_subscription<Odometry>(
-    "/localization/kinematic_state", rclcpp::QoS(1),
-    std::bind(&VehicleCmdGate::StartRequest::onCurrentTwist, this, _1));
 
   last_running_time_ = std::make_shared<rclcpp::Time>(node_->now());
   stopped_state_entry_duration_time_ = stopped_state_entry_duration_time;
-}
-
-void VehicleCmdGate::StartRequest::onCurrentTwist(Odometry::ConstSharedPtr msg)
-{
-  current_twist_ = *msg;
 }
 
 bool VehicleCmdGate::StartRequest::isAccepted()

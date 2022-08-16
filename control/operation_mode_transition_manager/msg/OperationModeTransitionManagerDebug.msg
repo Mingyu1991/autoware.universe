@@ -19,7 +19,8 @@ bool large_lateral_acceleration_diff_ok
 
 # values
 float64 current_speed
-float64 target_control_speed
+float64 target_auto_control_speed
+float64 target_gate_control_speed
 float64 target_planning_speed
 float64 target_control_acceleration
 float64 lateral_acceleration
