@@ -272,13 +272,16 @@ bool selectSafePath(
   const std::vector<LaneChangePath> & paths, const lanelet::ConstLanelets & current_lanes,
   const lanelet::ConstLanelets & target_lanes,
   const PredictedObjects::ConstSharedPtr dynamic_objects, const Pose & current_pose,
-  const Twist & current_twist, const double vehicle_width,
-  const LaneChangeParameters & ros_parameters, LaneChangePath * selected_path)
+  const double dist_threshold, const double yaw_threshold, const Twist & current_twist,
+  const double vehicle_width, const LaneChangeParameters & ros_parameters,
+  LaneChangePath * selected_path)
 {
   for (const auto & path : paths) {
+    const size_t current_seg_idx = motion_utils::findFirstNearestSegmentIndexWithSoftConstraints(
+      path.path.points, current_pose, dist_threshold, yaw_threshold);
     if (isLaneChangePathSafe(
-          path.path, current_lanes, target_lanes, dynamic_objects, current_pose, current_twist,
-          vehicle_width, ros_parameters, true, path.acceleration)) {
+          path.path, current_lanes, target_lanes, dynamic_objects, current_pose, current_seg_idx,
+          current_twist, vehicle_width, ros_parameters, true, path.acceleration)) {
       *selected_path = path;
       return true;
     }
@@ -330,7 +333,7 @@ bool isLaneChangePathSafe(
   const PathWithLaneId & path, const lanelet::ConstLanelets & current_lanes,
   const lanelet::ConstLanelets & target_lanes,
   const PredictedObjects::ConstSharedPtr dynamic_objects, const Pose & current_pose,
-  const Twist & current_twist, const double vehicle_width,
+  const size_t current_seg_idx, const Twist & current_twist, const double vehicle_width,
   const LaneChangeParameters & ros_parameters, const bool use_buffer, const double acceleration)
 {
   if (path.points.empty()) {
@@ -383,7 +386,8 @@ bool isLaneChangePathSafe(
     vehicle_width / 2 + lateral_buffer);
 
   const auto & vehicle_predicted_path = util::convertToPredictedPath(
-    path, current_twist, current_pose, target_lane_check_end_time, time_resolution, acceleration);
+    path, current_twist, current_pose, current_seg_idx, target_lane_check_end_time, time_resolution,
+    acceleration);
 
   // Collision check for objects in current lane
   for (const auto & i : current_lane_object_indices) {

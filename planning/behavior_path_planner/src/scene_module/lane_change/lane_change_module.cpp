@@ -390,6 +390,7 @@ std::pair<bool, bool> LaneChangeModule::getSafePath(
     // select safe path
     bool found_safe_path = lane_change_utils::selectSafePath(
       valid_paths, current_lanes, check_lanes, planner_data_->dynamic_object, current_pose,
+      common_parameters.ego_nearest_dist_threshold, common_parameters.ego_nearest_yaw_threshold,
       current_twist, common_parameters.vehicle_width, parameters_, &safe_path);
     return std::make_pair(true, found_safe_path);
   }
@@ -504,8 +505,9 @@ bool LaneChangeModule::isAbortConditionSatisfied() const
     const auto check_lanes = route_handler->getCheckTargetLanesFromPath(
       path.path, status_.lane_change_lanes, check_distance_with_path);
 
+    const size_t current_seg_idx = findEgoSegmentIndex(path.path.points);
     is_path_safe = lane_change_utils::isLaneChangePathSafe(
-      path.path, current_lanes, check_lanes, objects, current_pose, current_twist,
+      path.path, current_lanes, check_lanes, objects, current_pose, current_seg_idx, current_twist,
       common_parameters.vehicle_width, parameters_, false, status_.lane_change_path.acceleration);
   }
 
