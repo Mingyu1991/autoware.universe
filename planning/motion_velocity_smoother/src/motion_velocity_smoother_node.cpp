@@ -93,7 +93,7 @@ MotionVelocitySmootherNode::MotionVelocitySmootherNode(const rclcpp::NodeOptions
     std::bind(&MotionVelocitySmootherNode::onParameter, this, _1));
 
   // debug
-  publish_debug_trajs_ = declare_parameter("publish_debug_trajs", false);
+  publish_debug_trajs_ = true;  // declare_parameter("publish_debug_trajs", true);
   debug_closest_velocity_ = create_publisher<Float32Stamped>("~/closest_velocity", 1);
   debug_closest_acc_ = create_publisher<Float32Stamped>("~/closest_acceleration", 1);
   debug_closest_jerk_ = create_publisher<Float32Stamped>("~/closest_jerk", 1);
