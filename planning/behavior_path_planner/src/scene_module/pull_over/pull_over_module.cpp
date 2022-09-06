@@ -153,6 +153,7 @@ void PullOverModule::onEntry()
     GoalCandidate goal_candidate;
     goal_candidate.goal_pose = getRefinedGoal();
     goal_candidate.distance_from_original_goal = 0.0;
+    goal_candidate.is_safe = true;  // not sure, but try to use this goal for path generation
     goal_candidates_.push_back(goal_candidate);
   }
 }
@@ -256,14 +257,11 @@ void PullOverModule::researchGoal()
   for (double dx = -parameters_.backward_goal_search_length;
        dx <= parameters_.forward_goal_search_length; dx += parameters_.goal_search_interval) {
     const Pose search_pose = calcOffsetPose(refined_goal_pose, dx, 0, 0);
-    if (checkCollisionWithPose(search_pose)) {
-      continue;
-    }
-
     GoalCandidate goal_candidate;
     goal_candidate.goal_pose = search_pose;
     goal_candidate.distance_from_original_goal =
       std::abs(inverseTransformPose(search_pose, refined_goal_pose).position.x);
+    goal_candidate.is_safe = !checkCollisionWithPose(search_pose);
     goal_candidates_.push_back(goal_candidate);
   }
   // Sort with distance from original goal
@@ -360,8 +358,8 @@ bool PullOverModule::planWithEfficientPath()
         // shift parking plan already confirms safety and no lane departure in it's own function.
         status_.path = shift_parking_path_.path;
         status_.path_type = PathType::SHIFT;
-        status_.is_safe = true;
-        return true;
+        // status_.is_safe = true;
+        // return true;
       }
     }
   }
@@ -382,8 +380,8 @@ bool PullOverModule::planWithEfficientPath()
           status_.lanes, parallel_parking_planner_.getArcPath())) {
         status_.path = parallel_parking_planner_.getCurrentPath();
         status_.path_type = PathType::ARC_FORWARD;
-        status_.is_safe = true;
-        return true;
+        // status_.is_safe = true;
+        // return true;
       }
     }
   }
@@ -404,8 +402,8 @@ bool PullOverModule::planWithEfficientPath()
           status_.lanes, parallel_parking_planner_.getArcPath())) {
         status_.path = parallel_parking_planner_.getCurrentPath();
         status_.path_type = PathType::ARC_BACKWARD;
-        status_.is_safe = true;
-        return true;
+        // status_.is_safe = true;
+        // return true;
       }
     }
   }
@@ -660,34 +658,38 @@ void PullOverModule::setParameters(const PullOverParameters & parameters)
   parameters_ = parameters;
 }
 
-bool PullOverModule::planShiftPath()
+std::vector<PullOverPath> PullOverModule::planShiftPath(const Pose & goal_pose)
 {
   const auto & route_handler = planner_data_->route_handler;
-  const auto common_parameters = planner_data_->parameters;
+  const auto & common_parameters = planner_data_->parameters;
+  const auto & current_pose = planner_data_->self_pose->pose;
+  const auto & current_twist = planner_data_->self_odometry->twist.twist;
 
-  lanelet::ConstLanelet target_shoulder_lane;
+  const auto pull_over_paths = pull_over_utils::generateShiftParkingPaths(
+    *route_handler, status_.current_lanes, status_.pull_over_lanes, current_pose,
+    goal_pose, current_twist, common_parameters, parameters_);
 
-  if (route_handler->getPullOverTarget(
-        route_handler->getShoulderLanelets(), &target_shoulder_lane)) {
-    route_handler->setPullOverGoalPose(
-      target_shoulder_lane, common_parameters.vehicle_width, parameters_.margin_from_boundary);
-  } else {
-    RCLCPP_ERROR_THROTTLE(getLogger(), *clock_, 5000, "failed to get shoulder lane!!!");
+  // get lanes used for detection
+  lanelet::ConstLanelets check_lanes;
+  const auto & longest_path = pull_over_paths.front();
+  // we want to see check_distance [m] behind vehicle so add lane changing length
+  check_lanes = route_handler->getCheckTargetLanesFromPath(
+    longest_path.path, status_.pull_over_lanes, check_distance_);
+
+  // select valid path
+  auto valid_paths = pull_over_utils::selectValidPaths(
+    pull_over_paths, status_.current_lanes, check_lanes, *route_handler->getOverallGraphPtr(),
+    current_pose, route_handler->isInGoalRouteSection(status_.current_lanes.back()),
+    goal_pose, *lane_departure_checker_);
+
+  for (auto & shift_path : valid_paths) {
+    shift_path.path.drivable_area = util::generateDrivableArea(
+      shift_path.path, status_.lanes, common_parameters.drivable_area_resolution,
+      common_parameters.vehicle_length, planner_data_);
+    shift_path.path.header = planner_data_->route_handler->getRouteHeader();
   }
 
-  // Find pull_over path
-  bool found_valid_path, found_safe_path;
-  std::tie(found_valid_path, found_safe_path) = getSafePath(shift_parking_path_);
-  if (!found_safe_path) {
-    return found_safe_path;
-  }
-
-  shift_parking_path_.path.drivable_area = util::generateDrivableArea(
-    shift_parking_path_.path, status_.lanes, common_parameters.drivable_area_resolution,
-    common_parameters.vehicle_length, planner_data_);
-
-  shift_parking_path_.path.header = planner_data_->route_handler->getRouteHeader();
-  return found_safe_path;
+  return valid_paths;
 }
 
 PathWithLaneId PullOverModule::getReferencePath() const
@@ -819,49 +821,48 @@ std::pair<bool, bool> PullOverModule::getSafePath(ShiftParkingPath & safe_path) 
   const auto current_twist = planner_data_->self_odometry->twist.twist;
   const auto common_parameters = planner_data_->parameters;
 
-  if (!isLongEnough(status_.current_lanes, modified_goal_pose_)) {
+  if (
+    status_.pull_over_lanes.empty() || !isLongEnough(status_.current_lanes, modified_goal_pose_)) {
     return std::make_pair(false, false);
   }
-  if (!status_.pull_over_lanes.empty()) {
-    // find candidate paths
-    const auto pull_over_paths = pull_over_utils::getShiftParkingPaths(
-      *route_handler, status_.current_lanes, status_.pull_over_lanes, current_pose,
-      modified_goal_pose_, current_twist, common_parameters, parameters_);
 
-    // get lanes used for detection
-    lanelet::ConstLanelets check_lanes;
-    if (!pull_over_paths.empty()) {
-      const auto & longest_path = pull_over_paths.front();
-      // we want to see check_distance [m] behind vehicle so add lane changing length
-      const double check_distance_with_path =
-        check_distance_ + longest_path.preparation_length + longest_path.pull_over_length;
-      check_lanes = route_handler->getCheckTargetLanesFromPath(
-        longest_path.path, status_.pull_over_lanes, check_distance_with_path);
-    }
+  // find candidate paths
+  const auto pull_over_paths = pull_over_utils::generateShiftParkingPaths(
+    *route_handler, status_.current_lanes, status_.pull_over_lanes, current_pose,
+    modified_goal_pose_, current_twist, common_parameters, parameters_);
 
-    // select valid path
-    valid_paths = pull_over_utils::selectValidPaths(
-      pull_over_paths, status_.current_lanes, check_lanes, *route_handler->getOverallGraphPtr(),
-      current_pose, route_handler->isInGoalRouteSection(status_.current_lanes.back()),
-      modified_goal_pose_, *lane_departure_checker_);
-
-    if (valid_paths.empty()) {
-      return std::make_pair(false, false);
-    }
-    // select safe path
-    bool found_safe_path = false;
-    for (const auto & path : valid_paths) {
-      if (!checkCollisionWithPath(path.shifted_path.path)) {
-        safe_path = path;
-        found_safe_path = true;
-        break;
-      }
-    }
-
-    safe_path.is_safe = found_safe_path;
-    return std::make_pair(true, found_safe_path);
+  // get lanes used for detection
+  lanelet::ConstLanelets check_lanes;
+  if (!pull_over_paths.empty()) {
+    const auto & longest_path = pull_over_paths.front();
+    // we want to see check_distance [m] behind vehicle so add lane changing length
+    const double check_distance_with_path =
+      check_distance_ + longest_path.preparation_length + longest_path.pull_over_length;
+    check_lanes = route_handler->getCheckTargetLanesFromPath(
+      longest_path.path, status_.pull_over_lanes, check_distance_with_path);
   }
-  return std::make_pair(false, false);
+
+  // select valid path
+  valid_paths = pull_over_utils::selectValidPaths(
+    pull_over_paths, status_.current_lanes, check_lanes, *route_handler->getOverallGraphPtr(),
+    current_pose, route_handler->isInGoalRouteSection(status_.current_lanes.back()),
+    modified_goal_pose_, *lane_departure_checker_);
+
+  if (valid_paths.empty()) {
+    return std::make_pair(false, false);
+  }
+  // select safe path
+  bool found_safe_path = false;
+  for (const auto & path : valid_paths) {
+    if (!checkCollisionWithPath(path.shifted_path.path)) {
+      safe_path = path;
+      found_safe_path = true;
+      break;
+    }
+  }
+
+  safe_path.is_safe = found_safe_path;
+  return std::make_pair(true, found_safe_path);
 }
 
 double PullOverModule::calcMinimumShiftPathDistance() const

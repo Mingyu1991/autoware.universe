@@ -75,11 +75,10 @@ bool isPathInLanelets(
   return true;
 }
 
-std::vector<ShiftParkingPath> getShiftParkingPaths(
+std::vector<PullOverPath> generateShiftParkingPaths(
   const RouteHandler & route_handler, const lanelet::ConstLanelets & original_lanelets,
   const lanelet::ConstLanelets & target_lanelets, const Pose & current_pose, const Pose & goal_pose,
-  [[maybe_unused]] const Twist & twist, const BehaviorPathPlannerParameters & common_parameter,
-  const PullOverParameters & parameter)
+  const BehaviorPathPlannerParameters & common_parameter, const PullOverParameters & parameter)
 {
   std::vector<ShiftParkingPath> candidate_paths;
 
@@ -107,8 +106,6 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
   for (double lateral_jerk = minimum_lateral_jerk; lateral_jerk <= maximum_lateral_jerk;
        lateral_jerk += jerk_resolution) {
     PathShifter path_shifter;
-    ShiftedPath shifted_path;
-    ShiftParkingPath candidate_path;
 
     double pull_over_distance = path_shifter.calcLongitudinalDistFromJerk(
       abs(offset_from_current_pose), lateral_jerk, pull_over_velocity);
@@ -154,13 +151,7 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
               (point.point.longitudinal_velocity_mps - pull_over_velocity) +
             pull_over_velocity));
       }
-    }
-
-    if (road_lane_reference_path.points.empty()) {
-      RCLCPP_ERROR_STREAM(
-        rclcpp::get_logger("behavior_path_planner").get_child("pull_over").get_child("util"),
-        "reference path is empty!! something wrong...");
-      continue;
+      if (road_lane_reference_path.points.empty()) continue;
     }
 
     PathWithLaneId target_lane_reference_path;
@@ -173,23 +164,17 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
       const double s_end = arc_position_goal.length;
       target_lane_reference_path = route_handler.getCenterLinePath(target_lanelets, s_start, s_end);
       // distance between shoulder lane's left boundary and shoulder lane center
-      double distance_shoulder_to_left_bound = util::getDistanceToShoulderBoundary(
+      const double distance_shoulder_to_left_bound = util::getDistanceToShoulderBoundary(
         route_handler.getShoulderLanelets(), shift_end_point.point.pose);
 
       // distance between shoulder lane center and target line
-      double distance_shoulder_to_target =
+      const double distance_shoulder_to_target =
         distance_shoulder_to_left_bound + common_parameter.vehicle_width / 2 + margin;
 
       // Apply shifting shoulder lane to adjust to target line
-      double offset = -distance_shoulder_to_target;
+      const double offset = -distance_shoulder_to_target;
       for (size_t i = 0; i < target_lane_reference_path.points.size(); ++i) {
         {
-          if (fabs(offset) < 1.0e-8) {
-            RCLCPP_WARN_STREAM(
-              rclcpp::get_logger("behavior_path_planner").get_child("pull_over").get_child("util"),
-              "no offset from current lane center.");
-          }
-
           auto & p = target_lane_reference_path.points.at(i).point.pose;
           double yaw = tf2::getYaw(p.orientation);
           p.position.x -= std::sin(yaw) * offset;
@@ -197,17 +182,19 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
         }
         path_shifter.setPath(util::resamplePathWithSpline(target_lane_reference_path, 1.0));
       }
+      if (target_lane_reference_path.points.empty()) continue;
     }
+
     ShiftPoint shift_point;
     {
       shift_point.start = road_lane_reference_path.points.back().point.pose;
       shift_point.end = shift_end_point.point.pose;
 
       // distance between shoulder lane's left boundary and current lane center
-      double distance_road_to_left_boundary = util::getDistanceToShoulderBoundary(
+      const double distance_road_to_left_boundary = util::getDistanceToShoulderBoundary(
         route_handler.getShoulderLanelets(), road_lane_reference_path.points.back().point.pose);
       // distance between shoulder lane's left boundary and current lane center
-      double distance_road_to_target =
+      const double distance_road_to_target =
         distance_road_to_left_boundary + common_parameter.vehicle_width / 2 + margin;
 
       shift_point.length = distance_road_to_target;
@@ -215,6 +202,7 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
     }
 
     // offset front side from reference path
+    ShiftedPath shifted_path;
     bool offset_back = false;
     if (!path_shifter.generate(&shifted_path, offset_back)) {
       continue;
@@ -223,60 +211,54 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
     const auto shift_end_idx =
       motion_utils::findNearestIndex(shifted_path.path.points, shift_end_point.point.pose);
     const auto goal_idx = motion_utils::findNearestIndex(shifted_path.path.points, goal_pose);
-    if (shift_end_idx && goal_idx) {
-      // get target shoulder lane
-      lanelet::ConstLanelet target_shoulder_lanelet;
-      lanelet::utils::query::getClosestLanelet(
-        target_lanelets, shifted_path.path.points.back().point.pose, &target_shoulder_lanelet);
-
-      for (size_t i = 0; i < shifted_path.path.points.size(); ++i) {
-        auto & point = shifted_path.path.points.at(i);
-
-        // add road lane_ids if not found
-        for (const auto id : road_lane_reference_path.points.back().lane_ids) {
-          if (std::find(point.lane_ids.begin(), point.lane_ids.end(), id) == point.lane_ids.end()) {
-            point.lane_ids.push_back(id);
-          }
-        }
-
-        // add shoulder lane_id if not found
-        if (
-          std::find(point.lane_ids.begin(), point.lane_ids.end(), target_shoulder_lanelet.id()) ==
-          point.lane_ids.end()) {
-          point.lane_ids.push_back(target_shoulder_lanelet.id());
-        }
-
-        // set velocity
-        if (i < *shift_end_idx) {
-          // set velocity during shift
-          point.point.longitudinal_velocity_mps = std::min(
-            point.point.longitudinal_velocity_mps,
-            road_lane_reference_path.points.back().point.longitudinal_velocity_mps);
-          continue;
-        } else if (i >= *goal_idx) {
-          // set velocity after goal
-          point.point.longitudinal_velocity_mps = 0.0;
-          continue;
-        }
-        point.point.longitudinal_velocity_mps = pull_over_velocity;
-      }
-
-      candidate_path.straight_path = road_lane_reference_path;
-      candidate_path.path = combineReferencePath(road_lane_reference_path, shifted_path.path);
-      candidate_path.shifted_path = shifted_path;
-      shift_point.start_idx = path_shifter.getShiftPoints().front().start_idx;
-      shift_point.end_idx = path_shifter.getShiftPoints().front().end_idx;
-      candidate_path.shifted_path.shift_length = shifted_path.shift_length;
-      candidate_path.shift_point = shift_point;
-      // candidate_path.acceleration = acceleration;
-      candidate_path.preparation_length = straight_distance;
-      candidate_path.pull_over_length = pull_over_distance;
-    } else {
-      RCLCPP_ERROR_STREAM(
-        rclcpp::get_logger("behavior_path_planner").get_child("pull_over").get_child("util"),
-        "lane change end idx not found on target path.");
+    if (!shift_end_idx && !goal_idx) {
       continue;
     }
+    // get target shoulder lane
+    lanelet::ConstLanelet target_shoulder_lanelet;
+    lanelet::utils::query::getClosestLanelet(
+      target_lanelets, shifted_path.path.points.back().point.pose, &target_shoulder_lanelet);
+
+    // set laned_id and velocity
+    for (size_t i = 0; i < shifted_path.path.points.size(); ++i) {
+      auto & point = shifted_path.path.points.at(i);
+
+      // add road lane_ids if not found
+      for (const auto id : road_lane_reference_path.points.back().lane_ids) {
+        if (std::find(point.lane_ids.begin(), point.lane_ids.end(), id) == point.lane_ids.end()) {
+          point.lane_ids.push_back(id);
+        }
+      }
+
+      // add shoulder lane_id if not found
+      if (
+        std::find(point.lane_ids.begin(), point.lane_ids.end(), target_shoulder_lanelet.id()) ==
+        point.lane_ids.end()) {
+        point.lane_ids.push_back(target_shoulder_lanelet.id());
+      }
+
+      // set velocity
+      if (i < *shift_end_idx) {
+        // set velocity during shift
+        point.point.longitudinal_velocity_mps = std::min(
+          point.point.longitudinal_velocity_mps,
+          road_lane_reference_path.points.back().point.longitudinal_velocity_mps);
+        continue;
+      } else if (i >= *goal_idx) {
+        // set velocity after goal
+        point.point.longitudinal_velocity_mps = 0.0;
+        continue;
+      }
+      point.point.longitudinal_velocity_mps = pull_over_velocity;
+    }
+
+    // generate PullOverPath
+    PullOverPath candidate_path{};
+    candidate_path.road_path = road_lane_reference_path;
+    candidate_path.path = combineReferencePath(road_lane_reference_path, shifted_path.path);
+    candidate_path.pull_over_path = shifted_path;
+    candidate_path.start_pose = path_shifter.getShiftPoints().front().start;
+    candidate_path.end_pose = path_shifter.getShiftPoints().front().end;
 
     candidate_paths.push_back(candidate_path);
   }
@@ -284,8 +266,8 @@ std::vector<ShiftParkingPath> getShiftParkingPaths(
   return candidate_paths;
 }
 
-std::vector<ShiftParkingPath> selectValidPaths(
-  const std::vector<ShiftParkingPath> & paths, const lanelet::ConstLanelets & current_lanes,
+std::vector<PullOverPath> selectValidPaths(
+  const std::vector<PullOverPath> & paths, const lanelet::ConstLanelets & current_lanes,
   const lanelet::ConstLanelets & target_lanes,
   const lanelet::routing::RoutingGraphContainer & overall_graphs, const Pose & current_pose,
   const bool isInGoalRouteSection, const Pose & goal_pose,
@@ -295,7 +277,7 @@ std::vector<ShiftParkingPath> selectValidPaths(
   lanelet::ConstLanelets lanes = current_lanes;
   lanes.insert(lanes.end(), target_lanes.begin(), target_lanes.end());
 
-  std::vector<ShiftParkingPath> available_paths;
+  std::vector<PullOverPath> available_paths;
   for (const auto & path : paths) {
     if (!hasEnoughDistance(
           path, current_lanes, target_lanes, current_pose, isInGoalRouteSection, goal_pose,
@@ -311,26 +293,6 @@ std::vector<ShiftParkingPath> selectValidPaths(
   }
 
   return available_paths;
-}
-
-bool selectSafePath(
-  const std::vector<ShiftParkingPath> & paths,
-  const OccupancyGridBasedCollisionDetector & occupancy_grid_map, ShiftParkingPath & selected_path)
-{
-  for (const auto & path : paths) {
-    if (!occupancy_grid_map.hasObstacleOnPath(path.shifted_path.path, false)) {
-      selected_path = path;
-      return true;
-    }
-  }
-
-  // set first path for force pull over if no valid path found
-  if (!paths.empty()) {
-    selected_path = paths.front();
-    return false;
-  }
-
-  return false;
 }
 
 bool hasEnoughDistance(

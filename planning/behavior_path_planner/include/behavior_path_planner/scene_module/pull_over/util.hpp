@@ -46,7 +46,7 @@ PathWithLaneId combineReferencePath(const PathWithLaneId path1, const PathWithLa
 bool isPathInLanelets(
   const PathWithLaneId & path, const lanelet::ConstLanelets & original_lanelets,
   const lanelet::ConstLanelets & target_lanelets);
-std::vector<ShiftParkingPath> getShiftParkingPaths(
+std::vector<ShiftParkingPath> generateShiftParkingPaths(
   const RouteHandler & route_handler, const lanelet::ConstLanelets & original_lanelets,
   const lanelet::ConstLanelets & target_lanelets, const Pose & pose, const Pose & goal_pose,
   const Twist & twist, const BehaviorPathPlannerParameters & common_parameter,
