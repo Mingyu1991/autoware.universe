@@ -102,22 +102,16 @@ struct PullOverParameters
   bool print_debug_info;
 };
 
-enum PathType {
-  NONE = 0,
-  SHIFT,
-  ARC_FORWARD,
-  ARC_BACKWARD,
-};
-
 struct PUllOverStatus
 {
-  PathWithLaneId path{};
+  PullOverPath pull_over_path{};
+  size_t current_path_idx = 0;
   std::shared_ptr<PathWithLaneId> prev_stop_path = nullptr;
   lanelet::ConstLanelets current_lanes{};
   lanelet::ConstLanelets pull_over_lanes{};
   lanelet::ConstLanelets lanes{};  // current + pull_over
   bool has_decided_path = false;
-  int path_type = PathType::NONE;
+  PathType path_type = PathType::NONE;
   bool is_safe = false;
   bool prev_is_safe = false;
   bool has_decided_velocity = false;
@@ -128,11 +122,18 @@ struct GoalCandidate
 {
   Pose goal_pose{};
   double distance_from_original_goal = 0.0;
+  bool is_safe = false;
 
   bool operator<(const GoalCandidate & other) const noexcept
   {
     return distance_from_original_goal < other.distance_from_original_goal;
   }
+};
+
+struct PathCandidate
+{
+  PullOverPath path{};
+  std::shared_ptr<GoalCandidate> goal_candidate{};
 };
 
 class PullOverModule : public SceneModuleInterface
@@ -147,7 +148,7 @@ public:
   bool isExecutionReady() const override;
   BT::NodeStatus updateState() override;
   void onTimer();
-  bool planWithEfficientPath();
+  void planWithEfficientPath();
   bool planWithCloseGoal();
   BehaviorModuleOutput plan() override;
   BehaviorModuleOutput planWaitingApproval() override;
@@ -160,7 +161,7 @@ public:
 private:
   PullOverParameters parameters_;
 
-  ShiftParkingPath shift_parking_path_;
+  // ShiftParkingPath shift_parking_path_;
   vehicle_info_util::VehicleInfo vehicle_info_;
 
   const double pull_over_lane_length_ = 200.0;
@@ -178,7 +179,8 @@ private:
   OccupancyGridBasedCollisionDetector occupancy_grid_map_;
   Pose modified_goal_pose_;
   Pose refined_goal_pose_;
-  std::vector<GoalCandidate> goal_candidates_;
+  std::vector<std::shared_ptr<GoalCandidate>> goal_candidates_;
+  std::vector<PathCandidate> path_candidates_;
   GeometricParallelParking parallel_parking_planner_;
   ParallelParkingParameters parallel_parking_parameters_;
   std::deque<nav_msgs::msg::Odometry::ConstSharedPtr> odometry_buffer_;
@@ -190,9 +192,13 @@ private:
   PathWithLaneId getReferencePath() const;
   PathWithLaneId generateStopPath() const;
   lanelet::ConstLanelets getPullOverLanes() const;
-  std::pair<bool, bool> getSafePath(ShiftParkingPath & safe_path) const;
+  // std::pair<bool, bool> getSafePath(ShiftParkingPath & safe_path) const;
+  bool hasFinishedPullOver();
+  bool hasFinishedCurrentPath() const;
   Pose getRefinedGoal() const;
   Pose getParkingStartPose() const;
+  void incrementPathIndex();
+  PathWithLaneId getCurrentPath() const; 
   ParallelParkingParameters getGeometricPullOverParameters() const;
   bool isLongEnoughToParkingStart(
     const PathWithLaneId & path, const Pose & parking_start_pose) const;
@@ -202,12 +208,11 @@ private:
   double calcMinimumShiftPathDistance() const;
   std::pair<double, double> calcDistanceToPathChange() const;
 
-  bool planShiftPath();
+  std::vector<PullOverPath> planShiftPath(const Pose & goal_pose);
   bool isStopped();
-  bool hasFinishedCurrentPath();
-  bool hasFinishedPullOver();
   void updateOccupancyGrid();
   void researchGoal();
+  void updateGoalCandidatesSafety();
   void resetStatus();
   bool checkCollisionWtihLongitudinalDistance(
     const Pose & ego_pose, const PredictedObjects & dynamic_objects) const;
