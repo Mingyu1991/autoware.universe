@@ -106,6 +106,9 @@ PIDBasedPlanner::PIDBasedPlanner(
     node.declare_parameter<double>("pid_based_planner.lpf_output_acc_gain");
   lpf_output_acc_ptr_ = std::make_shared<LowpassFilter1d>(lpf_output_acc_gain);
 
+  const double lpf_obj_vel_acc_gain = 0.5;
+  lpf_obj_vel_acc_ptr_ = std::make_shared<LowpassFilter1d>(lpf_obj_vel_acc_gain);
+
   // publisher
   debug_values_pub_ = node.create_publisher<Float32MultiArrayStamped>("~/debug/values", 1);
 }
@@ -214,6 +217,7 @@ void PIDBasedPlanner::planCruise(
     prev_target_vel_ = {};
     lpf_cruise_ptr_->reset();
     lpf_output_acc_ptr_->reset();
+    lpf_obj_vel_acc_ptr_->reset();
   }
 }
 
@@ -255,7 +259,7 @@ VelocityLimit PIDBasedPlanner::doCruise(
   // calculate target acceleration
   // for stable cruise control1 // CHECK
   /*
-  const double modified_vel_to_acc_weight = linearSym(cruise_obstacle_info.dist_to_cruise, 3.0, modified_vel_to_acc_weight);
+  const double modified_vel_to_acc_weight = linearSym(cruise_obstacle_info.dist_to_cruise, 3.0, vel_to_acc_weight_);
   const double target_acc = modified_vel_to_acc_weight * additional_vel;
   */
   const double target_acc = vel_to_acc_weight_ * additional_vel;
@@ -266,11 +270,12 @@ VelocityLimit PIDBasedPlanner::doCruise(
   // for stable cruise control2 // CHECK
   /*
   if (std::abs(cruise_obstacle_info.dist_to_cruise) < 3.0) {
-    // target_acc_with_acc_limit = std::min(std::max(target_acc_with_acc_limit * 0.1, -0.1), 0.1);
     target_acc_with_acc_limit = std::min(std::max(target_acc_with_acc_limit * 0.1, -0.1), 0.1);
   }
   */
-  // target_acc_with_acc_limit = lpf_output_acc_ptr_->filter(target_acc_with_acc_limit);
+  
+  // for stable cruise control3 // CHECK
+  target_acc_with_acc_limit = lpf_output_acc_ptr_->filter(target_acc_with_acc_limit);
 
 
   RCLCPP_INFO_EXPRESSION(

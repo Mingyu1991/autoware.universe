@@ -124,6 +124,7 @@ private:
 
   std::shared_ptr<LowpassFilter1d> lpf_cruise_ptr_;
   std::shared_ptr<LowpassFilter1d> lpf_output_acc_ptr_;
+  std::shared_ptr<LowpassFilter1d> lpf_obj_vel_acc_ptr_;
 };
 
 #endif  // OBSTACLE_CRUISE_PLANNER__PID_BASED_PLANNER__PID_BASED_PLANNER_HPP_
