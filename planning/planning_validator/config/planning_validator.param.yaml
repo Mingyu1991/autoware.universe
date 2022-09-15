@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    interval_threshold: 100.0
+    relative_angle_threshold: 10.0
+    curvature_threshold: 100.0
+    lateral_acc_threshold: 100.0
+    longitudinal_max_acc_threshold: 100.0
+    longitudinal_min_acc_threshold: -100.0
+    steering_threshold: 100.0
+    steering_rate_threshold: 100.0
+    velocity_deviation_threshold: 100.0
+    distance_deviation_threshold: 100.0
