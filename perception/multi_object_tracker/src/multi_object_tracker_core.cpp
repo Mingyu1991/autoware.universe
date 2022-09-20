@@ -404,6 +404,7 @@ void MultiObjectTracker::publish(const rclcpp::Time & time) const
     }
     autoware_auto_perception_msgs::msg::TrackedObject object;
     (*itr)->getTrackedObject(time, object);
+    (*itr)->fillAccel(time, object);
     output_msg.objects.push_back(object);
   }
 
