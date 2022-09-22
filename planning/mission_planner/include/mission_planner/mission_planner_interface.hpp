@@ -17,6 +17,8 @@
 
 #include <boost/optional.hpp>
 
+#include <boost/optional.hpp>
+
 #include <string>
 #include <vector>
 
