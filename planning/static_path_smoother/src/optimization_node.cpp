@@ -118,11 +118,11 @@ StaticPathSmoother::StaticPathSmoother(const rclcpp::NodeOptions & node_options)
 
   // publisher to other nodes
   traj_pub_ = create_publisher<autoware_auto_planning_msgs::msg::Trajectory>(
-    "~/output/path", rclcpp::QoS{1}.transient_local());
+    "debug/optimized_centerline", rclcpp::QoS{1}.transient_local());
 
   // subscriber
   path_sub_ = create_subscription<autoware_auto_planning_msgs::msg::Path>(
-    "~/input/path", rclcpp::QoS{1}.transient_local(),
+    "debug/raw_centerline", rclcpp::QoS{1}.transient_local(),
     std::bind(&StaticPathSmoother::pathCallback, this, std::placeholders::_1));
 
   const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();

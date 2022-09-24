@@ -84,7 +84,7 @@ int main(int argc, char * argv[])
   const auto pub_map_bin = main_node->create_publisher<HADMapBin>("lanelet2_map_topic", qos);
   const auto pub_raw_path_with_lane_id =
     main_node->create_publisher<PathWithLaneId>("raw_path_with_lane_id", qos);
-  const auto pub_raw_path = main_node->create_publisher<Path>("raw_path", qos);
+  const auto pub_raw_path = main_node->create_publisher<Path>("debug/raw_centerline", qos);
 
   // get ros parameters
   const auto lanelet2_file_name = main_node->declare_parameter<std::string>("lanelet2_file_name");
