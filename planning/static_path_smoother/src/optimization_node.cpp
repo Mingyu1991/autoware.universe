@@ -460,11 +460,14 @@ std::vector<TrajectoryPoint> StaticPathSmoother::pathCallback(
     }
   }
 
-  auto output_traj_msg = motion_utils::convertToTrajectory(whole_optimized_traj_points);
+  // resample
+  auto output_traj_msg = motion_utils::resampleTrajectory(
+    motion_utils::convertToTrajectory(whole_optimized_traj_points), 0.5);
   output_traj_msg.header = path_ptr->header;
   traj_pub_->publish(output_traj_msg);
 
-  return whole_optimized_traj_points;
+  return motion_utils::convertToTrajectoryPointArray(
+    output_traj_msg);  // TODO(murooka) prepare resample param
 }
 
 #include "rclcpp_components/register_node_macro.hpp"

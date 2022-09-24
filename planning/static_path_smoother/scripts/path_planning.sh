@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ros2 launch static_path_smoother path_planning.launch.xml lanelet2_file_name:=/home/takayukimurooka/AutonomousDrivingScenarios/map/kashiwanoha/lanelet2_map.osm start_lanelet_id:=125 end_lanelet_id:=132 vehicle_model:=ymc_golfcart_m0
+ros2 launch static_path_smoother path_planning.launch.xml lanelet2_file_name:=/home/takayukimurooka/AutonomousDrivingScenarios/map/kashiwanoha/lanelet2_map.osm start_lanelet_id:=125 end_lanelet_id:=132 vehicle_model:=lexus
 
 # ros2 launch static_path_smoother path_planning.launch.xml lanelet2_file_name:=/tmp/popo/lanelet2_map.osm start_lanelet_id:=125 end_lanelet_id:=132 vehicle_model:=ymc_golfcart_m0
 
