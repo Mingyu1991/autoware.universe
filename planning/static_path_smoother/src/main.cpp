@@ -20,6 +20,8 @@
 #include "static_path_smoother/functions.hpp"
 #include "static_path_smoother/optimization_node.hpp"
 
+#include "autoware_auto_mapping_msgs/msg/had_map_bin.hpp"
+#include "autoware_auto_planning_msgs/msg/had_map_route.hpp"
 #include "autoware_auto_planning_msgs/msg/path.hpp"
 #include "autoware_auto_planning_msgs/msg/path_with_lane_id.hpp"
 #include "autoware_auto_planning_msgs/msg/trajectory.hpp"
@@ -34,6 +36,7 @@
 #include <vector>
 
 using autoware_auto_mapping_msgs::msg::HADMapBin;
+using autoware_auto_planning_msgs::msg::HADMapRoute;
 using autoware_auto_planning_msgs::msg::Path;
 using autoware_auto_planning_msgs::msg::PathWithLaneId;
 using autoware_auto_planning_msgs::msg::Trajectory;
@@ -66,16 +69,6 @@ lanelet::ConstLanelets get_lanelets_from_route(
 }
 
 rclcpp::NodeOptions create_node_options() { return rclcpp::NodeOptions{}; }
-
-lanelet::Point3d createPoint3d(const double x, const double y, const double z = 19.0)
-{
-  lanelet::Point3d point(lanelet::utils::getId(), x, y, z);
-  point.setAttribute("local_x", x);
-  point.setAttribute("local_y", y);
-  point.setAttribute("ele", z);
-
-  return point;
-}
 }  // namespace
 
 int main(int argc, char * argv[])
@@ -104,8 +97,8 @@ int main(int argc, char * argv[])
   const auto lanelet2_output_file_name = "/tmp/popo/lanelet2_map.osm";
 
   // load map by the map_loader package
-  lanelet::LaneletMapPtr map_ptr;
-  const auto map_bin_msg_ptr = create_map(map_ptr, lanelet2_file_name, current_time);
+  // function0 starts
+  const auto map_bin_msg_ptr = static_path_smoother::create_map(lanelet2_file_name, current_time);
   if (!map_bin_msg_ptr) {
     RCLCPP_ERROR(main_node->get_logger(), "Loading map failed");
     return 0;
@@ -114,22 +107,26 @@ int main(int argc, char * argv[])
   // publish map bin msg
   pub_map_bin->publish(*map_bin_msg_ptr);
   RCLCPP_INFO(main_node->get_logger(), "Published map.");
+  // function0 ends
 
   // create route_handler
   route_handler::RouteHandler route_handler;
   route_handler.setMap(*map_bin_msg_ptr);
 
   // calculate check points (= start and goal pose)
-  const auto check_points = create_check_points(route_handler, start_lanelet_id, end_lanelet_id);
+  const auto check_points =
+    static_path_smoother::create_check_points(route_handler, start_lanelet_id, end_lanelet_id);
   RCLCPP_INFO(main_node->get_logger(), "Calculated check points.");
 
   // plan route by the mission_planner package
-  const auto route = plan_route(map_bin_msg_ptr, check_points);
+  const auto route = static_path_smoother::plan_route(map_bin_msg_ptr, check_points);
   RCLCPP_INFO(main_node->get_logger(), "Planned route.");
 
   // calculate center line path with drivable area by the behavior_path_planner package
   const auto lanelets = get_lanelets_from_route(route_handler, route);
-  const auto raw_path_with_lane_id = get_path_with_lane_id(
+
+  // function1 starts
+  const auto raw_path_with_lane_id = static_path_smoother::get_path_with_lane_id(
     route_handler, lanelets, check_points.front(), ego_nearest_dist_threshold,
     ego_nearest_yaw_threshold);
   pub_raw_path_with_lane_id->publish(raw_path_with_lane_id);
@@ -141,90 +138,21 @@ int main(int argc, char * argv[])
   RCLCPP_INFO(main_node->get_logger(), "Converted to path and published.");
 
   // optimize trajectory by the obstacle_avoidance_planner package
-  StaticPathSmoother successive_path_optimizer(create_node_options());
+  static_path_smoother::StaticPathSmoother successive_path_optimizer(create_node_options());
   const auto optimized_traj_points =
     successive_path_optimizer.pathCallback(std::make_shared<Path>(raw_path));
   RCLCPP_INFO(main_node->get_logger(), "Optimized trajectory and published.");
+  // function1 ends
 
-  // store optimized trajectory in map
-  size_t lanelet_idx = 0;
-  lanelet::LineString3d centerline(lanelet::utils::getId());
-  for (const auto & traj_point : optimized_traj_points) {
-    const auto & traj_pos = traj_point.pose.position;
-
-    while (true) {
-      if (lanelets.size() - 1 < lanelet_idx) {
-        break;
-      }
-      const size_t lanelet_id = lanelets.at(lanelet_idx).id();
-
-      bool continue_flag = false;
-      bool break_flag = false;
-      for (auto & lanelet_obj : route_handler.getLaneletMapPtr()->laneletLayer) {
-        if (lanelet_obj.id() != lanelet_id) {
-          continue;
-        }
-        std::cerr << "p2" << std::endl;
-
-        const lanelet::BasicPoint2d point(traj_pos.x, traj_pos.y);
-        const bool is_inside = lanelet::geometry::inside(lanelet_obj, point);
-        if (is_inside) {
-          const lanelet::Point3d center_point =
-            createPoint3d(traj_pos.x, traj_pos.y, 19.0);  // traj_pos.z);
-          centerline.push_back(center_point);
-          route_handler.getLaneletMapPtr()->add(center_point);
-          break_flag = true;
-          break;
-        }
-
-        if (!centerline.empty()) {
-          std::cerr << "update" << std::endl;
-          route_handler.getLaneletMapPtr()->add(centerline);
-          std::cerr << centerline.size() << std::endl;
-          lanelet_obj.setCenterline(centerline);
-          break_flag = true;
-          centerline = lanelet::LineString3d(lanelet::utils::getId());
-          break;
-        }
-      }
-
-      if (continue_flag) {
-        continue;
-      }
-
-      if (break_flag) {
-        break;
-      }
-      ++lanelet_idx;
-    }
-  }
-
-  /*
-  for (auto & lanelet_obj : route_handler.getLaneletMapPtr()->laneletLayer) {
-    const auto start_point = createPoint3d(
-                                 (lanelet_obj.rightBound().front().x() +
-  lanelet_obj.leftBound().front().x()) / 2.0, (lanelet_obj.rightBound().front().y() +
-  lanelet_obj.leftBound().front().y()) / 2.0, 19.0);
-
-    const auto end_point = createPoint3d(
-                                       (lanelet_obj.rightBound().back().x() +
-  lanelet_obj.leftBound().back().x()) / 2.0, (lanelet_obj.rightBound().back().y() +
-  lanelet_obj.leftBound().back().y()) / 2.0, 19.0);
-
-    auto centerline = lanelet::LineString3d(lanelet::utils::getId());
-    centerline.push_back(start_point);
-    centerline.push_back(end_point);
-
-    route_handler.getLaneletMapPtr()->add(centerline);
-    route_handler.getLaneletMapPtr()->add(start_point);
-    route_handler.getLaneletMapPtr()->add(end_point);
-    lanelet_obj.setCenterline(centerline);
-  }
-  */
+  // update centerline in map
+  static_path_smoother::update_centerline(route_handler, lanelets, optimized_traj_points);
+  RCLCPP_INFO(main_node->get_logger(), "Updated centerline in map.");
 
   // save map with modified center line
   lanelet::write(lanelet2_output_file_name, *route_handler.getLaneletMapPtr());
+  RCLCPP_INFO(main_node->get_logger(), "Saved map.");
 
+  // NOTE: spin node to show debug path/trajectory in rviz with transient local
   rclcpp::spin(main_node);
   rclcpp::shutdown();
 

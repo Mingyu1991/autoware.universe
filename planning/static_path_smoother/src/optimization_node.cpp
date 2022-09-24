@@ -35,6 +35,8 @@
 
 // TODO(murooka) refactor
 
+namespace static_path_smoother
+{
 namespace
 {
 std::tuple<std::vector<double>, std::vector<double>> calcVehicleCirclesInfo(
@@ -469,6 +471,7 @@ std::vector<TrajectoryPoint> StaticPathSmoother::pathCallback(
   return motion_utils::convertToTrajectoryPointArray(
     output_traj_msg);  // TODO(murooka) prepare resample param
 }
+}  // namespace static_path_smoother
 
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(StaticPathSmoother)
+RCLCPP_COMPONENTS_REGISTER_NODE(static_path_smoother::StaticPathSmoother)

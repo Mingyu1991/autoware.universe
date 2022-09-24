@@ -20,6 +20,8 @@
 #include "mission_planner/mission_planner_lanelet2.hpp"
 #include "tier4_autoware_utils/tier4_autoware_utils.hpp"
 
+namespace static_path_smoother
+{
 namespace
 {
 rclcpp::NodeOptions create_node_options() { return rclcpp::NodeOptions{}; }
@@ -58,13 +60,23 @@ geometry_msgs::msg::Pose get_center_pose(
 
   return middle_pose;
 }
+
+lanelet::Point3d createPoint3d(const double x, const double y, const double z = 19.0)
+{
+  lanelet::Point3d point(lanelet::utils::getId());
+  point.setAttribute("local_x", x);
+  point.setAttribute("local_y", y);
+  point.setAttribute("ele", z);
+
+  return point;
+}
 }  // namespace
 
 HADMapBin::ConstSharedPtr create_map(
-  lanelet::LaneletMapPtr map_ptr, const std::string & lanelet2_file_name,
-  const rclcpp::Time & current_time)
+  const std::string & lanelet2_file_name, const rclcpp::Time & current_time)
 {
   // load map
+  lanelet::LaneletMapPtr map_ptr;
   map_ptr = Lanelet2MapLoaderNode::load_map(lanelet2_file_name, "MGRS");
   if (!map_ptr) {
     return nullptr;
@@ -128,3 +140,50 @@ PathWithLaneId get_path_with_lane_id(
 
   return path_with_lane_id;
 }
+
+void update_centerline(
+  route_handler::RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets,
+  const std::vector<TrajectoryPoint> & new_centerline)
+{
+  // get lanelet as reference to update centerline
+  lanelet::Lanelets lanelets_ref;
+  for (const auto & lanelet : lanelets) {
+    for (auto & lanelet_ref : route_handler.getLaneletMapPtr()->laneletLayer) {
+      if (lanelet_ref.id() == lanelet.id()) {
+        lanelets_ref.push_back(lanelet_ref);
+      }
+    }
+  }
+
+  // put new centerline in lanelets
+  size_t lanelet_idx = 0;
+  lanelet::LineString3d centerline(lanelet::utils::getId());
+  for (const auto & traj_point : new_centerline) {
+    const auto & traj_pos = traj_point.pose.position;
+
+    for (; lanelet_idx < lanelets_ref.size(); ++lanelet_idx) {
+      auto & lanelet_ref = lanelets_ref.at(lanelet_idx);
+
+      const lanelet::BasicPoint2d point(traj_pos.x, traj_pos.y);
+      const bool is_inside = lanelet::geometry::inside(lanelet_ref, point);
+      if (is_inside) {
+        const auto center_point = createPoint3d(traj_pos.x, traj_pos.y, traj_pos.z);
+
+        // set center point
+        centerline.push_back(center_point);
+        route_handler.getLaneletMapPtr()->add(center_point);
+        break;
+      }
+
+      if (!centerline.empty()) {
+        // set centerline
+        route_handler.getLaneletMapPtr()->add(centerline);
+        lanelet_ref.setCenterline(centerline);
+
+        // prepare new centerline
+        centerline = lanelet::LineString3d(lanelet::utils::getId());
+      }
+    }
+  }
+}
+}  // namespace static_path_smoother

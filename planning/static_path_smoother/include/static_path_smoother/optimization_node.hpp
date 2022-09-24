@@ -46,6 +46,8 @@
 #include <string>
 #include <vector>
 
+namespace static_path_smoother
+{
 using autoware_auto_perception_msgs::msg::PredictedObjects;
 using autoware_auto_planning_msgs::msg::TrajectoryPoint;
 
@@ -118,5 +120,6 @@ public:
   std::vector<TrajectoryPoint> pathCallback(
     const autoware_auto_planning_msgs::msg::Path::SharedPtr);
 };
+}  // namespace static_path_smoother
 
 #endif  // STATIC_PATH_SMOOTHER__OPTIMIZATION_NODE_HPP_
