@@ -155,11 +155,11 @@ void update_centerline(
     }
   }
 
-  // put new centerline in lanelets
+  // store new centerline in lanelets
   size_t lanelet_idx = 0;
   lanelet::LineString3d centerline(lanelet::utils::getId());
-  for (const auto & traj_point : new_centerline) {
-    const auto & traj_pos = traj_point.pose.position;
+  for (size_t traj_idx = 0; traj_idx < new_centerline.size(); ++traj_idx) {
+    const auto & traj_pos = new_centerline.at(traj_idx).pose.position;
 
     for (; lanelet_idx < lanelets_ref.size(); ++lanelet_idx) {
       auto & lanelet_ref = lanelets_ref.at(lanelet_idx);
@@ -183,6 +183,14 @@ void update_centerline(
         // prepare new centerline
         centerline = lanelet::LineString3d(lanelet::utils::getId());
       }
+    }
+
+    if (traj_idx == new_centerline.size() - 1 && !centerline.empty()) {
+      auto & lanelet_ref = lanelets_ref.at(lanelet_idx);
+
+      // set centerline
+      route_handler.getLaneletMapPtr()->add(centerline);
+      lanelet_ref.setCenterline(centerline);
     }
   }
 }
