@@ -32,12 +32,6 @@
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
-#include "nav_msgs/msg/map_meta_data.hpp"
-#include "nav_msgs/msg/occupancy_grid.hpp"
-#include "nav_msgs/msg/odometry.hpp"
-#include "tier4_debug_msgs/msg/string_stamped.hpp"
-#include "tier4_planning_msgs/msg/enable_avoidance.hpp"
-#include "visualization_msgs/msg/marker_array.hpp"
 
 #include "boost/optional.hpp"
 

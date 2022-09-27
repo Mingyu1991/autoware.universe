@@ -24,18 +24,12 @@
   <depend>map_loader</depend>
   <depend>mission_planner</depend>
   <depend>motion_utils</depend>
-  <depend>nav_msgs</depend>
   <depend>obstacle_avoidance_planner</depend>
   <depend>osqp_interface</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
-  <depend>std_msgs</depend>
-  <depend>tf2_ros</depend>
   <depend>tier4_autoware_utils</depend>
-  <depend>tier4_debug_msgs</depend>
-  <depend>tier4_planning_msgs</depend>
   <depend>vehicle_info_util</depend>
-  <depend>visualization_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>autoware_lint_common</test_depend>

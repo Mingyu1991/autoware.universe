@@ -26,7 +26,7 @@ namespace
 {
 rclcpp::NodeOptions create_node_options() { return rclcpp::NodeOptions{}; }
 
-geometry_msgs::msg::PoseStamped::ConstPtr convert_to_pose_stamped(
+geometry_msgs::msg::PoseStamped::ConstSharedPtr convert_to_pose_stamped(
   const geometry_msgs::msg::Pose & pose)
 {
   auto pose_stamped_ptr = std::make_shared<geometry_msgs::msg::PoseStamped>();
@@ -109,7 +109,7 @@ HADMapRoute plan_route(
   const auto route = mission_planner_node.plan_route(check_points);
 
   return route;
-};
+}
 
 PathWithLaneId get_path_with_lane_id(
   const route_handler::RouteHandler & route_handler, const lanelet::ConstLanelets lanelets,
