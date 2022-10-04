@@ -8,9 +8,10 @@ find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 
 ament_auto_add_executable(static_centerline_optimizer
-  src/static_centerline_optimizer.cpp
-  src/functions.cpp
-  src/optimization_node.cpp)
+  src/main.cpp
+  src/static_centerline_optimizer_node.cpp
+  src/optimization_node.cpp
+  src/utils.cpp)
 
 target_include_directories(static_centerline_optimizer
   SYSTEM PUBLIC

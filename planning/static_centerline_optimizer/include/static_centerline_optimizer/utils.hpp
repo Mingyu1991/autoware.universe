@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef STATIC_CENTERLINE_OPTIMIZER__FUNCTIONS_HPP_
-#define STATIC_CENTERLINE_OPTIMIZER__FUNCTIONS_HPP_
+#ifndef STATIC_CENTERLINE_OPTIMIZER__UTILS_HPP_
+#define STATIC_CENTERLINE_OPTIMIZER__UTILS_HPP_
 
 #include "route_handler/route_handler.hpp"
 #include "static_centerline_optimizer/type_alias.hpp"
@@ -23,6 +23,8 @@
 #include <vector>
 
 namespace static_centerline_optimizer
+{
+namespace utils
 {
 HADMapBin::ConstSharedPtr create_map(
   rclcpp::Node & node, const std::string & lanelet2_file_name, const rclcpp::Time & current_time);
@@ -42,6 +44,7 @@ PathWithLaneId get_path_with_lane_id(
 void update_centerline(
   RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets,
   const std::vector<TrajectoryPoint> & new_centerline);
+}
 }  // namespace static_centerline_optimizer
 
-#endif  // STATIC_CENTERLINE_OPTIMIZER__FUNCTIONS_HPP_
+#endif  // STATIC_CENTERLINE_OPTIMIZER__UTILS_HPP_

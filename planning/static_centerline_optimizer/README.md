@@ -24,6 +24,12 @@ The optimized centerline is generated from the command line interface.
 ros2 run static_centerline_optimizer optimize_path.sh <osm-map-path> <start-lanelet-id> <end-lanelet-id> <vehicle-model>
 ```
 
+image
+
+The yellow footprints are the original ones in the map file.
+The red footprints are the optimized ones.
+You can see that the red footprints are inside the lane although the yellow ones are outside.
+
 The output map with the optimized centerline locates `/tmp/lanelet2_map.osm`
 If you want to change the output map path, you can remap the path
 

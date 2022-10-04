@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "static_centerline_optimizer/functions.hpp"
+#include "static_centerline_optimizer/utils.hpp"
 
 #include "behavior_path_planner/data_manager.hpp"
 #include "behavior_path_planner/utilities.hpp"
@@ -72,6 +72,8 @@ lanelet::Point3d createPoint3d(const double x, const double y, const double z = 
 }
 }  // namespace
 
+namespace utils
+{
 HADMapBin::ConstSharedPtr create_map(
   rclcpp::Node & node, const std::string & lanelet2_file_name, const rclcpp::Time & current_time)
 {
@@ -193,4 +195,5 @@ void update_centerline(
     }
   }
 }
+}  // namespace utils
 }  // namespace static_centerline_optimizer

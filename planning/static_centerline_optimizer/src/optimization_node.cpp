@@ -456,7 +456,7 @@ std::vector<TrajectoryPoint> StaticCenterlineOptmizer::pathCallback(const Path::
 
   // resample
   auto output_traj_msg = motion_utils::resampleTrajectory(
-    motion_utils::convertToTrajectory(whole_optimized_traj_points), 0.5);
+    motion_utils::convertToTrajectory(whole_optimized_traj_points), 1.0);
   output_traj_msg.header = path_ptr->header;
   traj_pub_->publish(output_traj_msg);
 
