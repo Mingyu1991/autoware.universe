@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "static_path_smoother/optimization_node.hpp"
+#include "static_centerline_optimizer/optimization_node.hpp"
 
 #include "interpolation/spline_interpolation_points_2d.hpp"
 #include "motion_utils/motion_utils.hpp"
 #include "rclcpp/time.hpp"
 #include "tf2/utils.h"
-#include "tier4_autoware_utils/ros/update_param.hpp"
+#include "tier4_autoware_utils/tier4_autoware_utils.hpp"
 #include "vehicle_info_util/vehicle_info_util.hpp"
-
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "geometry_msgs/msg/twist_stamped.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -33,7 +30,7 @@
 
 // TODO(murooka) refactor
 
-namespace static_path_smoother
+namespace static_centerline_optimizer
 {
 namespace
 {
@@ -86,9 +83,9 @@ std::tuple<std::vector<double>, std::vector<double>> calcVehicleCirclesInfo(
 }
 
 template <typename T>
-autoware_auto_planning_msgs::msg::TrajectoryPoint convertToTrajectoryPoint(const T & point)
+TrajectoryPoint convertToTrajectoryPoint(const T & point)
 {
-  autoware_auto_planning_msgs::msg::TrajectoryPoint traj_point;
+  TrajectoryPoint traj_point;
   traj_point.pose = tier4_autoware_utils::getPose(point);
   traj_point.longitudinal_velocity_mps = point.longitudinal_velocity_mps;
   traj_point.lateral_velocity_mps = point.lateral_velocity_mps;
@@ -97,10 +94,9 @@ autoware_auto_planning_msgs::msg::TrajectoryPoint convertToTrajectoryPoint(const
 }
 
 template <typename T>
-std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> convertToTrajectoryPoints(
-  const std::vector<T> & points)
+std::vector<TrajectoryPoint> convertToTrajectoryPoints(const std::vector<T> & points)
 {
-  std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> traj_points;
+  std::vector<TrajectoryPoint> traj_points;
   for (const auto & point : points) {
     const auto traj_point = convertToTrajectoryPoint(point);
     traj_points.push_back(traj_point);
@@ -109,19 +105,19 @@ std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> convertToTrajecto
 }
 }  // namespace
 
-StaticPathSmoother::StaticPathSmoother(const rclcpp::NodeOptions & node_options)
-: Node("static_path_smoother", node_options), logger_ros_clock_(RCL_ROS_TIME)
+StaticCenterlineOptmizer::StaticCenterlineOptmizer(const rclcpp::NodeOptions & node_options)
+: Node("static_centerline_optimizer", node_options), logger_ros_clock_(RCL_ROS_TIME)
 {
   rclcpp::Clock::SharedPtr clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
 
   // publisher to other nodes
-  traj_pub_ = create_publisher<autoware_auto_planning_msgs::msg::Trajectory>(
-    "debug/optimized_centerline", rclcpp::QoS{1}.transient_local());
+  traj_pub_ =
+    create_publisher<Trajectory>("debug/optimized_centerline", rclcpp::QoS{1}.transient_local());
 
   // subscriber
-  path_sub_ = create_subscription<autoware_auto_planning_msgs::msg::Path>(
+  path_sub_ = create_subscription<Path>(
     "debug/raw_centerline", rclcpp::QoS{1}.transient_local(),
-    std::bind(&StaticPathSmoother::pathCallback, this, std::placeholders::_1));
+    std::bind(&StaticCenterlineOptmizer::pathCallback, this, std::placeholders::_1));
 
   const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
   {  // vehicle param
@@ -367,13 +363,13 @@ StaticPathSmoother::StaticPathSmoother(const rclcpp::NodeOptions & node_options)
       declare_parameter<double>("advanced.mpt.weight.terminal_path_yaw_error_weight");
   }
 
-  // TODO(murooka) tune this param when avoiding with static_path_smoother
+  // TODO(murooka) tune this param when avoiding with static_centerline_optimizer
   traj_param_.center_line_width = vehicle_param_.width;
 
   resetPlanning();
 }
 
-void StaticPathSmoother::resetPlanning()
+void StaticCenterlineOptmizer::resetPlanning()
 {
   RCLCPP_WARN(get_logger(), "[ObstacleAvoidancePlanner] Reset planning");
 
@@ -389,14 +385,13 @@ void StaticPathSmoother::resetPlanning()
   resetPrevOptimization();
 }
 
-void StaticPathSmoother::resetPrevOptimization()
+void StaticCenterlineOptmizer::resetPrevOptimization()
 {
   prev_optimal_trajs_ptr_ = nullptr;
   eb_solved_count_ = 0;
 }
 
-std::vector<TrajectoryPoint> StaticPathSmoother::pathCallback(
-  const autoware_auto_planning_msgs::msg::Path::SharedPtr path_ptr)
+std::vector<TrajectoryPoint> StaticCenterlineOptmizer::pathCallback(const Path::SharedPtr path_ptr)
 {
   if (path_ptr->points.empty() || path_ptr->drivable_area.data.empty()) {
     return std::vector<TrajectoryPoint>{};
@@ -423,7 +418,7 @@ std::vector<TrajectoryPoint> StaticPathSmoother::pathCallback(
 
   const size_t initial_target_index = 3;
   auto target_pose = resampled_path.points.at(initial_target_index).pose;  // TODO(murooka)
-  std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> whole_optimized_traj_points;
+  std::vector<TrajectoryPoint> whole_optimized_traj_points;
 
   std::cerr << "==============================================" << std::endl;
   for (size_t i = 0; i < path_segment_num; ++i) {
@@ -448,9 +443,8 @@ std::vector<TrajectoryPoint> StaticPathSmoother::pathCallback(
       const double dist = tier4_autoware_utils::calcDistance2d(
         whole_optimized_traj_points.at(j), mpt_trajs->mpt.front());
       if (dist < 0.5) {
-        const std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint>
-          extracted_whole_optimized_traj_points{
-            whole_optimized_traj_points.begin(), whole_optimized_traj_points.begin() + j - 1};
+        const std::vector<TrajectoryPoint> extracted_whole_optimized_traj_points{
+          whole_optimized_traj_points.begin(), whole_optimized_traj_points.begin() + j - 1};
         whole_optimized_traj_points = extracted_whole_optimized_traj_points;
       }
     }
@@ -469,7 +463,7 @@ std::vector<TrajectoryPoint> StaticPathSmoother::pathCallback(
   return motion_utils::convertToTrajectoryPointArray(
     output_traj_msg);  // TODO(murooka) prepare resample param
 }
-}  // namespace static_path_smoother
+}  // namespace static_centerline_optimizer
 
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(static_path_smoother::StaticPathSmoother)
+RCLCPP_COMPONENTS_REGISTER_NODE(static_centerline_optimizer::StaticCenterlineOptmizer)

@@ -11,27 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef STATIC_PATH_SMOOTHER__OPTIMIZATION_NODE_HPP_
-#define STATIC_PATH_SMOOTHER__OPTIMIZATION_NODE_HPP_
+#ifndef STATIC_CENTERLINE_OPTIMIZER__OPTIMIZATION_NODE_HPP_
+#define STATIC_CENTERLINE_OPTIMIZER__OPTIMIZATION_NODE_HPP_
 
-#include "motion_utils/trajectory/trajectory.hpp"
+#include "motion_utils/motion_utils.hpp"
 #include "obstacle_avoidance_planner/common_structs.hpp"
 #include "obstacle_avoidance_planner/costmap_generator.hpp"
 #include "obstacle_avoidance_planner/eb_path_optimizer.hpp"
 #include "obstacle_avoidance_planner/mpt_optimizer.hpp"
 #include "rclcpp/clock.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "tier4_autoware_utils/system/stop_watch.hpp"
-
-#include "autoware_auto_perception_msgs/msg/predicted_objects.hpp"
-#include "autoware_auto_planning_msgs/msg/path.hpp"
-#include "autoware_auto_planning_msgs/msg/path_point.hpp"
-#include "autoware_auto_planning_msgs/msg/trajectory.hpp"
-#include "autoware_auto_planning_msgs/msg/trajectory_point.hpp"
-#include "geometry_msgs/msg/point.hpp"
-#include "geometry_msgs/msg/pose.hpp"
-#include "geometry_msgs/msg/twist.hpp"
-#include "geometry_msgs/msg/twist_stamped.hpp"
+#include "static_centerline_optimizer/type_alias.hpp"
+#include "tier4_autoware_utils/tier4_autoware_utils.hpp"
 
 #include "boost/optional.hpp"
 
@@ -40,12 +31,9 @@
 #include <string>
 #include <vector>
 
-namespace static_path_smoother
+namespace static_centerline_optimizer
 {
-using autoware_auto_perception_msgs::msg::PredictedObjects;
-using autoware_auto_planning_msgs::msg::TrajectoryPoint;
-
-class StaticPathSmoother : public rclcpp::Node
+class StaticCenterlineOptmizer : public rclcpp::Node
 {
 private:
   rclcpp::Clock logger_ros_clock_;
@@ -91,29 +79,28 @@ private:
 
   geometry_msgs::msg::Pose current_ego_pose_;
   std::unique_ptr<Trajectories> prev_optimal_trajs_ptr_;
-  std::unique_ptr<std::vector<autoware_auto_planning_msgs::msg::PathPoint>> prev_path_points_ptr_;
+  std::unique_ptr<std::vector<PathPoint>> prev_path_points_ptr_;
 
   std::unique_ptr<rclcpp::Time> latest_replanned_time_ptr_;
 
   // ROS
-  rclcpp::Publisher<autoware_auto_planning_msgs::msg::Trajectory>::SharedPtr traj_pub_;
-  rclcpp::Subscription<autoware_auto_planning_msgs::msg::Path>::SharedPtr path_sub_;
+  rclcpp::Publisher<Trajectory>::SharedPtr traj_pub_;
+  rclcpp::Subscription<Path>::SharedPtr path_sub_;
 
   // functions
   void resetPlanning();
   void resetPrevOptimization();
 
   // void insertZeroVelocityOutsideDrivableArea(
-  //   std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> & traj_points,
+  //   std::vector<TrajectoryPoint> & traj_points,
   //   const CVMaps & cv_maps);
 
 public:
-  explicit StaticPathSmoother(const rclcpp::NodeOptions & node_options);
+  explicit StaticCenterlineOptmizer(const rclcpp::NodeOptions & node_options);
 
   // subscriber callback functions
-  std::vector<TrajectoryPoint> pathCallback(
-    const autoware_auto_planning_msgs::msg::Path::SharedPtr);
+  std::vector<TrajectoryPoint> pathCallback(const Path::SharedPtr);
 };
-}  // namespace static_path_smoother
+}  // namespace static_centerline_optimizer
 
-#endif  // STATIC_PATH_SMOOTHER__OPTIMIZATION_NODE_HPP_
+#endif  // STATIC_CENTERLINE_OPTIMIZER__OPTIMIZATION_NODE_HPP_

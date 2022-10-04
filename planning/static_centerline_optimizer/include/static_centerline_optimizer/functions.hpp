@@ -12,45 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef STATIC_PATH_SMOOTHER__FUNCTIONS_HPP_
-#define STATIC_PATH_SMOOTHER__FUNCTIONS_HPP_
+#ifndef STATIC_CENTERLINE_OPTIMIZER__FUNCTIONS_HPP_
+#define STATIC_CENTERLINE_OPTIMIZER__FUNCTIONS_HPP_
 
 #include "route_handler/route_handler.hpp"
-
-#include "autoware_auto_mapping_msgs/msg/had_map_bin.hpp"
-#include "autoware_auto_planning_msgs/msg/had_map_route.hpp"
-#include "autoware_auto_planning_msgs/msg/path.hpp"
-#include "autoware_auto_planning_msgs/msg/trajectory.hpp"
-#include "geometry_msgs/msg/pose.hpp"
+#include "static_centerline_optimizer/type_alias.hpp"
 
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace static_path_smoother
+namespace static_centerline_optimizer
 {
-using autoware_auto_mapping_msgs::msg::HADMapBin;
-using autoware_auto_planning_msgs::msg::HADMapRoute;
-using autoware_auto_planning_msgs::msg::Path;
-using autoware_auto_planning_msgs::msg::PathWithLaneId;
-using autoware_auto_planning_msgs::msg::Trajectory;
-using autoware_auto_planning_msgs::msg::TrajectoryPoint;
-
 HADMapBin::ConstSharedPtr create_map(
   const std::string & lanelet2_file_name, const rclcpp::Time & current_time);
+
 std::vector<geometry_msgs::msg::Pose> create_check_points(
-  const route_handler::RouteHandler & route_handler, const size_t start_lanelet_id,
-  const size_t end_lanelet_id);
+  const RouteHandler & route_handler, const size_t start_lanelet_id, const size_t end_lanelet_id);
+
 HADMapRoute plan_route(
   const HADMapBin::ConstSharedPtr map_bin_msg_ptr,
   const std::vector<geometry_msgs::msg::Pose> & check_points);
+
 PathWithLaneId get_path_with_lane_id(
-  const route_handler::RouteHandler & route_handler, const lanelet::ConstLanelets lanelets,
+  const RouteHandler & route_handler, const lanelet::ConstLanelets lanelets,
   const geometry_msgs::msg::Pose & start_pose, const double nearset_ego_dist_threshold,
   const double nearest_ego_yaw_threshold);
-void update_centerline(
-  route_handler::RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets,
-  const std::vector<TrajectoryPoint> & new_centerline);
-}  // namespace static_path_smoother
 
-#endif  // STATIC_PATH_SMOOTHER__FUNCTIONS_HPP_
+void update_centerline(
+  RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets,
+  const std::vector<TrajectoryPoint> & new_centerline);
+}  // namespace static_centerline_optimizer
+
+#endif  // STATIC_CENTERLINE_OPTIMIZER__FUNCTIONS_HPP_

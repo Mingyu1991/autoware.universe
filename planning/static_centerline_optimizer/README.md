@@ -1,0 +1,32 @@
+# Static Centerline Optimizer
+
+## Purpose
+
+This package statically calcualtes the centerline satisfying footprints inside the drivable area.
+
+On narrow-road driving, the default centerline, which is the middle line between lanelet's right and left bounds, often causes footprints outside the drivable area.
+With the static centerline optimization, we have the following advantages.
+
+- We can see the optimized centerline shape in advance.
+- We do not have to calculate a heavy and sometimes unstable path optimization since the footprints are already inside the drivable area.
+
+## Usecases
+
+There are two interfaces to communicate with the centerline optimizer.
+
+### Vector Map Builder Interface
+
+### Command Line Interface
+
+The optimized centerline is generated from the command line interface.
+
+```sh
+ros2 run static_centerline_optimizer optimize_path.sh <osm-map-path> <start-lanelet-id> <end-lanelet-id> <vehicle-model>
+```
+
+The output map with the optimized centerline locates `/tmp/lanelet2_map.osm`
+If you want to change the output map path, you can remap the path
+
+```sh
+ros2 run static_centerline_optimizer optimize_centerline.sh <map-path> <start-lanelet-id> <end-lanelet-id> --ros-args --remap output:=<output-map-path>
+```

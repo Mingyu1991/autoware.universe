@@ -1,3 +1,4 @@
+# copied from obstacle_avoidance_palnner's yaml
 /**:
   ros__parameters:
     option:

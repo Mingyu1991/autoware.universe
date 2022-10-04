@@ -28,7 +28,7 @@
   </node>
 
   <!-- optimize path -->
-  <node pkg="static_path_smoother" exec="static_path_smoother" name="static_path_smoother">
+  <node pkg="static_centerline_optimizer" exec="static_centerline_optimizer" name="static_centerline_optimizer">
     <remap from="lanelet2_map_topic" to="$(var lanelet2_map_topic)"/>
     <remap from="debug/raw_centerline" to="~/debug/raw_centerline"/>
     <remap from="debug/optimized_centerline" to="~/debug/optimized_centerline"/>
@@ -42,5 +42,5 @@
   </node>
 
   <!-- rviz -->
-  <node pkg="rviz2" exec="rviz2" name="rviz2" output="screen" args="-d $(find-pkg-share static_path_smoother)/rviz/static_path_smoother.rviz"/>
+  <node pkg="rviz2" exec="rviz2" name="rviz2" output="screen" args="-d $(find-pkg-share static_centerline_optimizer)/rviz/static_centerline_optimizer.rviz"/>
 </launch>

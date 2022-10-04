@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "static_path_smoother/functions.hpp"
+#include "static_centerline_optimizer/functions.hpp"
 
 #include "behavior_path_planner/data_manager.hpp"
 #include "behavior_path_planner/utilities.hpp"
@@ -20,7 +20,7 @@
 #include "mission_planner/mission_planner_lanelet2.hpp"
 #include "tier4_autoware_utils/tier4_autoware_utils.hpp"
 
-namespace static_path_smoother
+namespace static_centerline_optimizer
 {
 namespace
 {
@@ -35,7 +35,7 @@ geometry_msgs::msg::PoseStamped::ConstSharedPtr convert_to_pose_stamped(
 }
 
 geometry_msgs::msg::Pose get_center_pose(
-  const route_handler::RouteHandler & route_handler, const size_t lanelet_id)
+  const RouteHandler & route_handler, const size_t lanelet_id)
 {
   // get middle idx of the lanelet
   const auto lanelet = route_handler.getLaneletsFromId(lanelet_id);
@@ -90,8 +90,7 @@ HADMapBin::ConstSharedPtr create_map(
 }
 
 std::vector<geometry_msgs::msg::Pose> create_check_points(
-  const route_handler::RouteHandler & route_handler, const size_t start_lanelet_id,
-  const size_t end_lanelet_id)
+  const RouteHandler & route_handler, const size_t start_lanelet_id, const size_t end_lanelet_id)
 {
   const auto start_pose = get_center_pose(route_handler, start_lanelet_id);
   const auto end_pose = get_center_pose(route_handler, end_lanelet_id);
@@ -112,7 +111,7 @@ HADMapRoute plan_route(
 }
 
 PathWithLaneId get_path_with_lane_id(
-  const route_handler::RouteHandler & route_handler, const lanelet::ConstLanelets lanelets,
+  const RouteHandler & route_handler, const lanelet::ConstLanelets lanelets,
   const geometry_msgs::msg::Pose & start_pose, const double ego_nearest_dist_threshold,
   const double ego_nearest_yaw_threshold)
 {
@@ -124,7 +123,7 @@ PathWithLaneId get_path_with_lane_id(
 
   // create planner data
   auto planner_data = std::make_shared<behavior_path_planner::PlannerData>();
-  planner_data->route_handler = std::make_shared<route_handler::RouteHandler>(route_handler);
+  planner_data->route_handler = std::make_shared<RouteHandler>(route_handler);
   planner_data->self_pose = convert_to_pose_stamped(start_pose);
   planner_data->parameters.drivable_lane_forward_length = std::numeric_limits<double>::max();
   planner_data->parameters.drivable_lane_backward_length = std::numeric_limits<double>::min();
@@ -142,7 +141,7 @@ PathWithLaneId get_path_with_lane_id(
 }
 
 void update_centerline(
-  route_handler::RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets,
+  RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets,
   const std::vector<TrajectoryPoint> & new_centerline)
 {
   // get lanelet as reference to update centerline
@@ -194,4 +193,4 @@ void update_centerline(
     }
   }
 }
-}  // namespace static_path_smoother
+}  // namespace static_centerline_optimizer

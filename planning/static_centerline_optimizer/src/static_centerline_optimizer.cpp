@@ -16,15 +16,9 @@
 #include "lanelet2_extension/utility/query.hpp"
 #include "lanelet2_extension/utility/utilities.hpp"
 #include "rclcpp/time.hpp"
-#include "route_handler/route_handler.hpp"
-#include "static_path_smoother/functions.hpp"
-#include "static_path_smoother/optimization_node.hpp"
-
-#include "autoware_auto_mapping_msgs/msg/had_map_bin.hpp"
-#include "autoware_auto_planning_msgs/msg/had_map_route.hpp"
-#include "autoware_auto_planning_msgs/msg/path.hpp"
-#include "autoware_auto_planning_msgs/msg/path_with_lane_id.hpp"
-#include "autoware_auto_planning_msgs/msg/trajectory.hpp"
+#include "static_centerline_optimizer/functions.hpp"
+#include "static_centerline_optimizer/optimization_node.hpp"
+#include "static_centerline_optimizer/type_alias.hpp"
 
 #include <lanelet2_core/LaneletMap.h>
 #include <lanelet2_io/Io.h>
@@ -39,7 +33,7 @@ using autoware_auto_mapping_msgs::msg::HADMapBin;
 using autoware_auto_planning_msgs::msg::HADMapRoute;
 using autoware_auto_planning_msgs::msg::Path;
 using autoware_auto_planning_msgs::msg::PathWithLaneId;
-using autoware_auto_planning_msgs::msg::Trajectory;
+using route_handler::RouteHandler;
 
 namespace
 {
@@ -56,7 +50,7 @@ Path convert_to_path(const PathWithLaneId & path_with_lane_id)
 }
 
 lanelet::ConstLanelets get_lanelets_from_route(
-  const route_handler::RouteHandler & route_handler, const HADMapRoute & route)
+  const RouteHandler & route_handler, const HADMapRoute & route)
 {
   lanelet::ConstLanelets lanelets;
   for (const auto & segment : route.segments) {
@@ -76,7 +70,7 @@ int main(int argc, char * argv[])
   rclcpp::init(argc, argv);
 
   // create main node
-  const auto main_node = rclcpp::Node::make_shared("static_path_smoother");
+  const auto main_node = rclcpp::Node::make_shared("static_centerline_optimizer");
   const auto current_time = main_node->get_clock()->now();
 
   // create publisher
@@ -98,7 +92,8 @@ int main(int argc, char * argv[])
 
   // load map by the map_loader package
   // function0 starts
-  const auto map_bin_msg_ptr = static_path_smoother::create_map(lanelet2_file_name, current_time);
+  const auto map_bin_msg_ptr =
+    static_centerline_optimizer::create_map(lanelet2_file_name, current_time);
   if (!map_bin_msg_ptr) {
     RCLCPP_ERROR(main_node->get_logger(), "Loading map failed");
     return 0;
@@ -110,23 +105,23 @@ int main(int argc, char * argv[])
   // function0 ends
 
   // create route_handler
-  route_handler::RouteHandler route_handler;
+  RouteHandler route_handler;
   route_handler.setMap(*map_bin_msg_ptr);
 
   // calculate check points (= start and goal pose)
-  const auto check_points =
-    static_path_smoother::create_check_points(route_handler, start_lanelet_id, end_lanelet_id);
+  const auto check_points = static_centerline_optimizer::create_check_points(
+    route_handler, start_lanelet_id, end_lanelet_id);
   RCLCPP_INFO(main_node->get_logger(), "Calculated check points.");
 
   // plan route by the mission_planner package
-  const auto route = static_path_smoother::plan_route(map_bin_msg_ptr, check_points);
+  const auto route = static_centerline_optimizer::plan_route(map_bin_msg_ptr, check_points);
   RCLCPP_INFO(main_node->get_logger(), "Planned route.");
 
   // calculate center line path with drivable area by the behavior_path_planner package
   const auto lanelets = get_lanelets_from_route(route_handler, route);
 
   // function1 starts
-  const auto raw_path_with_lane_id = static_path_smoother::get_path_with_lane_id(
+  const auto raw_path_with_lane_id = static_centerline_optimizer::get_path_with_lane_id(
     route_handler, lanelets, check_points.front(), ego_nearest_dist_threshold,
     ego_nearest_yaw_threshold);
   pub_raw_path_with_lane_id->publish(raw_path_with_lane_id);
@@ -138,14 +133,15 @@ int main(int argc, char * argv[])
   RCLCPP_INFO(main_node->get_logger(), "Converted to path and published.");
 
   // optimize trajectory by the obstacle_avoidance_planner package
-  static_path_smoother::StaticPathSmoother successive_path_optimizer(create_node_options());
+  static_centerline_optimizer::StaticCenterlineOptmizer successive_path_optimizer(
+    create_node_options());
   const auto optimized_traj_points =
     successive_path_optimizer.pathCallback(std::make_shared<Path>(raw_path));
   RCLCPP_INFO(main_node->get_logger(), "Optimized trajectory and published.");
   // function1 ends
 
   // update centerline in map
-  static_path_smoother::update_centerline(route_handler, lanelets, optimized_traj_points);
+  static_centerline_optimizer::update_centerline(route_handler, lanelets, optimized_traj_points);
   RCLCPP_INFO(main_node->get_logger(), "Updated centerline in map.");
 
   // save map with modified center line
