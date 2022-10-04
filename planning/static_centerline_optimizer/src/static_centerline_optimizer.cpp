@@ -88,12 +88,12 @@ int main(int argc, char * argv[])
     main_node->declare_parameter<double>("ego_nearest_dist_threshold");
   const double ego_nearest_yaw_threshold =
     main_node->declare_parameter<double>("ego_nearest_yaw_threshold");
-  const auto lanelet2_output_file_name = "/tmp/popo/lanelet2_map.osm";
+  const auto lanelet2_output_file_name = "/tmp/lanelet2_map.osm";
 
   // load map by the map_loader package
   // function0 starts
   const auto map_bin_msg_ptr =
-    static_centerline_optimizer::create_map(lanelet2_file_name, current_time);
+    static_centerline_optimizer::create_map(*main_node, lanelet2_file_name, current_time);
   if (!map_bin_msg_ptr) {
     RCLCPP_ERROR(main_node->get_logger(), "Loading map failed");
     return 0;

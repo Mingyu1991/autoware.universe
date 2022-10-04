@@ -73,11 +73,11 @@ lanelet::Point3d createPoint3d(const double x, const double y, const double z = 
 }  // namespace
 
 HADMapBin::ConstSharedPtr create_map(
-  const std::string & lanelet2_file_name, const rclcpp::Time & current_time)
+  rclcpp::Node & node, const std::string & lanelet2_file_name, const rclcpp::Time & current_time)
 {
   // load map
   lanelet::LaneletMapPtr map_ptr;
-  map_ptr = Lanelet2MapLoaderNode::load_map(lanelet2_file_name, "MGRS");
+  map_ptr = Lanelet2MapLoaderNode::load_map(node, lanelet2_file_name, "MGRS");
   if (!map_ptr) {
     return nullptr;
   }

@@ -1,11 +1,19 @@
 <launch>
+  <!-- mandatory arguments for planning-->
   <arg name="lanelet2_file_name"/>
   <arg name="start_lanelet_id"/>
   <arg name="end_lanelet_id"/>
   <arg name="vehicle_model"/>
 
+  <!-- topic -->
   <arg name="lanelet2_map_topic" default="/map/vector_map"/>
   <arg name="lanelet2_map_marker_topic" default="/map/vector_map_marker"/>
+  <!-- param -->
+  <arg name="map_loader_param" default="$(find-pkg-share map_loader)/config/lanelet2_map_loader.param.yaml"/>
+  <arg
+    name="obstacle_avoidance_planner_param"
+    default="$(find-pkg-share planning_launch)/config/scenario_planning/lane_driving/motion_planning/obstacle_avoidance_planner/obstacle_avoidance_planner.param.yaml"
+  />
 
   <!-- Global parameters (for PathFootprint in tier4_planning_rviz_plugin) -->
   <!-- Do not add "group" in order to propagate global parameters -->
@@ -36,9 +44,12 @@
     <param name="lanelet2_file_name" value="$(var lanelet2_file_name)"/>
     <param name="start_lanelet_id" value="$(var start_lanelet_id)"/>
     <param name="end_lanelet_id" value="$(var end_lanelet_id)"/>
-    <param from="$(find-pkg-share planning_launch)/config/scenario_planning/lane_driving/motion_planning/obstacle_avoidance_planner/obstacle_avoidance_planner.param.yaml"/>
+    <!-- common param -->
     <param from="$(find-pkg-share planning_launch)/config/scenario_planning/common/common.param.yaml"/>
     <param from="$(find-pkg-share planning_launch)/config/scenario_planning/common/nearest_search.param.yaml"/>
+    <!-- component param -->
+    <param from="$(var map_loader_param)"/>
+    <param from="$(var obstacle_avoidance_planner_param)"/>
   </node>
 
   <!-- rviz -->

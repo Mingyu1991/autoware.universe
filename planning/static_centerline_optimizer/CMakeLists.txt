@@ -25,7 +25,6 @@ target_link_libraries(static_centerline_optimizer
 ament_auto_package(
   INSTALL_TO_SHARE
     launch
-    config
     rviz
 )
 
