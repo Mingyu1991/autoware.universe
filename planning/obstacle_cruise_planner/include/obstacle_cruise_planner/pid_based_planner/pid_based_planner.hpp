@@ -38,16 +38,15 @@ public:
   {
     CruiseObstacleInfo(
       const TargetObstacle & obstacle_arg, const double dist_to_cruise_arg,
-      const double normalized_dist_to_cruise_arg, double dist_to_obstacle_arg)
+      double dist_to_obstacle_arg)
     : obstacle(obstacle_arg),
       dist_to_cruise(dist_to_cruise_arg),
-      normalized_dist_to_cruise(normalized_dist_to_cruise_arg),
       dist_to_obstacle(dist_to_obstacle_arg)
     {
     }
+
     TargetObstacle obstacle;
     double dist_to_cruise;
-    double normalized_dist_to_cruise;
     double dist_to_obstacle;
   };
 
@@ -71,8 +70,10 @@ private:
     const boost::optional<CruiseObstacleInfo> & cruise_obstacle_info, DebugData & debug_data);
   VelocityLimit doCruise(
     const ObstacleCruisePlannerData & planner_data, const CruiseObstacleInfo & cruise_obstacle_info,
-    std::vector<TargetObstacle> & debug_obstacles_to_cruise,
-    visualization_msgs::msg::MarkerArray & debug_walls_marker);
+    std::vector<TargetObstacle> & debug_obstacles_to_cruise);
+  void publishWallMarker(
+    const ObstacleCruisePlannerData & planner_data, const CruiseObstacleInfo & cruise_obstacle_info,
+    visualization_msgs::msg::MarkerArray & debug_wall_marker);
 
   void publishDebugValues(const ObstacleCruisePlannerData & planner_data) const;
 
@@ -102,6 +103,7 @@ private:
   double min_accel_during_cruise_;
   double vel_to_acc_weight_;
   double min_cruise_target_vel_;
+  double cruise_dist_margin_without_feedback_;
   // bool use_predicted_obstacle_pose_;
 
   // pid controller
