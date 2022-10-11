@@ -20,19 +20,16 @@
       nb_points: 5  # number of points representing the curved projections
 
     obstacles:
-      dynamic_source: occupancy_grid # source of dynamic obstacles. Must be 'pointcloud', 'occupancy_grid', or 'static_only'.
+      dynamic_source: static_only # source of dynamic obstacles. Must be 'pointcloud', 'occupancy_grid', or 'static_only'.
       ignore_obstacles_on_path: false # if true, obstacles on the ego paths are ignored
       ignore_extra_distance: 1.0 # [m] extra lateral distance where obstacles along the path are ignored
       occupancy_grid_threshold: 60 # occupancy grid values higher than this are considered to be obstacles
       dynamic_obstacles_buffer: 1.5 # [m] extra distance around dynamic obstacles used to mask the occupancy grid and avoid false obstacle detection
       dynamic_obstacles_min_vel: 0.5 # [m/s] velocity above which a dynamic obstacle is ignored by the module
       static_map_tags: # linestring tags in the lanelet maps that will be used as static obstacles
-        - curbstone
         - guard_rail
-        - wall
-        - fence
       static_map_ids: # linestring with these ids will be used as static obstacles # TODO:FOR DEBUGING, REMOVE BEFORE MERGING
-        - 34644
+        - 0
       filter_envelope : false # whether to calculate the apparent safety envelope and use it to filter obstacles
       rtree_min_points: 500 # from this number of obstacle points, a rtree is used for collision detection
       rtree_min_segments: 1600 # from this number of obstacle segments, a rtree is used for collision detection
