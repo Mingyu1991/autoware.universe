@@ -50,7 +50,7 @@ struct TargetObstacle
 {
   TargetObstacle(
     const rclcpp::Time & arg_time_stamp, const PredictedObject & object,
-    const double aligned_velocity,
+    const double aligned_velocity, const double aligned_acceleration,
     const std::vector<geometry_msgs::msg::PointStamped> & arg_collision_points)
   {
     time_stamp = arg_time_stamp;
@@ -58,6 +58,8 @@ struct TargetObstacle
     pose = object.kinematics.initial_pose_with_covariance.pose;
     velocity_reliable = true;
     velocity = aligned_velocity;
+    acceleration_reliable = true;
+    acceleration = aligned_acceleration;
     is_classified = true;
     classification = object.classification.at(0);
     uuid = toHexString(object.object_id);
@@ -76,6 +78,8 @@ struct TargetObstacle
   geometry_msgs::msg::Pose pose;
   bool velocity_reliable;
   float velocity;
+  bool acceleration_reliable;
+  float acceleration;
   bool is_classified;
   ObjectClassification classification;
   std::string uuid;
