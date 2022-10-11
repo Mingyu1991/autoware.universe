@@ -47,7 +47,8 @@ LinfPseudoJerkSmoother::Param LinfPseudoJerkSmoother::getParam() const { return 
 
 bool LinfPseudoJerkSmoother::apply(
   const double initial_vel, const double initial_acc, const TrajectoryPoints & input,
-  TrajectoryPoints & output, std::vector<TrajectoryPoints> & debug_trajectories)
+  TrajectoryPoints & output, std::vector<TrajectoryPoints> & debug_trajectories,
+  const double velocity_limit_dist, const double min_acc_limit)
 {
   debug_trajectories.clear();
 

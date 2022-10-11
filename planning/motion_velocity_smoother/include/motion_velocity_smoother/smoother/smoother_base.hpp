@@ -63,7 +63,8 @@ public:
   virtual ~SmootherBase() = default;
   virtual bool apply(
     const double initial_vel, const double initial_acc, const TrajectoryPoints & input,
-    TrajectoryPoints & output, std::vector<TrajectoryPoints> & debug_trajectories) = 0;
+    TrajectoryPoints & output, std::vector<TrajectoryPoints> & debug_trajectories,
+    const double velocity_limit_dist = 0.0, const double min_acc_limit = 0.0) = 0;
 
   virtual boost::optional<TrajectoryPoints> resampleTrajectory(
     const TrajectoryPoints & input, const double v0, const geometry_msgs::msg::Pose & current_pose,

@@ -101,7 +101,7 @@ MotionVelocitySmootherNode::MotionVelocitySmootherNode(const rclcpp::NodeOptions
     std::bind(&MotionVelocitySmootherNode::onParameter, this, _1));
 
   // debug
-  publish_debug_trajs_ = declare_parameter("publish_debug_trajs", true);
+  publish_debug_trajs_ = true;  // declare_parameter("publish_debug_trajs", true);
   debug_closest_velocity_ = create_publisher<Float32Stamped>("~/closest_velocity", 1);
   debug_closest_acc_ = create_publisher<Float32Stamped>("~/closest_acceleration", 1);
   debug_closest_jerk_ = create_publisher<Float32Stamped>("~/closest_jerk", 1);
@@ -120,6 +120,7 @@ MotionVelocitySmootherNode::MotionVelocitySmootherNode(const rclcpp::NodeOptions
   self_pose_listener_.waitForFirstPose();
 
   external_velocity_limit_ = node_param_.max_velocity;
+  external_acceleration_limit_ = smoother_->getBaseParam().min_decel;
   max_velocity_with_deceleration_ = node_param_.max_velocity;
 
   // publish default max velocity
@@ -341,7 +342,10 @@ void MotionVelocitySmootherNode::onExternalVelocityLimit(const VelocityLimit::Co
     }
   }
 
+  external_velocity_limit_dist_from_ego_ = external_velocity_limit_dist_;
   external_velocity_limit_ = msg->max_velocity;
+  external_acceleration_limit_ = msg->constraints.min_acceleration;
+
   pub_velocity_limit_->publish(*msg);
 }
 
@@ -440,6 +444,10 @@ void MotionVelocitySmootherNode::updateDataForExternalVelocityLimit()
   const double travel_dist = calcTravelDistance();
   external_velocity_limit_dist_ -= travel_dist;
   external_velocity_limit_dist_ = std::max(external_velocity_limit_dist_, 0.0);
+
+  external_velocity_limit_dist_from_ego_ -= travel_dist;
+  external_velocity_limit_dist_from_ego_ = std::max(external_velocity_limit_dist_from_ego_, 0.0);
+
   RCLCPP_DEBUG(
     get_logger(), "run: travel_dist = %f, external_velocity_limit_dist_ = %f", travel_dist,
     external_velocity_limit_dist_);
@@ -542,7 +550,8 @@ bool MotionVelocitySmootherNode::smoothVelocity(
 
   std::vector<TrajectoryPoints> debug_trajectories;
   if (!smoother_->apply(
-        initial_motion.vel, initial_motion.acc, clipped, traj_smoothed, debug_trajectories)) {
+        initial_motion.vel, initial_motion.acc, clipped, traj_smoothed, debug_trajectories,
+        external_velocity_limit_dist_from_ego_, external_acceleration_limit_)) {
     RCLCPP_WARN(get_logger(), "Fail to solve optimization.");
   }
 
