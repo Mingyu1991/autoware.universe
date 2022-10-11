@@ -173,6 +173,21 @@ double calcAlignedAdaptiveCruise(
   return object_vel * std::cos(object_yaw - traj_yaw);
 }
 
+double calcAlignedAccel(const PredictedObject & predicted_object, const Trajectory & trajectory)
+{
+  const auto & object_pos = predicted_object.kinematics.initial_pose_with_covariance.pose.position;
+  const auto & object_acc =
+    predicted_object.kinematics.initial_acceleration_with_covariance.accel.linear.x;
+
+  const size_t object_idx = motion_utils::findNearestIndex(trajectory.points, object_pos);
+
+  const double object_yaw =
+    tf2::getYaw(predicted_object.kinematics.initial_pose_with_covariance.pose.orientation);
+  const double traj_yaw = tf2::getYaw(trajectory.points.at(object_idx).pose.orientation);
+
+  return object_acc * std::cos(object_yaw - traj_yaw);
+}
+
 double calcObjectMaxLength(const autoware_auto_perception_msgs::msg::Shape & shape)
 {
   if (shape.type == autoware_auto_perception_msgs::msg::Shape::BOUNDING_BOX) {
@@ -828,8 +843,9 @@ std::vector<TargetObstacle> ObstacleCruisePlannerNode::filterObstacles(
     // convert to obstacle type
     const double trajectory_aligned_adaptive_cruise =
       calcAlignedAdaptiveCruise(predicted_object, traj);
+    const double trajectory_aligned_accel = calcAlignedAccel(predicted_object, traj);
     const auto target_obstacle = TargetObstacle(
-      time_stamp, predicted_object, trajectory_aligned_adaptive_cruise, nearest_collision_point);
+      time_stamp, predicted_object, trajectory_aligned_adaptive_cruise, trajectory_aligned_accel, nearest_collision_point);
     target_obstacles.push_back(target_obstacle);
   }
 

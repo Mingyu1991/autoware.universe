@@ -165,6 +165,8 @@ void PIDBasedPlanner::calcObstaclesToCruise(
 
       // update debug values
       debug_values_.setValues(DebugValues::TYPE::CRUISE_CURRENT_OBJECT_VELOCITY, obstacle.velocity);
+      debug_values_.setValues(
+        DebugValues::TYPE::CRUISE_CURRENT_OBJECT_ACCELERATION, obstacle.acceleration);
       debug_values_.setValues(DebugValues::TYPE::CRUISE_CURRENT_OBJECT_DISTANCE, dist_to_obstacle);
       debug_values_.setValues(DebugValues::TYPE::CRUISE_TARGET_OBJECT_DISTANCE, rss_dist);
       debug_values_.setValues(DebugValues::TYPE::CRUISE_ERROR_OBJECT_DISTANCE, error_dist);
