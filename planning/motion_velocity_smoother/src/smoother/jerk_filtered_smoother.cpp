@@ -51,7 +51,8 @@ JerkFilteredSmoother::Param JerkFilteredSmoother::getParam() const { return smoo
 
 bool JerkFilteredSmoother::apply(
   const double v0, const double a0, const TrajectoryPoints & input, TrajectoryPoints & output,
-  std::vector<TrajectoryPoints> & debug_trajectories)
+  std::vector<TrajectoryPoints> & debug_trajectories, const double velocity_limit_dist,
+  const double min_acc_limit)
 {
   output = input;
 
@@ -232,7 +233,14 @@ bool JerkFilteredSmoother::apply(
   }
 
   // Soft Constraint Acceleration Limit: a_min < a - sigma < a_max
+  double dist = 0.0;
   for (size_t i = 0; i < N; ++i, ++constr_idx) {
+    if (i != N - 1) {
+      dist += tier4_autoware_utils::calcDistance2d(
+        opt_resampled_trajectory->at(i),
+        opt_resampled_trajectory->at(i + 1));  // add dist from start to ego
+    }
+
     A(constr_idx, IDX_A0 + i) = 1.0;       // a_i
     A(constr_idx, IDX_SIGMA0 + i) = -1.0;  // -sigma_i
 
@@ -241,6 +249,10 @@ bool JerkFilteredSmoother::apply(
       // Stop Point
       upper_bound[constr_idx] = a_stop_decel;
       lower_bound[constr_idx] = a_stop_decel;
+    } else if (dist < velocity_limit_dist) {
+      // during external velocity limit
+      upper_bound[constr_idx] = a_max;
+      lower_bound[constr_idx] = min_acc_limit;
     } else {
       upper_bound[constr_idx] = a_max;
       lower_bound[constr_idx] = a_min;

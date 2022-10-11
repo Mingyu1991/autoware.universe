@@ -81,10 +81,12 @@ private:
   Odometry::ConstSharedPtr current_odometry_ptr_;  // current odometry
   Trajectory::ConstSharedPtr base_traj_raw_ptr_;   // current base_waypoints
   double external_velocity_limit_;                 // current external_velocity_limit
+  double external_acceleration_limit_;                 // current external_acceleration_limit
 
   // maximum velocity with deceleration for external velocity limit
   double max_velocity_with_deceleration_;
   double external_velocity_limit_dist_{0.0};  // distance to set external velocity limit
+  double external_velocity_limit_dist_from_ego_{0.0};  // distance to set external velocity limit
 
   TrajectoryPoints prev_output_;  // previously published trajectory
 
