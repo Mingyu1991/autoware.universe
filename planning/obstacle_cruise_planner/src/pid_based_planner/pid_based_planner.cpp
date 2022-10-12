@@ -40,6 +40,19 @@ VelocityLimit createVelocityLimitMsg(
   return msg;
 }
 
+// create velocity limit message without constraints
+VelocityLimit createVelocityLimitMsg(const rclcpp::Time & current_time, const double vel)
+{
+  VelocityLimit msg;
+  msg.stamp = current_time;
+  msg.sender = "obstacle_cruise_planner";
+  msg.use_constraints = false;
+
+  msg.max_velocity = vel;
+
+  return msg;
+}
+
 Float32MultiArrayStamped convertDebugValuesToMsg(
   const rclcpp::Time & current_time, const DebugValues & debug_values)
 {
@@ -69,6 +82,19 @@ double linearSym(const double v, const double x, const double y)
     return y;
   }
   return v / x * y;
+}
+
+double linearWithDeadZone(
+  const double x, const double min_dead_zone_x, const double max_dead_zone_x)
+{
+  if (x < min_dead_zone_x) {
+    return x - min_dead_zone_x;
+  } else if (max_dead_zone_x < x) {
+    return x - max_dead_zone_x;
+  }
+
+  // dead zone
+  return 0.0;
 }
 }  // namespace
 
@@ -200,8 +226,10 @@ void PIDBasedPlanner::planCruise(
       "cruise planning");
 
     vel_limit = doCruise(
-      planner_data, cruise_obstacle_info.get(), debug_data.obstacles_to_cruise,
-      debug_data.cruise_wall_marker);
+      planner_data, cruise_obstacle_info.get(), debug_data.obstacles_to_cruise);
+
+    // publish marker
+    publishWallMarker(planner_data, cruise_obstacle_info.get(), debug_data.cruise_wall_marker);
 
     // update debug values
     debug_values_.setValues(DebugValues::TYPE::CRUISE_TARGET_VELOCITY, vel_limit->max_velocity);
@@ -216,10 +244,27 @@ void PIDBasedPlanner::planCruise(
 
 VelocityLimit PIDBasedPlanner::doCruise(
   const ObstacleCruisePlannerData & planner_data, const CruiseObstacleInfo & cruise_obstacle_info,
-  std::vector<TargetObstacle> & debug_obstacles_to_cruise,
-  visualization_msgs::msg::MarkerArray & debug_wall_marker)
+  std::vector<TargetObstacle> & debug_obstacles_to_cruise)
 {
-  const double dist_to_cruise = cruise_obstacle_info.dist_to_cruise;
+  // const double dist_to_cruise = cruise_obstacle_info.dist_to_cruise;
+  const double dist_to_cruise = linearWithDeadZone(
+    cruise_obstacle_info.dist_to_cruise, 0.0, cruise_dist_margin_without_feedback_);
+
+  if (dist_to_cruise == 0.0) {
+    double cruise_target_vel = planner_data.current_vel;
+    if (planner_data.current_vel < cruise_obstacle_info.obstacle.velocity) {
+      cruise_target_vel += 0.05;
+      cruise_target_vel =
+        std::min(static_cast<double>(cruise_obstacle_info.obstacle.velocity), cruise_target_vel);
+    } else {
+      cruise_target_vel -= 0.05;
+      cruise_target_vel =
+        std::max(static_cast<double>(cruise_obstacle_info.obstacle.velocity), cruise_target_vel);
+    }
+
+    return createVelocityLimitMsg(planner_data.current_time, cruise_target_vel);
+  }
+
   const double filtered_normalized_dist_to_cruise = [&]() {
     const double normalized_dist_to_cruise = cruise_obstacle_info.normalized_dist_to_cruise;
     return lpf_cruise_ptr_->filter(normalized_dist_to_cruise);
@@ -234,6 +279,7 @@ VelocityLimit PIDBasedPlanner::doCruise(
   // const double modified_kp = linear(cruise_obstacle_info.dist_to_cruise, -5.0, 0.0, 10.0, 2.5);
   const double modified_kp = linear(filtered_normalized_dist_to_cruise, -0.2, 0.0, 10.0, 2.5);
   const double modified_kp_ratio = linear(cruise_obstacle_info.obstacle.acceleration, -1.0, 0.0, 1.0, 0.5);
+  // const double modified_kp_ratio = linear(-planner_data.current_vel + cruise_obstacle_info.obstacle.velocity, -2.8, 0.0, 1.0, 0.5);
   pid_controller_->setKp(modified_kp * modified_kp_ratio);
 
   const double pid_output_vel = pid_controller_->calc(filtered_normalized_dist_to_cruise);
@@ -266,6 +312,7 @@ VelocityLimit PIDBasedPlanner::doCruise(
     planner_data.current_time, positive_target_vel, target_acc_with_acc_limit,
     longitudinal_info_.max_jerk, longitudinal_info_.min_jerk);
 
+  /*
   // virtual wall marker for cruise
   const double dist_to_rss_wall = std::min(
     dist_to_cruise + vehicle_info_.max_longitudinal_offset_m,
@@ -276,10 +323,46 @@ VelocityLimit PIDBasedPlanner::doCruise(
   const auto markers = motion_utils::createSlowDownVirtualWallMarker(
     planner_data.traj.points.at(wall_idx).pose, "obstacle cruise", planner_data.current_time, 0);
   tier4_autoware_utils::appendMarkerArray(markers, &debug_wall_marker);
+  */
 
   debug_obstacles_to_cruise.push_back(cruise_obstacle_info.obstacle);
 
   return vel_limit;
+}
+
+void PIDBasedPlanner::publishWallMarker(
+  const ObstacleCruisePlannerData & planner_data, const CruiseObstacleInfo & cruise_obstacle_info,
+  visualization_msgs::msg::MarkerArray & debug_wall_marker)
+{
+  const double dist_to_cruise = cruise_obstacle_info.dist_to_cruise;
+  const double dist_to_obstacle = cruise_obstacle_info.dist_to_obstacle;
+
+  const size_t ego_idx = findExtendedNearestIndex(planner_data.traj, planner_data.current_pose);
+
+  // virtual wall marker for cruise
+  /*
+  const double abs_ego_offset = planner_data.is_driving_forward
+                                  ? std::abs(vehicle_info_.max_longitudinal_offset_m)
+                                  : std::abs(vehicle_info_.min_longitudinal_offset_m);
+  */
+  const double abs_ego_offset = std::abs(vehicle_info_.max_longitudinal_offset_m);
+
+  const double dist_to_rss_wall =
+    std::min(dist_to_cruise + abs_ego_offset, dist_to_obstacle + abs_ego_offset);
+
+  const size_t front_wall_idx = obstacle_cruise_utils::getIndexWithLongitudinalOffset(
+    planner_data.traj.points, dist_to_rss_wall, ego_idx);
+  const auto front_markers = motion_utils::createSlowDownVirtualWallMarker(
+    planner_data.traj.points.at(front_wall_idx).pose, "obstacle cruise", planner_data.current_time,
+    0);
+  tier4_autoware_utils::appendMarkerArray(front_markers, &debug_wall_marker);
+
+  const size_t back_wall_idx = obstacle_cruise_utils::getIndexWithLongitudinalOffset(
+    planner_data.traj.points, dist_to_rss_wall - cruise_dist_margin_without_feedback_, ego_idx);
+  const auto back_markers = motion_utils::createSlowDownVirtualWallMarker(
+    planner_data.traj.points.at(back_wall_idx).pose, "obstacle cruise margin",
+    planner_data.current_time, 1);
+  tier4_autoware_utils::appendMarkerArray(back_markers, &debug_wall_marker);
 }
 
 void PIDBasedPlanner::publishDebugValues(const ObstacleCruisePlannerData & planner_data) const

@@ -73,8 +73,10 @@ private:
     const boost::optional<CruiseObstacleInfo> & cruise_obstacle_info, DebugData & debug_data);
   VelocityLimit doCruise(
     const ObstacleCruisePlannerData & planner_data, const CruiseObstacleInfo & cruise_obstacle_info,
-    std::vector<TargetObstacle> & debug_obstacles_to_cruise,
-    visualization_msgs::msg::MarkerArray & debug_walls_marker);
+    std::vector<TargetObstacle> & debug_obstacles_to_cruise);
+  void publishWallMarker(
+    const ObstacleCruisePlannerData & planner_data, const CruiseObstacleInfo & cruise_obstacle_info,
+    visualization_msgs::msg::MarkerArray & debug_wall_marker);
 
   void publishDebugValues(const ObstacleCruisePlannerData & planner_data) const;
 
@@ -123,6 +125,8 @@ private:
   DebugValues debug_values_;
 
   std::shared_ptr<LowpassFilter1d> lpf_cruise_ptr_;
+
+  const double cruise_dist_margin_without_feedback_ = 30.0;
 };
 
 #endif  // OBSTACLE_CRUISE_PLANNER__PID_BASED_PLANNER__PID_BASED_PLANNER_HPP_
