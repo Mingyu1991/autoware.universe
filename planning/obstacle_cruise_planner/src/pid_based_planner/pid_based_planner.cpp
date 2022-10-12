@@ -212,11 +212,9 @@ void PIDBasedPlanner::planCruise(
     lpf_cruise_ptr_->reset();
 
     // delete marker
-    /*
     const auto markers =
       motion_utils::createDeletedSlowDownVirtualWallMarker(planner_data.current_time, 0);
     tier4_autoware_utils::appendMarkerArray(markers, &debug_data.cruise_wall_marker);
-    */
   }
 }
 
@@ -228,8 +226,18 @@ VelocityLimit PIDBasedPlanner::doCruise(
     cruise_obstacle_info.dist_to_cruise, 0.0, cruise_dist_margin_without_feedback_);
 
   if (dist_to_cruise == 0.0) {
-    return createVelocityLimitMsg(
-      planner_data.current_time, cruise_obstacle_info.obstacle.velocity);
+    double cruise_target_vel = planner_data.current_vel;
+    if (planner_data.current_vel < cruise_obstacle_info.obstacle.velocity) {
+      cruise_target_vel += 0.05;
+      cruise_target_vel =
+        std::min(static_cast<double>(cruise_obstacle_info.obstacle.velocity), cruise_target_vel);
+    } else {
+      cruise_target_vel -= 0.05;
+      cruise_target_vel =
+        std::max(static_cast<double>(cruise_obstacle_info.obstacle.velocity), cruise_target_vel);
+    }
+
+    return createVelocityLimitMsg(planner_data.current_time, cruise_target_vel);
   }
 
   const double filtered_normalized_dist_to_cruise = [&]() {
