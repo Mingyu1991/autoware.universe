@@ -27,15 +27,24 @@ public:
   void run();
 
 private:
-  HADMapBin::ConstSharedPtr load_map(const std::string & lanelet2_file_name);
-std::vector<TrajectoryPoint> optimize_center_line(const RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets, const std::vector<geometry_msgs::msg::Pose> & check_points);
+  void load_map();
+  void plan_path();
+  void save_map();
 
-  /*
+  // ros parameters
+  std::string lanelet2_input_file_name_;
+  std::string lanelet2_output_file_name_;
+  int start_lanelet_id_;
+  int end_lanelet_id_;
+
+  std::shared_ptr<RouteHandler> route_handler_ptr_{nullptr};
+  HADMapRoute::ConstSharedPtr route_ptr_{nullptr};
+  std::vector<TrajectoryPoint> optimized_traj_points_{};
+
   // publisher
-  rclcpp::Publisher<HADMapBin>::SharedPtr pub_map_bin_;
-  rclcpp::Publisher<PathWithLaneId>::SharedPtr pub_raw_path_with_lane_id_;
-  rclcpp::Publisher<Path>::SharedPtr pub_raw_path_;
-  */
+  rclcpp::Publisher<HADMapBin>::SharedPtr pub_map_bin_{nullptr};
+  rclcpp::Publisher<PathWithLaneId>::SharedPtr pub_raw_path_with_lane_id_{nullptr};
+  rclcpp::Publisher<Path>::SharedPtr pub_raw_path_{nullptr};
 };
 }
 #endif  // STATIC_CENTERLINE_OPTIMIZER__UTILS1_HPP_

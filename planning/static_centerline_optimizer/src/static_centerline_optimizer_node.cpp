@@ -73,92 +73,118 @@ rclcpp::QoS create_transient_local_qos() { return rclcpp::QoS{1}.transient_local
 StaticCenterlineOptimizerNode::StaticCenterlineOptimizerNode(const rclcpp::NodeOptions & node_options)
 : Node("static_centerlin_optimizer", node_options)
 {
+  // declare planning setting parameters
+  lanelet2_input_file_name_ = declare_parameter<std::string>("lanelet2_input_file_name");
+  lanelet2_output_file_name_ = "/tmp/lanelet2_map.osm";  // TODO(murooka)
+  start_lanelet_id_ = declare_parameter<int>("start_lanelet_id");
+  end_lanelet_id_ = declare_parameter<int>("end_lanelet_id");
+
+  // publishers
+  pub_map_bin_ = create_publisher<HADMapBin>("lanelet2_map_topic", create_transient_local_qos());
+  pub_raw_path_with_lane_id_ = create_publisher<PathWithLaneId>("raw_path_with_lane_id", create_transient_local_qos());
+  pub_raw_path_ = create_publisher<Path>("debug/raw_centerline", create_transient_local_qos());
+
+  /*
+  // services
+  srv_load_map_ = node->create_service<LoadMap>(
+    cooperate_commands_namespace_ + "/" + name,
+    std::bind(&RTCInterface::onCooperateCommandService, this, _1, _2),
+    rmw_qos_profile_services_default, callback_group_);
+  */
 }
 
 void StaticCenterlineOptimizerNode::run()
 {
-  // declare planning setting parameters
-  const auto lanelet2_file_name = declare_parameter<std::string>("lanelet2_file_name");
-  const int start_lanelet_id = declare_parameter<int>("start_lanelet_id");
-  const int end_lanelet_id = declare_parameter<int>("end_lanelet_id");
-  const auto lanelet2_output_file_name = "/tmp/lanelet2_map.osm";  // TODO(murooka)
+  // load map and initialize route_handler
+  load_map();
+  plan_path();
+  save_map();
+}
 
-  // load map
-  const auto map_bin_ptr = load_map(lanelet2_file_name);
+void StaticCenterlineOptimizerNode::load_map()
+{
+  // load map by the map_loader package
+  const auto map_bin_ptr = utils::create_map(*this, lanelet2_input_file_name_, now());
+  if (!map_bin_ptr) {
+    RCLCPP_ERROR(get_logger(), "Loading map failed");
+    return;
+  }
+  RCLCPP_INFO(get_logger(), "Loaded map.");
+
+  // publish map bin msg
+  pub_map_bin_->publish(*map_bin_ptr);
+  RCLCPP_INFO(get_logger(), "Published map.");
 
   // create route_handler
-  RouteHandler route_handler;
-  route_handler.setMap(*map_bin_ptr);
+  route_handler_ptr_ = std::make_shared<RouteHandler>();
+  route_handler_ptr_->setMap(*map_bin_ptr);
 
   // calculate check points (= start and goal pose)
   const auto check_points =
-    utils::create_check_points(route_handler, start_lanelet_id, end_lanelet_id);
+    [&]() {
+      const auto start_center_pose = utils::get_center_pose(*route_handler_ptr_, start_lanelet_id_);
+      const auto end_center_pose = utils::get_center_pose(*route_handler_ptr_, end_lanelet_id_);
+      return std::vector<geometry_msgs::msg::Pose>{start_center_pose, end_center_pose};
+    }();
   RCLCPP_INFO(get_logger(), "Calculated check points.");
 
   // plan route by the mission_planner package
-  const auto route = utils::plan_route(map_bin_ptr, check_points);
+  route_ptr_ = std::make_shared<HADMapRoute>(utils::plan_route(map_bin_ptr, check_points));
   RCLCPP_INFO(get_logger(), "Planned route.");
-
-  // calculate center line path with drivable area by the behavior_path_planner package
-  const auto lanelets = get_lanelets_from_route(route_handler, route);
-
-  // optimize centerline inside the lane
-  const auto optimized_traj_points = optimize_center_line(route_handler, lanelets, check_points);
-
-  // update centerline in map
-  utils::update_centerline(route_handler, lanelets, optimized_traj_points);
-  RCLCPP_INFO(get_logger(), "Updated centerline in map.");
-
-  // save map with modified center line
-  lanelet::write(lanelet2_output_file_name, *route_handler.getLaneletMapPtr());
-  RCLCPP_INFO(get_logger(), "Saved map.");
 }
 
-HADMapBin::ConstSharedPtr StaticCenterlineOptimizerNode::load_map(
-  const std::string & lanelet2_file_name)
+void StaticCenterlineOptimizerNode::plan_path()
 {
-  // load map by the map_loader package
-  const auto map_bin_ptr = utils::create_map(*this, lanelet2_file_name, now());
-  if (!map_bin_ptr) {
-    RCLCPP_ERROR(get_logger(), "Loading map failed");
-    return nullptr;
+  if (!route_handler_ptr_ || !route_ptr_) {
+    return;
   }
 
-  // publish map bin msg
-  const auto pub_map_bin = create_publisher<HADMapBin>("lanelet2_map_topic", create_transient_local_qos());
-  pub_map_bin->publish(*map_bin_ptr);
-  RCLCPP_INFO(get_logger(), "Published map.");
+  // calculate center line path with drivable area by the behavior_path_planner package
+  const auto lanelets = get_lanelets_from_route(*route_handler_ptr_, *route_ptr_);
 
-  return map_bin_ptr;
-}
+  // optimize centerline inside the lane
+  const auto start_center_pose = utils::get_center_pose(*route_handler_ptr_, start_lanelet_id_);
 
-std::vector<TrajectoryPoint> StaticCenterlineOptimizerNode::optimize_center_line(const RouteHandler & route_handler, const lanelet::ConstLanelets & lanelets, const std::vector<geometry_msgs::msg::Pose> & check_points)
-{
   // ego nearest search parameters
   const double ego_nearest_dist_threshold = declare_parameter<double>("ego_nearest_dist_threshold");
   const double ego_nearest_yaw_threshold = declare_parameter<double>("ego_nearest_yaw_threshold");
 
   // extract path with lane id from lanelets
   const auto raw_path_with_lane_id = utils::get_path_with_lane_id(
-    route_handler, lanelets, check_points.front(), ego_nearest_dist_threshold,
+    *route_handler_ptr_, lanelets, start_center_pose, ego_nearest_dist_threshold,
     ego_nearest_yaw_threshold);
 
-  const auto pub_raw_path_with_lane_id = create_publisher<PathWithLaneId>("raw_path_with_lane_id", create_transient_local_qos());
-  pub_raw_path_with_lane_id->publish(raw_path_with_lane_id);
+  pub_raw_path_with_lane_id_->publish(raw_path_with_lane_id);
   RCLCPP_INFO(get_logger(), "Calculated raw path with lane id and published.");
 
   // convert path with lane id to path
   const auto raw_path = convert_to_path(raw_path_with_lane_id);
-  const auto pub_raw_path = create_publisher<Path>("debug/raw_centerline", create_transient_local_qos());
-  pub_raw_path->publish(raw_path);
+  pub_raw_path_->publish(raw_path);
   RCLCPP_INFO(get_logger(), "Converted to path and published.");
 
   // optimize trajectory by the obstacle_avoidance_planner package
   StaticCenterlineOptmizer successive_path_optimizer(create_node_options());
-  const auto optimized_traj_points =
+  optimized_traj_points_ =
     successive_path_optimizer.pathCallback(std::make_shared<Path>(raw_path));
   RCLCPP_INFO(get_logger(), "Optimized trajectory and published.");
-
-  return optimized_traj_points;
 }
+
+void StaticCenterlineOptimizerNode::save_map()
+{
+  if (!route_handler_ptr_ || !route_ptr_) {
+    return;
+  }
+
+  // get lanelets
+  const auto lanelets = get_lanelets_from_route(*route_handler_ptr_, *route_ptr_);
+
+  // update centerline in map
+  utils::update_centerline(*route_handler_ptr_, lanelets, optimized_traj_points_);
+  RCLCPP_INFO(get_logger(), "Updated centerline in map.");
+
+  // save map with modified center line
+  lanelet::write(lanelet2_output_file_name_, *route_handler_ptr_->getLaneletMapPtr());
+  RCLCPP_INFO(get_logger(), "Saved map.");
+}
+
 }  // namespace static_centerline_optimizer

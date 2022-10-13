@@ -36,6 +36,9 @@ HADMapRoute plan_route(
   const HADMapBin::ConstSharedPtr map_bin_msg_ptr,
   const std::vector<geometry_msgs::msg::Pose> & check_points);
 
+geometry_msgs::msg::Pose get_center_pose(
+  const RouteHandler & route_handler, const size_t lanelet_id);
+
 PathWithLaneId get_path_with_lane_id(
   const RouteHandler & route_handler, const lanelet::ConstLanelets lanelets,
   const geometry_msgs::msg::Pose & start_pose, const double nearset_ego_dist_threshold,

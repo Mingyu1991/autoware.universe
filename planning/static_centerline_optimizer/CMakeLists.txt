@@ -29,6 +29,13 @@ ament_auto_package(
     rviz
 )
 
+# rosidl_generate_interfaces(${PROJECT_NAME}
+#   "srv/LoadMap.srv"
+#   DEPENDENCIES
+#     autoware_common_msgs
+#     std_msgs
+# )
+
 install(PROGRAMS
   scripts/optimize_centerline.sh
   DESTINATION lib/${PROJECT_NAME}

@@ -34,33 +34,6 @@ geometry_msgs::msg::PoseStamped::ConstSharedPtr convert_to_pose_stamped(
   return pose_stamped_ptr;
 }
 
-geometry_msgs::msg::Pose get_center_pose(
-  const RouteHandler & route_handler, const size_t lanelet_id)
-{
-  // get middle idx of the lanelet
-  const auto lanelet = route_handler.getLaneletsFromId(lanelet_id);
-  const auto center_line = lanelet.centerline();
-  const size_t middle_point_idx = std::floor(center_line.size() / 2.0);
-
-  // get middle position of the lanelet
-  geometry_msgs::msg::Point middle_pos;
-  middle_pos.x = center_line[middle_point_idx].x();
-  middle_pos.y = center_line[middle_point_idx].y();
-
-  // get next middle position of the lanelet
-  geometry_msgs::msg::Point next_middle_pos;
-  next_middle_pos.x = center_line[middle_point_idx + 1].x();
-  next_middle_pos.y = center_line[middle_point_idx + 1].y();
-
-  // calculate middle pose
-  geometry_msgs::msg::Pose middle_pose;
-  middle_pose.position = middle_pos;
-  const double yaw = tier4_autoware_utils::calcAzimuthAngle(middle_pos, next_middle_pos);
-  middle_pose.orientation = tier4_autoware_utils::createQuaternionFromYaw(yaw);
-
-  return middle_pose;
-}
-
 lanelet::Point3d createPoint3d(const double x, const double y, const double z = 19.0)
 {
   lanelet::Point3d point(lanelet::utils::getId());
@@ -91,15 +64,6 @@ HADMapBin::ConstSharedPtr create_map(
   return std::make_shared<HADMapBin>(map_bin_msg);
 }
 
-std::vector<geometry_msgs::msg::Pose> create_check_points(
-  const RouteHandler & route_handler, const size_t start_lanelet_id, const size_t end_lanelet_id)
-{
-  const auto start_pose = get_center_pose(route_handler, start_lanelet_id);
-  const auto end_pose = get_center_pose(route_handler, end_lanelet_id);
-
-  return std::vector<geometry_msgs::msg::Pose>{start_pose, end_pose};
-}
-
 HADMapRoute plan_route(
   const HADMapBin::ConstSharedPtr map_bin_msg_ptr,
   const std::vector<geometry_msgs::msg::Pose> & check_points)
@@ -110,6 +74,33 @@ HADMapRoute plan_route(
   const auto route = mission_planner_node.plan_route(check_points);
 
   return route;
+}
+
+geometry_msgs::msg::Pose get_center_pose(
+  const RouteHandler & route_handler, const size_t lanelet_id)
+{
+  // get middle idx of the lanelet
+  const auto lanelet = route_handler.getLaneletsFromId(lanelet_id);
+  const auto center_line = lanelet.centerline();
+  const size_t middle_point_idx = std::floor(center_line.size() / 2.0);
+
+  // get middle position of the lanelet
+  geometry_msgs::msg::Point middle_pos;
+  middle_pos.x = center_line[middle_point_idx].x();
+  middle_pos.y = center_line[middle_point_idx].y();
+
+  // get next middle position of the lanelet
+  geometry_msgs::msg::Point next_middle_pos;
+  next_middle_pos.x = center_line[middle_point_idx + 1].x();
+  next_middle_pos.y = center_line[middle_point_idx + 1].y();
+
+  // calculate middle pose
+  geometry_msgs::msg::Pose middle_pose;
+  middle_pose.position = middle_pos;
+  const double yaw = tier4_autoware_utils::calcAzimuthAngle(middle_pos, next_middle_pos);
+  middle_pose.orientation = tier4_autoware_utils::createQuaternionFromYaw(yaw);
+
+  return middle_pose;
 }
 
 PathWithLaneId get_path_with_lane_id(
