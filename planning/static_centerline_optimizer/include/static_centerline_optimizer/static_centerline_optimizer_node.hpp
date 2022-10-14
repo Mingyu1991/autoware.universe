@@ -12,31 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef STATIC_CENTERLINE_OPTIMIZER__UTILS1_HPP_
-#define STATIC_CENTERLINE_OPTIMIZER__UTILS1_HPP_
+#ifndef STATIC_CENTERLINE_OPTIMIZER__STATIC_CENTERLINE_OPTIMIZER_NODE_HPP_
+#define STATIC_CENTERLINE_OPTIMIZER__STATIC_CENTERLINE_OPTIMIZER_NODE_HPP_
 
 #include "rclcpp/rclcpp.hpp"
+#include "static_centerline_optimizer/srv/load_map.hpp"
+#include "static_centerline_optimizer/srv/plan_path.hpp"
+#include "static_centerline_optimizer/srv/plan_route.hpp"
 #include "static_centerline_optimizer/type_alias.hpp"
+
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace static_centerline_optimizer
 {
+using static_centerline_optimizer::srv::LoadMap;
+using static_centerline_optimizer::srv::PlanPath;
+using static_centerline_optimizer::srv::PlanRoute;
+
 class StaticCenterlineOptimizerNode : public rclcpp::Node
 {
 public:
-  StaticCenterlineOptimizerNode(const rclcpp::NodeOptions & node_options);
+  explicit StaticCenterlineOptimizerNode(const rclcpp::NodeOptions & node_options);
   void run();
 
 private:
-  void load_map();
-  void plan_path();
-  void save_map();
+  // load map
+  void on_load_map(
+    const LoadMap::Request::SharedPtr request, const LoadMap::Response::SharedPtr response);
+  void load_map(const std::string & lanelet2_input_file_name);
 
-  // ros parameters
-  std::string lanelet2_input_file_name_;
-  std::string lanelet2_output_file_name_;
-  int start_lanelet_id_;
-  int end_lanelet_id_;
+  // plan route
+  void on_plan_route(
+    const PlanRoute::Request::SharedPtr request, const PlanRoute::Response::SharedPtr response);
+  void plan_route(const int start_lanelet_id, const int end_lanelet_id);
 
+  // plan path
+  void on_plan_path(
+    const PlanPath::Request::SharedPtr request, const PlanPath::Response::SharedPtr response);
+  void plan_path(const int start_lanelet_id);
+  void save_map(const std::string & lanelet2_output_file_name);
+
+  HADMapBin::ConstSharedPtr map_bin_ptr_{nullptr};
   std::shared_ptr<RouteHandler> route_handler_ptr_{nullptr};
   HADMapRoute::ConstSharedPtr route_ptr_{nullptr};
   std::vector<TrajectoryPoint> optimized_traj_points_{};
@@ -45,6 +63,12 @@ private:
   rclcpp::Publisher<HADMapBin>::SharedPtr pub_map_bin_{nullptr};
   rclcpp::Publisher<PathWithLaneId>::SharedPtr pub_raw_path_with_lane_id_{nullptr};
   rclcpp::Publisher<Path>::SharedPtr pub_raw_path_{nullptr};
+
+  // service
+  rclcpp::Service<LoadMap>::SharedPtr srv_load_map_;
+
+  // callback group for service
+  rclcpp::CallbackGroup::SharedPtr callback_group_;
 };
-}
-#endif  // STATIC_CENTERLINE_OPTIMIZER__UTILS1_HPP_
+}  // namespace static_centerline_optimizer
+#endif  // STATIC_CENTERLINE_OPTIMIZER__STATIC_CENTERLINE_OPTIMIZER_NODE_HPP_

@@ -30,12 +30,6 @@
 #include <string>
 #include <vector>
 
-using autoware_auto_mapping_msgs::msg::HADMapBin;
-using autoware_auto_planning_msgs::msg::HADMapRoute;
-using autoware_auto_planning_msgs::msg::Path;
-using autoware_auto_planning_msgs::msg::PathWithLaneId;
-using route_handler::RouteHandler;
-
 namespace static_centerline_optimizer
 {
 namespace
@@ -70,70 +64,130 @@ rclcpp::NodeOptions create_node_options() { return rclcpp::NodeOptions{}; }
 rclcpp::QoS create_transient_local_qos() { return rclcpp::QoS{1}.transient_local(); }
 }  // namespace
 
-StaticCenterlineOptimizerNode::StaticCenterlineOptimizerNode(const rclcpp::NodeOptions & node_options)
+StaticCenterlineOptimizerNode::StaticCenterlineOptimizerNode(
+  const rclcpp::NodeOptions & node_options)
 : Node("static_centerlin_optimizer", node_options)
 {
-  // declare planning setting parameters
-  lanelet2_input_file_name_ = declare_parameter<std::string>("lanelet2_input_file_name");
-  lanelet2_output_file_name_ = "/tmp/lanelet2_map.osm";  // TODO(murooka)
-  start_lanelet_id_ = declare_parameter<int>("start_lanelet_id");
-  end_lanelet_id_ = declare_parameter<int>("end_lanelet_id");
-
   // publishers
   pub_map_bin_ = create_publisher<HADMapBin>("lanelet2_map_topic", create_transient_local_qos());
-  pub_raw_path_with_lane_id_ = create_publisher<PathWithLaneId>("raw_path_with_lane_id", create_transient_local_qos());
+  pub_raw_path_with_lane_id_ =
+    create_publisher<PathWithLaneId>("raw_path_with_lane_id", create_transient_local_qos());
   pub_raw_path_ = create_publisher<Path>("debug/raw_centerline", create_transient_local_qos());
 
-  /*
   // services
-  srv_load_map_ = node->create_service<LoadMap>(
-    cooperate_commands_namespace_ + "/" + name,
-    std::bind(&RTCInterface::onCooperateCommandService, this, _1, _2),
+  callback_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  srv_load_map_ = create_service<LoadMap>(
+    "load_map",
+    std::bind(
+      &StaticCenterlineOptimizerNode::on_load_map, this, std::placeholders::_1,
+      std::placeholders::_2),
     rmw_qos_profile_services_default, callback_group_);
-  */
 }
 
 void StaticCenterlineOptimizerNode::run()
 {
-  // load map and initialize route_handler
-  load_map();
-  plan_path();
-  save_map();
+  // declare planning setting parameters
+  const auto lanelet2_input_file_name = declare_parameter<std::string>("lanelet2_input_file_name");
+  const auto lanelet2_output_file_name = "/tmp/lanelet2_map.osm";  // TODO(murooka)
+  const int start_lanelet_id = declare_parameter<int>("start_lanelet_id");
+  const int end_lanelet_id = declare_parameter<int>("end_lanelet_id");
+
+  load_map(lanelet2_input_file_name);
+  plan_route(start_lanelet_id, end_lanelet_id);
+  plan_path(start_lanelet_id);
+  save_map(lanelet2_output_file_name);
 }
 
-void StaticCenterlineOptimizerNode::load_map()
+/*
+void StaticCenterlineOptimizerNode::run_all()
+{
+  // declare planning setting parameters
+  const auto lanelet2_input_file_name = declare_parameter<std::string>("lanelet2_input_file_name");
+  const auto lanelet2_output_file_name = "/tmp/lanelet2_map.osm";  // TODO(murooka)
+  const int start_lanelet_id = declare_parameter<int>("start_lanelet_id");
+  const int end_lanelet_id = declare_parameter<int>("end_lanelet_id");
+
+  load_map(lanelet2_input_file_name);
+  plan_route(start_lanelet_id, end_lanelet_id);
+  plan_path(start_lanelet_id);
+  save_map(lanelet2_output_file_name);
+}
+*/
+
+void StaticCenterlineOptimizerNode::on_load_map(
+  const LoadMap::Request::SharedPtr request, const LoadMap::Response::SharedPtr response)
+{
+  const std::string tmp_lanelet2_input_file_name = "/tmp/lanelet2_map.osm";
+
+  // save map
+  // TODO(murooka)
+
+  // load map
+  load_map(tmp_lanelet2_input_file_name);
+
+  response->success = map_bin_ptr_ ? true : false;
+}
+
+void StaticCenterlineOptimizerNode::load_map(const std::string & lanelet2_input_file_name)
 {
   // load map by the map_loader package
-  const auto map_bin_ptr = utils::create_map(*this, lanelet2_input_file_name_, now());
-  if (!map_bin_ptr) {
+  map_bin_ptr_ = utils::create_map(*this, lanelet2_input_file_name, now());
+  if (!map_bin_ptr_) {
     RCLCPP_ERROR(get_logger(), "Loading map failed");
     return;
   }
   RCLCPP_INFO(get_logger(), "Loaded map.");
 
   // publish map bin msg
-  pub_map_bin_->publish(*map_bin_ptr);
+  pub_map_bin_->publish(*map_bin_ptr_);
   RCLCPP_INFO(get_logger(), "Published map.");
 
   // create route_handler
   route_handler_ptr_ = std::make_shared<RouteHandler>();
-  route_handler_ptr_->setMap(*map_bin_ptr);
+  route_handler_ptr_->setMap(*map_bin_ptr_);
+}
 
+void StaticCenterlineOptimizerNode::on_plan_route(
+  const PlanRoute::Request::SharedPtr request, const PlanRoute::Response::SharedPtr response)
+{
+  const int start_lanelet_id = request->start_lane_id;
+  const int end_lanelet_id = request->end_lane_id;
+
+  // plan route
+  plan_route(start_lanelet_id, end_lanelet_id);
+
+  // extract lane ids
+  // TODO(murooka)
+  // response->lane_ids;
+}
+
+void StaticCenterlineOptimizerNode::plan_route(const int start_lanelet_id, const int end_lanelet_id)
+{
   // calculate check points (= start and goal pose)
-  const auto check_points =
-    [&]() {
-      const auto start_center_pose = utils::get_center_pose(*route_handler_ptr_, start_lanelet_id_);
-      const auto end_center_pose = utils::get_center_pose(*route_handler_ptr_, end_lanelet_id_);
-      return std::vector<geometry_msgs::msg::Pose>{start_center_pose, end_center_pose};
-    }();
+  const auto check_points = [&]() {
+    const auto start_center_pose = utils::get_center_pose(*route_handler_ptr_, start_lanelet_id);
+    const auto end_center_pose = utils::get_center_pose(*route_handler_ptr_, end_lanelet_id);
+    return std::vector<geometry_msgs::msg::Pose>{start_center_pose, end_center_pose};
+  }();
   RCLCPP_INFO(get_logger(), "Calculated check points.");
 
   // plan route by the mission_planner package
-  route_ptr_ = std::make_shared<HADMapRoute>(utils::plan_route(map_bin_ptr, check_points));
+  route_ptr_ = std::make_shared<HADMapRoute>(utils::plan_route(map_bin_ptr_, check_points));
   RCLCPP_INFO(get_logger(), "Planned route.");
 }
 
-void StaticCenterlineOptimizerNode::plan_path()
+void StaticCenterlineOptimizerNode::on_plan_path(
+  const PlanPath::Request::SharedPtr request, const PlanPath::Response::SharedPtr response)
+{
+  const int start_lanelet_id = request->start_lane_id;
+
+  plan_path(start_lanelet_id);
+
+  // TODO(murooka)
+  // response->points_with_lane_id;
+}
+
+void StaticCenterlineOptimizerNode::plan_path(const int start_lanelet_id)
 {
   if (!route_handler_ptr_ || !route_ptr_) {
     return;
@@ -143,7 +197,7 @@ void StaticCenterlineOptimizerNode::plan_path()
   const auto lanelets = get_lanelets_from_route(*route_handler_ptr_, *route_ptr_);
 
   // optimize centerline inside the lane
-  const auto start_center_pose = utils::get_center_pose(*route_handler_ptr_, start_lanelet_id_);
+  const auto start_center_pose = utils::get_center_pose(*route_handler_ptr_, start_lanelet_id);
 
   // ego nearest search parameters
   const double ego_nearest_dist_threshold = declare_parameter<double>("ego_nearest_dist_threshold");
@@ -164,12 +218,11 @@ void StaticCenterlineOptimizerNode::plan_path()
 
   // optimize trajectory by the obstacle_avoidance_planner package
   StaticCenterlineOptmizer successive_path_optimizer(create_node_options());
-  optimized_traj_points_ =
-    successive_path_optimizer.pathCallback(std::make_shared<Path>(raw_path));
+  optimized_traj_points_ = successive_path_optimizer.pathCallback(std::make_shared<Path>(raw_path));
   RCLCPP_INFO(get_logger(), "Optimized trajectory and published.");
 }
 
-void StaticCenterlineOptimizerNode::save_map()
+void StaticCenterlineOptimizerNode::save_map(const std::string & lanelet2_output_file_name)
 {
   if (!route_handler_ptr_ || !route_ptr_) {
     return;
@@ -183,7 +236,7 @@ void StaticCenterlineOptimizerNode::save_map()
   RCLCPP_INFO(get_logger(), "Updated centerline in map.");
 
   // save map with modified center line
-  lanelet::write(lanelet2_output_file_name_, *route_handler_ptr_->getLaneletMapPtr());
+  lanelet::write(lanelet2_output_file_name, *route_handler_ptr_->getLaneletMapPtr());
   RCLCPP_INFO(get_logger(), "Saved map.");
 }
 

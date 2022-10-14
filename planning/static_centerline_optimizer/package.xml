@@ -12,6 +12,7 @@
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
   <build_depend>autoware_cmake</build_depend>
+  <build_depend>rosidl_default_generators</build_depend>
 
   <depend>autoware_auto_mapping_msgs</depend>
   <depend>autoware_auto_perception_msgs</depend>
@@ -32,8 +33,12 @@
   <depend>tier4_autoware_utils</depend>
   <depend>vehicle_info_util</depend>
 
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>autoware_lint_common</test_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <export>
     <build_type>ament_cmake</build_type>
