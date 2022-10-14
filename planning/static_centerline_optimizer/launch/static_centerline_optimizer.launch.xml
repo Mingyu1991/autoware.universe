@@ -4,6 +4,7 @@
   <arg name="start_lanelet_id"/>
   <arg name="end_lanelet_id"/>
   <arg name="vehicle_model"/>
+  <arg name="run_background" default="false"/>
 
   <!-- topic -->
   <arg name="lanelet2_map_topic" default="/map/vector_map"/>
@@ -41,6 +42,7 @@
     <remap from="debug/raw_centerline" to="~/debug/raw_centerline"/>
     <remap from="debug/optimized_centerline" to="~/debug/optimized_centerline"/>
 
+    <param name="run_background" value="$(var run_background)"/>
     <param name="lanelet2_input_file_name" value="$(var lanelet2_input_file_name)"/>
     <param name="start_lanelet_id" value="$(var start_lanelet_id)"/>
     <param name="end_lanelet_id" value="$(var end_lanelet_id)"/>

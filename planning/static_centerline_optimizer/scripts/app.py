@@ -8,7 +8,6 @@ from flask import session
 app = Flask(__name__)
 app.secret_key = "hogehoge"
 
-
 @app.route("/load_map", methods=["POST"])
 def load_map_post():
     data = request.get_json()
@@ -17,6 +16,7 @@ def load_map_post():
     print(session["map_id"])
 
     # load map(map)
+    ros2 service call /load_map static_centerline_optimizer/srv/LoadMap map:\ \'\'\
     error = False
 
     if error:

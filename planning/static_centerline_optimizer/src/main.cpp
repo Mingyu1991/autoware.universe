@@ -20,10 +20,15 @@ int main(int argc, char * argv[])
 
   // initialize node
   rclcpp::NodeOptions node_options;
-  auto node = std::make_shared<static_centerline_optimizer::StaticCenterlineOptimizerNode>(node_options);
+  auto node =
+    std::make_shared<static_centerline_optimizer::StaticCenterlineOptimizerNode>(node_options);
+
+  const bool run_background = node->declare_parameter<bool>("run_background", true);
 
   // process
-  node->run();
+  if (!run_background) {
+    node->run();
+  }
 
   // NOTE: spin node to keep showing debug path/trajectory in rviz with transient local
   rclcpp::spin(node);
