@@ -18,30 +18,30 @@ rosidl_generate_interfaces(
   DEPENDENCIES builtin_interfaces
 )
 
-ament_auto_add_executable(static_centerline_optimizer_node
+ament_auto_add_executable(main
   src/main.cpp
   src/static_centerline_optimizer_node.cpp
   src/optimization_node.cpp
   src/utils.cpp
   )
 
-target_include_directories(static_centerline_optimizer_node
+target_include_directories(main
   SYSTEM PUBLIC
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
 )
 
-target_link_libraries(static_centerline_optimizer_node
+target_link_libraries(main
   ${OpenCV_LIBRARIES}
 )
 
 if(${rosidl_cmake_VERSION} VERSION_LESS 2.5.0)
-    rosidl_target_interfaces(static_centerline_optimizer_node
+    rosidl_target_interfaces(main
     static_centerline_optimizer "rosidl_typesupport_cpp")
 else()
     rosidl_get_typesupport_target(
             cpp_typesupport_target static_centerline_optimizer "rosidl_typesupport_cpp")
-    target_link_libraries(static_centerline_optimizer_node "${cpp_typesupport_target}")
+    target_link_libraries(main "${cpp_typesupport_target}")
 endif()
 
 ament_auto_package(

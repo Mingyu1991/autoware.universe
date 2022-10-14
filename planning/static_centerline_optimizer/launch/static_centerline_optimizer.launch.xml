@@ -36,7 +36,7 @@
   </node>
 
   <!-- optimize path -->
-  <node pkg="static_centerline_optimizer" exec="static_centerline_optimizer_node" name="static_centerline_optimizer">
+  <node pkg="static_centerline_optimizer" exec="main" name="static_centerline_optimizer">
     <remap from="lanelet2_map_topic" to="$(var lanelet2_map_topic)"/>
     <remap from="debug/raw_centerline" to="~/debug/raw_centerline"/>
     <remap from="debug/optimized_centerline" to="~/debug/optimized_centerline"/>
