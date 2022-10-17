@@ -82,6 +82,18 @@ StaticCenterlineOptimizerNode::StaticCenterlineOptimizerNode(
       &StaticCenterlineOptimizerNode::on_load_map, this, std::placeholders::_1,
       std::placeholders::_2),
     rmw_qos_profile_services_default, callback_group_);
+  srv_plan_route_ = create_service<PlanRoute>(
+    "plan_route",
+    std::bind(
+      &StaticCenterlineOptimizerNode::on_plan_route, this, std::placeholders::_1,
+      std::placeholders::_2),
+    rmw_qos_profile_services_default, callback_group_);
+  srv_plan_path_ = create_service<PlanPath>(
+    "plan_path",
+    std::bind(
+      &StaticCenterlineOptimizerNode::on_plan_path, this, std::placeholders::_1,
+      std::placeholders::_2),
+    rmw_qos_profile_services_default, callback_group_);
 }
 
 void StaticCenterlineOptimizerNode::run()
@@ -97,22 +109,6 @@ void StaticCenterlineOptimizerNode::run()
   plan_path(start_lanelet_id);
   save_map(lanelet2_output_file_name);
 }
-
-/*
-void StaticCenterlineOptimizerNode::run_all()
-{
-  // declare planning setting parameters
-  const auto lanelet2_input_file_name = declare_parameter<std::string>("lanelet2_input_file_name");
-  const auto lanelet2_output_file_name = "/tmp/lanelet2_map.osm";  // TODO(murooka)
-  const int start_lanelet_id = declare_parameter<int>("start_lanelet_id");
-  const int end_lanelet_id = declare_parameter<int>("end_lanelet_id");
-
-  load_map(lanelet2_input_file_name);
-  plan_route(start_lanelet_id, end_lanelet_id);
-  plan_path(start_lanelet_id);
-  save_map(lanelet2_output_file_name);
-}
-*/
 
 void StaticCenterlineOptimizerNode::on_load_map(
   const LoadMap::Request::SharedPtr request, const LoadMap::Response::SharedPtr response)

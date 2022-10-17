@@ -16,6 +16,10 @@ There are two interfaces to communicate with the centerline optimizer.
 
 ### Vector Map Builder Interface
 
+```sh
+ros2 run static_centerline_optimizer run_planning_server.sh vehicle_model:=<vehicle-name>
+```
+
 ### Command Line Interface
 
 The optimized centerline is generated from the command line interface.

@@ -66,6 +66,8 @@ private:
 
   // service
   rclcpp::Service<LoadMap>::SharedPtr srv_load_map_;
+  rclcpp::Service<PlanRoute>::SharedPtr srv_plan_route_;
+  rclcpp::Service<PlanPath>::SharedPtr srv_plan_path_;
 
   // callback group for service
   rclcpp::CallbackGroup::SharedPtr callback_group_;

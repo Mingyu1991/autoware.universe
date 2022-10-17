@@ -1,10 +1,15 @@
 <launch>
   <!-- mandatory arguments for planning-->
-  <arg name="lanelet2_input_file_name"/>
-  <arg name="start_lanelet_id"/>
-  <arg name="end_lanelet_id"/>
   <arg name="vehicle_model"/>
+
+  <!-- flag -->
   <arg name="run_background" default="false"/>
+  <arg name="rviz" default="true"/>
+
+  <!-- mandatory arguments when run_background is true -->
+  <arg name="lanelet2_input_file_name" default=""/>
+  <arg name="start_lanelet_id" default=""/>
+  <arg name="end_lanelet_id" default=""/>
 
   <!-- topic -->
   <arg name="lanelet2_map_topic" default="/map/vector_map"/>
@@ -55,5 +60,5 @@
   </node>
 
   <!-- rviz -->
-  <node pkg="rviz2" exec="rviz2" name="rviz2" output="screen" args="-d $(find-pkg-share static_centerline_optimizer)/rviz/static_centerline_optimizer.rviz"/>
+  <node pkg="rviz2" exec="rviz2" name="rviz2" output="screen" args="-d $(find-pkg-share static_centerline_optimizer)/rviz/static_centerline_optimizer.rviz" if="$(var rviz)"/>
 </launch>
