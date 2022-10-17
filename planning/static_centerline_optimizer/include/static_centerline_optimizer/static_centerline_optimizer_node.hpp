@@ -34,14 +34,19 @@ using static_centerline_optimizer::srv::PlanRoute;
 class StaticCenterlineOptimizerNode : public rclcpp::Node
 {
 public:
+  enum class PlanPathResult {
+    SUCCESS = 0,
+    ROUTE_IS_NOT_READY = 1,
+  };
+
   explicit StaticCenterlineOptimizerNode(const rclcpp::NodeOptions & node_options);
   void run();
 
 private:
   // load map
+  void load_map(const std::string & lanelet2_input_file_name);
   void on_load_map(
     const LoadMap::Request::SharedPtr request, const LoadMap::Response::SharedPtr response);
-  void load_map(const std::string & lanelet2_input_file_name);
 
   // plan route
   void on_plan_route(
@@ -51,12 +56,12 @@ private:
   // plan path
   void on_plan_path(
     const PlanPath::Request::SharedPtr request, const PlanPath::Response::SharedPtr response);
-  void plan_path(const int start_lanelet_id);
+  PlanPathResult plan_path(const int start_lanelet_id);
   void save_map(const std::string & lanelet2_output_file_name);
 
   HADMapBin::ConstSharedPtr map_bin_ptr_{nullptr};
   std::shared_ptr<RouteHandler> route_handler_ptr_{nullptr};
-  HADMapRoute::ConstSharedPtr route_ptr_{nullptr};
+  std::shared_ptr<lanelet::ConstLanelets> lanelets_ptr_{nullptr};
   std::vector<TrajectoryPoint> optimized_traj_points_{};
 
   // publisher

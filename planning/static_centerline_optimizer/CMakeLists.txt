@@ -52,5 +52,6 @@ ament_auto_package(
 
 install(PROGRAMS
   scripts/optimize_centerline.sh
+  scripts/app.py
   DESTINATION lib/${PROJECT_NAME}
 )

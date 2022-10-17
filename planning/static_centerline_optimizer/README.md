@@ -16,8 +16,17 @@ There are two interfaces to communicate with the centerline optimizer.
 
 ### Vector Map Builder Interface
 
+Run the autoware server with the following command by designating `vehicle_model` as lexus for example.
+
 ```sh
-ros2 run static_centerline_optimizer run_planning_server.sh vehicle_model:=<vehicle-name>
+ros2 run static_centerline_optimizer run_planning_server.sh vehicle_model:=lexus
+```
+
+Run http server with the following command.
+The port number is 5000 by default.
+
+```sh
+ros2 run static_centerline_optimizer app.py
 ```
 
 ### Command Line Interface
@@ -25,7 +34,8 @@ ros2 run static_centerline_optimizer run_planning_server.sh vehicle_model:=<vehi
 The optimized centerline is generated from the command line interface.
 
 ```sh
-ros2 run static_centerline_optimizer optimize_path.sh <osm-map-path> <start-lanelet-id> <end-lanelet-id> <vehicle-model>
+# ros2 run static_centerline_optimizer optimize_path.sh <osm-map-path> <start-lanelet-id> <end-lanelet-id> <vehicle-model>
+$ ros2 launch static_centerline_optimizer static_centerline_optimizer.launch.xml lanelet2_input_file_name:="$HOME"/AutonomousDrivingScenarios/map/kashiwanoha/lanelet2_map.osm start_lanelet_id:=125 end_lanelet_id:=132 vehicle_model:=lexus run_backgrond:=false
 ```
 
 image
