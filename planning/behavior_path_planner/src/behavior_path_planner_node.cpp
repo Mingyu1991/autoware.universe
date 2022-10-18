@@ -65,6 +65,7 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
   turn_signal_publisher_ =
     create_publisher<TurnIndicatorsCommand>("~/output/turn_indicators_cmd", 1);
   hazard_signal_publisher_ = create_publisher<HazardLightsCommand>("~/output/hazard_lights_cmd", 1);
+  goal_publisher_ = create_publisher<PoseStamped>("~/output/modified_goal", 1);
   debug_avoidance_msg_array_publisher_ =
     create_publisher<AvoidanceDebugMsgArray>("~/debug/avoidance_debug_message_array", 1);
 
@@ -637,6 +638,8 @@ void BehaviorPathPlannerNode::run()
 
     publish_steering_factor(turn_signal);
   }
+
+  goal_publisher_->publish(output.modified_goal);
 
   // for debug
   debug_avoidance_msg_array_publisher_->publish(bt_manager_->getAvoidanceDebugMsgArray());
