@@ -513,8 +513,7 @@ BehaviorModuleOutput PullOverModule::planWaitingApproval()
   const auto path = *(plan().path);
   out.path = std::make_shared<PathWithLaneId>(getReferencePath());
   out.path_candidate = std::make_shared<PathWithLaneId>(getFullPath());
-  out.modified_goal.header.frame_id = planner_data_->route_handler->getRouteHeader().frame_id;
-  out.modified_goal.header.stamp = clock_->now();
+  out.modified_goal.header = planner_data_->route_handler->getRouteHeader();
   out.modified_goal.pose = planner_data_->route_handler->getGoalPose();
 
   const auto distance_to_path_change = calcDistanceToPathChange();
