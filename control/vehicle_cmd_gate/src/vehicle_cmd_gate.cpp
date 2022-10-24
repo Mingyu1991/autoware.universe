@@ -275,7 +275,7 @@ void VehicleCmdGate::onEmergencyCtrlCmd(
 {
   emergency_commands_.control = *msg;
 
-  if (use_emergency_handling_ && is_system_emergency_) {
+  if (use_emergency_handling_ && is_system_emergency_ && current_gate_mode_.data != tier4_control_msgs::msg::GateMode::EXTERNAL) {
     publishControlCommands(emergency_commands_);
   }
 }
@@ -293,7 +293,7 @@ void VehicleCmdGate::onEmergencyShiftCmd(
 void VehicleCmdGate::onTimer()
 {
   updater_.force_update();
-
+  if(current_gate_mode_.data == tier4_control_msgs::msg::GateMode::EXTERNAL) return;
   // Check system emergency heartbeat
   if (use_emergency_handling_) {
     is_emergency_state_heartbeat_timeout_ = isHeartbeatTimeout(
@@ -336,9 +336,15 @@ void VehicleCmdGate::onTimer()
   autoware_auto_vehicle_msgs::msg::HazardLightsCommand hazard_light;
   autoware_auto_vehicle_msgs::msg::GearCommand gear;
   if (use_emergency_handling_ && is_system_emergency_) {
-    turn_indicator = emergency_commands_.turn_indicator;
-    hazard_light = emergency_commands_.hazard_light;
-    gear = emergency_commands_.gear;
+    if(current_gate_mode_.data != tier4_control_msgs::msg::GateMode::EXTERNAL){
+      turn_indicator = emergency_commands_.turn_indicator;
+      hazard_light = emergency_commands_.hazard_light;
+      gear = emergency_commands_.gear;
+    } else{
+      turn_indicator = remote_commands_.turn_indicator;
+      hazard_light = remote_commands_.hazard_light;
+      gear = remote_commands_.gear;
+    }
   } else {
     if (current_gate_mode_.data == tier4_control_msgs::msg::GateMode::AUTO) {
       turn_indicator = auto_commands_.turn_indicator;
@@ -383,13 +389,17 @@ void VehicleCmdGate::onTimer()
 
 void VehicleCmdGate::publishControlCommands(const Commands & commands)
 {
+  std::cerr<<"em: "<<use_emergency_handling_<<std::endl;
   // Check system emergency
-  if (use_emergency_handling_ && is_emergency_state_heartbeat_timeout_) {
+  if (use_emergency_handling_ && is_emergency_state_heartbeat_timeout_&& current_gate_mode_.data != tier4_control_msgs::msg::GateMode::EXTERNAL) {
+    std::cerr<<"emergency"<<std::endl;
     return;
   }
 
   // Check external emergency stop
-  if (is_external_emergency_stop_) {
+  if (is_external_emergency_stop_ && current_gate_mode_.data != tier4_control_msgs::msg::GateMode::EXTERNAL) {
+    std::cerr<<"external emergency"<<std::endl;
+    publishEmergencyStopControlCommands();
     return;
   }
 
@@ -409,6 +419,10 @@ void VehicleCmdGate::publishControlCommands(const Commands & commands)
     filtered_commands.gear = emergency_commands_.gear;  // tmp
   }
 
+  if (current_gate_mode_.data == tier4_control_msgs::msg::GateMode::EXTERNAL) {
+      filtered_commands.control = remote_commands_.control;
+      filtered_commands.gear = remote_commands_.gear;
+  }
   // Check start after applying all gates except engage
   if (is_engaged_) {
     start_request_->checkStartRequest(filtered_commands.control);
