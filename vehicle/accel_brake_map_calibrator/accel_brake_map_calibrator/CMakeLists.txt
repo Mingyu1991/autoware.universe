@@ -8,6 +8,10 @@ ament_auto_add_executable(accel_brake_map_calibrator
   src/accel_brake_map_calibrator_node.cpp
   src/main.cpp
 )
+
+ament_auto_add_executable(acceleration_map_calibrator
+  src/acceleration_map_calibrator_node.cpp
+)
 ament_target_dependencies(accel_brake_map_calibrator)
 
 install(
