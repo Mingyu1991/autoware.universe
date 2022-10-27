@@ -1020,12 +1020,12 @@ geometry_msgs::msg::Point ObstacleCruisePlannerNode::calcNearestCollisionPoint(
     const auto front_pos = tier4_autoware_utils::calcOffsetPose(
                              traj_front_pose, vehicle_info_.max_longitudinal_offset_m, 0.0, 0.0)
                              .position;
-    segment_points.at(0) = traj_front_pose.position;
-    segment_points.at(1) = front_pos;
+    segment_points.push_back(traj_front_pose.position);
+    segment_points.push_back(front_pos);
   } else {
     const size_t seg_idx = first_within_idx - 1;
-    segment_points.at(0) = extended_traj.points.at(seg_idx).pose.position;
-    segment_points.at(1) = extended_traj.points.at(seg_idx + 1).pose.position;
+    segment_points.push_back(extended_traj.points.at(seg_idx).pose.position);
+    segment_points.push_back(extended_traj.points.at(seg_idx + 1).pose.position);
   }
 
   size_t min_idx = 0;
