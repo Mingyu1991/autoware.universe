@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="input/image" default="/sensing/camera/traffic_light/image_raw"/>
+  <arg name="input/map/rois" default="map/rois"/>
+  <arg name="input/last_rois" default="rois"/>
+  <arg name="output/rois" default="rough/rois"/>
+
+  <node pkg="traffic_light_optical_flow_based_detector" exec="traffic_light_optical_flow_based_detector_node" name="traffic_light_optical_flow_based_detector" output="screen">
+    <remap from="~/input/image" to="$(var input/image)"/>
+    <remap from="~/input/map/rois" to="$(var input/map/rois)"/>
+    <remap from="~/input/last_rois" to="$(var input/last_rois)"/>
+    <remap from="~/output/rois" to="$(var output/rois)"/>
+  </node>
+</launch>
