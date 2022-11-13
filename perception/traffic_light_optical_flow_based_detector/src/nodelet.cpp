@@ -77,6 +77,74 @@ TrafficLightOpticalFlowBasedDetectorNodelet::TrafficLightOpticalFlowBasedDetecto
   last_roi_.reset();
 }
 
+autoware_auto_perception_msgs::msg::TrafficLightRoi TrafficLightOpticalFlowBasedDetectorNodelet::predictRoi(
+  const autoware_auto_perception_msgs::msg::TrafficLightRoi& ssd_roi,
+  const autoware_auto_perception_msgs::msg::TrafficLightRoi& map_roi)
+{
+  int step = std::max(int(ssd_roi.roi.width / 20), 1);
+  auto t1 = clock();
+  // int width = std::max(300, int(map_roi.roi.width));
+  // int height = std::max(300, int(map_roi.roi.height));
+  int width = map_roi.roi.width;
+  int height = map_roi.roi.height;
+  int cx = ssd_roi.roi.x_offset + ssd_roi.roi.width / 2;
+  int cy = ssd_roi.roi.y_offset + ssd_roi.roi.height / 2;
+  // top left x of the whole image
+  int x1 = std::max(0, cx - width / 2);
+  // top left y of the whole image
+  int y1 = std::max(0, cy - height / 2);
+  // bottom right x of the whole image
+  int x2 = std::min(curr_image_.image.cols - 1, int(cx + width / 2));
+  // bottom right y of the whole image
+  int y2 = std::min(curr_image_.image.rows - 1, int(cy + width / 2));
+  // use a relatively large image (slightly larger than the map_roi but much smaller than the whole image) for computing the optical flow
+  cv::Rect opticalFlowROI(x1, y1, x2 - x1, y2 - y1);
+  cv::Mat srcImage(prev_image_.image, opticalFlowROI);
+  cv::Mat dstImage(curr_image_.image, opticalFlowROI);
+  std::vector<cv::Point2f> prevPts, nextPts;
+  std::vector<uchar> status;
+  std::vector<float> err;
+  //points within ssd_roi on the cropped image
+  // for(int ssd_roi_x = ssd_roi.roi.x_offset; ssd_roi_x < int(ssd_roi.roi.x_offset + ssd_roi.roi.width); ssd_roi_x += step_){
+  //   for(int ssd_roi_y = ssd_roi.roi.y_offset; ssd_roi_y < int(ssd_roi.roi.y_offset + ssd_roi.roi.height); ssd_roi_y += step_){
+  //     prevPts.emplace_back(ssd_roi_x - x1, ssd_roi_y - y1);
+  //   }
+  // }
+  for(int ssd_roi_x = ssd_roi.roi.x_offset; ssd_roi_x < int(ssd_roi.roi.x_offset + ssd_roi.roi.width); ssd_roi_x += step){
+    for(int ssd_roi_y = ssd_roi.roi.y_offset; ssd_roi_y < int(ssd_roi.roi.y_offset + ssd_roi.roi.height); ssd_roi_y += step){
+      prevPts.emplace_back(ssd_roi_x - x1, ssd_roi_y - y1);
+    }
+  }
+  autoware_auto_perception_msgs::msg::TrafficLightRoi out_roi = map_roi;
+  if(prevPts.empty()){
+    return out_roi;
+  }
+
+  int sum_x = 0, sum_y = 0, count = 0;
+  cv::calcOpticalFlowPyrLK(srcImage, dstImage, prevPts, nextPts, status, err);
+  for(size_t i = 0; i < status.size(); i++){
+    if(status[i]){
+      count++;
+      sum_x += nextPts[i].x;
+      sum_y += nextPts[i].y;
+    }
+  }
+  
+  if(count == 0){
+  }
+  else{
+    cx = sum_x / count + x1;
+    cy = sum_y / count + y1;
+    out_roi.roi.x_offset = std::max(0, int(cx - out_roi.roi.width / 2));
+    out_roi.roi.y_offset = std::max(0, int(cy - out_roi.roi.height / 2));
+    out_roi.roi.width = std::min(out_roi.roi.width, curr_image_.image.cols - out_roi.roi.x_offset);
+    out_roi.roi.height = std::min(out_roi.roi.height, curr_image_.image.rows - out_roi.roi.y_offset);
+    out_roi.id = -1;
+    RCLCPP_INFO_STREAM(get_logger(), "cropped image size = " << width << " * " << height << ", t = " << 1.0 * (clock() -t1) / CLOCKS_PER_SEC);
+  }
+  return out_roi;
+}
+
 void TrafficLightOpticalFlowBasedDetectorNodelet::imageMapRoiCallback(
   const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg)
@@ -102,71 +170,34 @@ void TrafficLightOpticalFlowBasedDetectorNodelet::imageMapRoiCallback(
      && last_roi_->rois.empty() == false
      && prev_image_.header.stamp.sec == last_roi_->header.stamp.sec
      && prev_image_.header.stamp.nanosec == last_roi_->header.stamp.nanosec){
+    //only for debug. To delete
     std::string parent_dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221111/optical_flow/";
     double stamp = 1.0 * curr_image_.header.stamp.sec + 1e-9 * curr_image_.header.stamp.nanosec;
     std::string img_path = parent_dir + std::to_string(stamp) + ".jpg";
     cv::Mat img_save = cv_bridge::toCvCopy(in_image_msg, "bgr8")->image;
-
-
-    std::vector<cv::Point2f> prevPts, nextPts;
-    std::vector<uchar> status;
-    std::vector<float> err;
+  
+    //create a id-roi hash map
+    std::unordered_map<autoware_auto_perception_msgs::msg::TrafficLightRoi::_id_type,
+                       autoware_auto_perception_msgs::msg::TrafficLightRoi const*> idRoiHash;
     for(const auto & roi : last_roi_->rois){
-      for(int x = roi.roi.x_offset; x < std::min(int(roi.roi.x_offset + roi.roi.width), curr_image_.image.cols); x += step_ ){
-        for(int y = roi.roi.y_offset; y < std::min(int(roi.roi.y_offset + roi.roi.height), curr_image_.image.rows); y += step_){
-          prevPts.emplace_back(x, y);
-        }
-      }
-    }
-    
-    auto t1 = clock();
-    cv::calcOpticalFlowPyrLK(prev_image_.image, curr_image_.image, prevPts, nextPts, status, err);
-    RCLCPP_INFO_STREAM(get_logger(), "prevPts = " << prevPts.size() << ", optical flow t = " << 1.0 * (clock() - t1) / CLOCKS_PER_SEC);
-
-    std::unordered_map<int, std::unordered_map<int, cv::Point2i> > hash;
-    for(size_t i = 0; i < status.size(); i++){
-      if(status[i]){
-        int x1 = prevPts[i].x;
-        int x2 = nextPts[i].x;
-        int y1 = prevPts[i].y;
-        int y2 = nextPts[i].y;
-        hash[x1][y1] = cv::Point2i{x2, y2};
-      }
+      idRoiHash[roi.id] = &roi;
     }
 
     autoware_auto_perception_msgs::msg::TrafficLightRoiArray out_msg;
     out_msg.header = in_map_roi_msg->header;
     out_msg.rois.resize(in_map_roi_msg->rois.size());
-    for(size_t i = 0; i < out_msg.rois.size(); i++){
-      const auto& old_roi = in_map_roi_msg->rois[i];
-      int next_x_sum = 0, next_y_sum = 0, count = 0;
-      for(int x = old_roi.roi.x_offset; x < std::min(int(old_roi.roi.x_offset + old_roi.roi.width), curr_image_.image.cols); x += step_ ){
-        for(int y = old_roi.roi.y_offset; y < std::min(int(old_roi.roi.y_offset + old_roi.roi.height), curr_image_.image.rows); y += step_){
-          if(hash.count(x) && hash[x].count(y)){
-            next_x_sum += hash[x][y].x;
-            next_y_sum += hash[x][y].y;
-            count++;
-          }
-        }
-      }
-      // failed to track any point in the old roi, just use the map roi
-      if(count == 0){
-        out_msg.rois[i] = old_roi;
-      }
-      else{
-        // center coordinates of the predicted roi
-        int cx = next_x_sum / count;
-        int cy = next_y_sum / count;
-        out_msg.rois[i].roi.x_offset = cx - old_roi.roi.width / 2;
-        out_msg.rois[i].roi.y_offset = cy - old_roi.roi.height / 2;
-        out_msg.rois[i].roi.width = old_roi.roi.width;
-        out_msg.rois[i].roi.height = old_roi.roi.height;
-        out_msg.rois[i].id = -1;
-        ::createRect(img_save, out_msg.rois[i]);
-        ::createRect(img_save, old_roi);
-      }
+    //for every map roi, check if there's a corresponding ssd roi detected last frame.
+    //if so, predict the new position with optical flow.
+    //otherwise, just use the map roi.
+    for(size_t idx = 0; idx < in_map_roi_msg->rois.size(); idx++){
+      const auto & map_roi = in_map_roi_msg->rois[idx];
+      out_msg.rois[idx] = idRoiHash.count(map_roi.id)? predictRoi(*idRoiHash[map_roi.id], map_roi) : map_roi;      
+      if(out_msg.rois[idx].id == -1){
+        ::createRect(img_save, out_msg.rois[idx]);
+        ::createRect(img_save, map_roi);
+        out_msg.rois[idx].id = map_roi.id;
+      }      
     }
-
     roi_pub_->publish(out_msg);
 
     cv::imwrite(img_path, img_save);

@@ -74,7 +74,8 @@ private:
   {
     return header.stamp.sec != 0 || header.stamp.nanosec != 0;
   }
-
+  autoware_auto_perception_msgs::msg::TrafficLightRoi predictRoi(const autoware_auto_perception_msgs::msg::TrafficLightRoi& ssd_roi,
+                                                                 const autoware_auto_perception_msgs::msg::TrafficLightRoi& map_roi);
   void imageMapRoiCallback(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
                            const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
   void cameraImageCallback(const sensor_msgs::msg::Image::ConstSharedPtr input_msg);
