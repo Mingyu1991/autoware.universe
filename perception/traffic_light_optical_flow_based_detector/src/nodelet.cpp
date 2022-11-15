@@ -37,20 +37,20 @@
 #include <boost/filesystem.hpp>
 namespace
 {
-void createRect(cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi)
-{
-  cv::Scalar color;
-  if(tl_roi.id == -1){
-    color = cv::Scalar{0, 255, 255};
-  }
-  else{
-    color = cv::Scalar{0, 255, 0};
-  }
-  cv::rectangle(
-    image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
-    cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 2);
-}
+// void createRect(cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi)
+// {
+//   cv::Scalar color;
+//   if(tl_roi.id == -1){
+//     color = cv::Scalar{0, 255, 255};
+//   }
+//   else{
+//     color = cv::Scalar{0, 255, 0};
+//   }
+//   cv::rectangle(
+//     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
+//     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
+//     color, 2);
+// }
 }
 
 namespace traffic_light
@@ -81,35 +81,35 @@ autoware_auto_perception_msgs::msg::TrafficLightRoi TrafficLightOpticalFlowBased
   const autoware_auto_perception_msgs::msg::TrafficLightRoi& ssd_roi,
   const autoware_auto_perception_msgs::msg::TrafficLightRoi& map_roi)
 {
-  int step = std::max(int(ssd_roi.roi.width / 20), 1);
-  auto t1 = clock();
+  std::string root_dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221115/test/";
+  double stamp = rclcpp::Time(curr_image_.header.stamp).seconds();
+  std::string img_src = root_dir + std::to_string(stamp) + "-" + std::to_string(ssd_roi.id) + "_src.jpeg";
+  std::string img_tar = root_dir + std::to_string(stamp) + "-" + std::to_string(ssd_roi.id) + "_dst.jpeg";
+  int step = 1;
   // int width = std::max(300, int(map_roi.roi.width));
   // int height = std::max(300, int(map_roi.roi.height));
   int width = map_roi.roi.width;
   int height = map_roi.roi.height;
   int cx = ssd_roi.roi.x_offset + ssd_roi.roi.width / 2;
   int cy = ssd_roi.roi.y_offset + ssd_roi.roi.height / 2;
+  int bound = 30;
   // top left x of the whole image
-  int x1 = std::max(0, cx - width / 2);
+  int x1 = std::max(0, cx - width / 2 - bound);
   // top left y of the whole image
   int y1 = std::max(0, cy - height / 2);
   // bottom right x of the whole image
-  int x2 = std::min(curr_image_.image.cols - 1, int(cx + width / 2));
+  int x2 = std::min(curr_image_.image.cols - 1, int(cx + width / 2) + bound);
   // bottom right y of the whole image
-  int y2 = std::min(curr_image_.image.rows - 1, int(cy + width / 2));
+  int y2 = std::min(curr_image_.image.rows - 1, int(cy + height / 2));
   // use a relatively large image (slightly larger than the map_roi but much smaller than the whole image) for computing the optical flow
   cv::Rect opticalFlowROI(x1, y1, x2 - x1, y2 - y1);
   cv::Mat srcImage(prev_image_.image, opticalFlowROI);
   cv::Mat dstImage(curr_image_.image, opticalFlowROI);
+  cv::imwrite(img_src, srcImage);
+  cv::imwrite(img_tar, dstImage);
   std::vector<cv::Point2f> prevPts, nextPts;
   std::vector<uchar> status;
   std::vector<float> err;
-  //points within ssd_roi on the cropped image
-  // for(int ssd_roi_x = ssd_roi.roi.x_offset; ssd_roi_x < int(ssd_roi.roi.x_offset + ssd_roi.roi.width); ssd_roi_x += step_){
-  //   for(int ssd_roi_y = ssd_roi.roi.y_offset; ssd_roi_y < int(ssd_roi.roi.y_offset + ssd_roi.roi.height); ssd_roi_y += step_){
-  //     prevPts.emplace_back(ssd_roi_x - x1, ssd_roi_y - y1);
-  //   }
-  // }
   for(int ssd_roi_x = ssd_roi.roi.x_offset; ssd_roi_x < int(ssd_roi.roi.x_offset + ssd_roi.roi.width); ssd_roi_x += step){
     for(int ssd_roi_y = ssd_roi.roi.y_offset; ssd_roi_y < int(ssd_roi.roi.y_offset + ssd_roi.roi.height); ssd_roi_y += step){
       prevPts.emplace_back(ssd_roi_x - x1, ssd_roi_y - y1);
@@ -139,8 +139,6 @@ autoware_auto_perception_msgs::msg::TrafficLightRoi TrafficLightOpticalFlowBased
     out_roi.roi.y_offset = std::max(0, int(cy - out_roi.roi.height / 2));
     out_roi.roi.width = std::min(out_roi.roi.width, curr_image_.image.cols - out_roi.roi.x_offset);
     out_roi.roi.height = std::min(out_roi.roi.height, curr_image_.image.rows - out_roi.roi.y_offset);
-    out_roi.id = -1;
-    RCLCPP_INFO_STREAM(get_logger(), "cropped image size = " << width << " * " << height << ", t = " << 1.0 * (clock() -t1) / CLOCKS_PER_SEC);
   }
   return out_roi;
 }
@@ -152,9 +150,8 @@ void TrafficLightOpticalFlowBasedDetectorNodelet::imageMapRoiCallback(
   if(curr_image_ .valid){
     prev_image_ = std::move(curr_image_);
   }
-  auto t1 = clock();
   bool convRes = rosMsg2CvMat(in_image_msg, curr_image_.image);
-  std::cout << "ros 2 cv t = " << 1.0 * (clock() - t1) / CLOCKS_PER_SEC << std::endl;
+  
   if(!convRes){
     curr_image_.valid = false;
   }
@@ -171,10 +168,10 @@ void TrafficLightOpticalFlowBasedDetectorNodelet::imageMapRoiCallback(
      && prev_image_.header.stamp.sec == last_roi_->header.stamp.sec
      && prev_image_.header.stamp.nanosec == last_roi_->header.stamp.nanosec){
     //only for debug. To delete
-    std::string parent_dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221111/optical_flow/";
-    double stamp = 1.0 * curr_image_.header.stamp.sec + 1e-9 * curr_image_.header.stamp.nanosec;
-    std::string img_path = parent_dir + std::to_string(stamp) + ".jpg";
-    cv::Mat img_save = cv_bridge::toCvCopy(in_image_msg, "bgr8")->image;
+    // std::string parent_dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221111/optical_flow/";
+    // double stamp = 1.0 * curr_image_.header.stamp.sec + 1e-9 * curr_image_.header.stamp.nanosec;
+    // std::string img_path = parent_dir + std::to_string(stamp) + ".jpg";
+    // cv::Mat img_save = cv_bridge::toCvCopy(in_image_msg, "bgr8")->image;
   
     //create a id-roi hash map
     std::unordered_map<autoware_auto_perception_msgs::msg::TrafficLightRoi::_id_type,
@@ -193,14 +190,14 @@ void TrafficLightOpticalFlowBasedDetectorNodelet::imageMapRoiCallback(
       const auto & map_roi = in_map_roi_msg->rois[idx];
       out_msg.rois[idx] = idRoiHash.count(map_roi.id)? predictRoi(*idRoiHash[map_roi.id], map_roi) : map_roi;      
       if(out_msg.rois[idx].id == -1){
-        ::createRect(img_save, out_msg.rois[idx]);
-        ::createRect(img_save, map_roi);
+        //::createRect(img_save, out_msg.rois[idx]);
+        //::createRect(img_save, map_roi);
         out_msg.rois[idx].id = map_roi.id;
       }      
     }
     roi_pub_->publish(out_msg);
 
-    cv::imwrite(img_path, img_save);
+    //cv::imwrite(img_path, img_save);
   }
   
   //if optical flow can ot be performed to estimate the rough roi,

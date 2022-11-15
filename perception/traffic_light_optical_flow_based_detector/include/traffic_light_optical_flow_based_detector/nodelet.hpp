@@ -78,7 +78,6 @@ private:
                                                                  const autoware_auto_perception_msgs::msg::TrafficLightRoi& map_roi);
   void imageMapRoiCallback(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
                            const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
-  void cameraImageCallback(const sensor_msgs::msg::Image::ConstSharedPtr input_msg);
   void mapRoiCallback(const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr input_msg);
   void lastRoiCallback(const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr input_msg);
 
