@@ -56,10 +56,13 @@
 namespace traffic_light
 {
 
-struct cvMatMsg
+using namespace autoware_auto_perception_msgs::msg;
+
+struct cvMatRoi
 {
 cv::Mat image;
-std_msgs::msg::Header header;
+TrafficLightRoiArray map_rois;
+TrafficLightRoiArray ssd_rois;
 bool valid;
 };
 
@@ -74,32 +77,39 @@ private:
   {
     return header.stamp.sec != 0 || header.stamp.nanosec != 0;
   }
-  autoware_auto_perception_msgs::msg::TrafficLightRoi predictRoi(const autoware_auto_perception_msgs::msg::TrafficLightRoi& ssd_roi,
-                                                                 const autoware_auto_perception_msgs::msg::TrafficLightRoi& map_roi);
-  void imageMapRoiCallback(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
-                           const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
-  void mapRoiCallback(const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr input_msg);
-  void lastRoiCallback(const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr input_msg);
+  
+  TrafficLightRoi predictRoi(const TrafficLightRoi& ssd_roi, const TrafficLightRoi& map_roi);
 
-  typedef message_filters::sync_policies::ExactTime<
-    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
-    SyncPolicy;
+  TrafficLightRoi predictRoi(const TrafficLightRoi& ssd_roi, const TrafficLightRoi& map_roi, const TrafficLightRoi& last_map_roi);
+
+  void imageMapRoiCallback(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
+                           const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
+
+  void mapRoiCallback(const TrafficLightRoiArray::ConstSharedPtr input_msg);
+
+  void lastRoiCallback(const TrafficLightRoiArray::ConstSharedPtr input_msg);
+
+  TrafficLightRoiArray performPartialOpticalFlow(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
+                                                 const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
+
+  TrafficLightRoiArray performOpticalFlow(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
+                                          const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
+
+  typedef message_filters::sync_policies::ExactTime<sensor_msgs::msg::Image, TrafficLightRoiArray> SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   std::shared_ptr<Sync> sync_;
   //subscribe the current frame traffic light image
   image_transport::SubscriberFilter image_sub_;
   //subscribe the current frame map cropped traffic light rois
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> map_roi_sub_;
+  message_filters::Subscriber<TrafficLightRoiArray> map_roi_sub_;
   //subscribe the previous frame detected rois by ssd
-  rclcpp::Subscription<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr prev_roi_sub_;
+  rclcpp::Subscription<TrafficLightRoiArray>::SharedPtr prev_roi_sub_;
   //publish the current frame predicted rois
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
-  //previous frame image
-  cvMatMsg prev_image_;
-  //current frame image
-  cvMatMsg curr_image_;
-  //previous frame detected rois by ssd
-  std::shared_ptr<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> last_roi_;
+  rclcpp::Publisher<TrafficLightRoiArray>::SharedPtr roi_pub_;
+  //previous frame image and rois
+  cvMatRoi prev_image_rois_;
+  //current frame image and rois
+  cvMatRoi curr_image_rois_;
 
   const uint8_t step_ = 1;
 };
