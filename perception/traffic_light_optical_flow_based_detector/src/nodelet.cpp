@@ -55,6 +55,23 @@ namespace
 
 namespace traffic_light
 {
+
+void cvMatRoi::setInvalid()
+{
+  image.reset();
+  map_rois.reset();
+  ssd_rois.reset();
+}
+
+bool cvMatRoi::isValid()
+{
+  return image != nullptr 
+         && map_rois != nullptr 
+         && ssd_rois != nullptr
+         && map_rois->header.stamp == ssd_rois->header.stamp
+         && map_rois->header.frame_id == ssd_rois->header.frame_id;
+}
+
 TrafficLightOpticalFlowBasedDetectorNodelet::TrafficLightOpticalFlowBasedDetectorNodelet(const rclcpp::NodeOptions & node_options)
 : Node("traffic_light_optical_flow_based_detector", node_options)
 {
@@ -72,8 +89,8 @@ TrafficLightOpticalFlowBasedDetectorNodelet::TrafficLightOpticalFlowBasedDetecto
 
   roi_pub_ = this->create_publisher<TrafficLightRoiArray>(
     "~/output/rois", 1);
-  prev_image_rois_.valid = false;
-  curr_image_rois_.valid = false;
+  prev_image_rois_.setInvalid();
+  curr_image_rois_.setInvalid();
 }
 
 
@@ -94,13 +111,13 @@ TrafficLightRoi TrafficLightOpticalFlowBasedDetectorNodelet::predictRoi(
   // top left y of the whole image
   int y1 = std::max(0, cy - height / 2);
   // bottom right x of the whole image
-  int x2 = std::min(curr_image_rois_.image.cols - 1, int(cx + width / 2) + bound);
+  int x2 = std::min(curr_image_rois_.image->cols - 1, int(cx + width / 2) + bound);
   // bottom right y of the whole image
-  int y2 = std::min(curr_image_rois_.image.rows - 1, int(cy + height / 2));
+  int y2 = std::min(curr_image_rois_.image->rows - 1, int(cy + height / 2));
   // use a relatively large image (slightly larger than the map_roi but much smaller than the whole image) for computing the optical flow
   cv::Rect opticalFlowROI(x1, y1, x2 - x1, y2 - y1);
-  cv::Mat srcImage(prev_image_rois_.image, opticalFlowROI);
-  cv::Mat dstImage(curr_image_rois_.image, opticalFlowROI);
+  cv::Mat srcImage(*prev_image_rois_.image, opticalFlowROI);
+  cv::Mat dstImage(*curr_image_rois_.image, opticalFlowROI);
   std::vector<cv::Point2f> prevPts, nextPts;
   std::vector<uchar> status;
   std::vector<float> err;
@@ -131,8 +148,8 @@ TrafficLightRoi TrafficLightOpticalFlowBasedDetectorNodelet::predictRoi(
     cy = sum_y / count + y1;
     out_roi.roi.x_offset = std::max(0, int(cx - out_roi.roi.width / 2));
     out_roi.roi.y_offset = std::max(0, int(cy - out_roi.roi.height / 2));
-    out_roi.roi.width = std::min(out_roi.roi.width, curr_image_rois_.image.cols - out_roi.roi.x_offset);
-    out_roi.roi.height = std::min(out_roi.roi.height, curr_image_rois_.image.rows - out_roi.roi.y_offset);
+    out_roi.roi.width = std::min(out_roi.roi.width, curr_image_rois_.image->cols - out_roi.roi.x_offset);
+    out_roi.roi.height = std::min(out_roi.roi.height, curr_image_rois_.image->rows - out_roi.roi.y_offset);
   }
   return out_roi;
 }
@@ -155,8 +172,8 @@ TrafficLightRoi TrafficLightOpticalFlowBasedDetectorNodelet::predictRoi(
   const int ssd_cy = ssd_roi.roi.y_offset + ssd_roi.roi.height / 2;
   int roi_width = std::max(map_roi.roi.width, prev_map_roi.roi.width);
   int roi_height = std::max(map_roi.roi.height, prev_map_roi.roi.height);
-  const int img_width = curr_image_rois_.image.cols;
-  const int img_height = curr_image_rois_.image.rows;
+  const int img_width = curr_image_rois_.image->cols;
+  const int img_height = curr_image_rois_.image->rows;
   // the roi center of current image
   const int roi_cx = ssd_cx + curr_map_roi_cx - prev_map_roi_cx;
   const int roi_cy = ssd_cy + curr_map_roi_cy - prev_map_roi_cy;
@@ -178,8 +195,8 @@ TrafficLightRoi TrafficLightOpticalFlowBasedDetectorNodelet::predictRoi(
 
   const int step = 1;
   const int bound = 20;
-  cv::Mat srcImage(prev_image_rois_.image, last_roi);
-  cv::Mat dstImage(curr_image_rois_.image, current_roi);
+  cv::Mat srcImage(*prev_image_rois_.image, last_roi);
+  cv::Mat dstImage(*curr_image_rois_.image, current_roi);
   std::vector<cv::Point2f> prevPts, nextPts;
   std::vector<uchar> status;
   std::vector<float> err;
@@ -210,8 +227,8 @@ TrafficLightRoi TrafficLightOpticalFlowBasedDetectorNodelet::predictRoi(
     int cy = sum_y / count + curr_y1;
     out_roi.roi.x_offset = std::max(0, int(cx - out_roi.roi.width / 2));
     out_roi.roi.y_offset = std::max(0, int(cy - out_roi.roi.height / 2));
-    out_roi.roi.width = std::min(out_roi.roi.width, curr_image_rois_.image.cols - out_roi.roi.x_offset);
-    out_roi.roi.height = std::min(out_roi.roi.height, curr_image_rois_.image.rows - out_roi.roi.y_offset);
+    out_roi.roi.width = std::min(out_roi.roi.width, curr_image_rois_.image->cols - out_roi.roi.x_offset);
+    out_roi.roi.height = std::min(out_roi.roi.height, curr_image_rois_.image->rows - out_roi.roi.y_offset);
   }
   return out_roi;
 }
@@ -222,23 +239,26 @@ void TrafficLightOpticalFlowBasedDetectorNodelet::imageMapRoiCallback(
   const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
   const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg)
 {
-  if(curr_image_rois_.valid){
-    prev_image_rois_ = std::move(curr_image_rois_);
+  prev_image_rois_.setInvalid();
+  if(curr_image_rois_.isValid()){
+    prev_image_rois_.image = std::move(curr_image_rois_.image);
+    prev_image_rois_.map_rois = std::move(curr_image_rois_.map_rois);
+    prev_image_rois_.ssd_rois = std::move(curr_image_rois_.ssd_rois);
   }
+  curr_image_rois_.setInvalid();
   bool convRes = rosMsg2CvMat(in_image_msg, curr_image_rois_.image);
   if(!convRes){
-    curr_image_rois_.valid = false;
+    curr_image_rois_.setInvalid();
   }
   else{
-    curr_image_rois_.map_rois = *in_map_roi_msg;
-    curr_image_rois_.valid = true;
+    curr_image_rois_.map_rois = std::make_unique<TrafficLightRoiArray>(*in_map_roi_msg);
   }
 
   // check if optical flow can be performed
-  if(curr_image_rois_.valid
-     && prev_image_rois_.valid){
+  if(curr_image_rois_.image != nullptr
+     && curr_image_rois_.map_rois != nullptr
+     && prev_image_rois_.isValid()){
     TrafficLightRoiArray out_msg = performOpticalFlow(in_image_msg, in_map_roi_msg);
-    //out_msg = performPartialOpticalFlow(in_image_msg, in_map_roi_msg);
     roi_pub_->publish(out_msg);
   }
   
@@ -256,10 +276,10 @@ TrafficLightRoiArray TrafficLightOpticalFlowBasedDetectorNodelet::performPartial
 )
 {
   std::unordered_map<TrafficLightRoi::_id_type, TrafficLightRoi const*> lastSsdRoiHash, lastMapRoiHash;
-  for(const auto & roi : prev_image_rois_.ssd_rois.rois){
+  for(const auto & roi : prev_image_rois_.ssd_rois->rois){
     lastSsdRoiHash[roi.id] = &roi;
   }
-  for(const auto & roi : prev_image_rois_.map_rois.rois){
+  for(const auto & roi : prev_image_rois_.map_rois->rois){
     lastMapRoiHash[roi.id] = &roi;
   }
 
@@ -287,7 +307,7 @@ TrafficLightRoiArray TrafficLightOpticalFlowBasedDetectorNodelet::performPartial
       out_msg.rois[idx] = map_roi;
     }
   }
-  double stamp = rclcpp::Time(curr_image_rois_.map_rois.header.stamp).seconds();
+  double stamp = rclcpp::Time(curr_image_rois_.map_rois->header.stamp).seconds();
   std::string path = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221115/test/" + std::to_string(stamp) + ".jpeg";
   cv::Mat debug_img = cv_bridge::toCvCopy(in_image_msg)->image;
   cv::cvtColor(debug_img, debug_img, cv::COLOR_RGB2BGR);
@@ -315,62 +335,75 @@ TrafficLightRoiArray TrafficLightOpticalFlowBasedDetectorNodelet::performOptical
   const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg)
 {
   (void)in_image_msg;
+  const int bound = 50;
   std::vector<cv::Point2f> prevPts, nextPts;
   std::vector<uchar> status;
   std::vector<float> err;
+  /**
+   * it's time consuming to perform optical flow on the whole image.
+   * We just need to crop the image containing all the map/rois with safety boundary
+  */
+  int x1 = curr_image_rois_.image->cols;
+  int x2 = 0;
+  int y1 = curr_image_rois_.image->rows;
+  int y2 = 0;
 
-  // int x1 = std::numeric_limits<int>::max();
-  // int x2 = 0;
-  // int y1 = std::numeric_limits<int>::max();
-  // int y2 = 0;
+  for(const auto & roi : in_map_roi_msg->rois){
+    x1 = std::min(x1, int(roi.roi.x_offset));
+    y1 = std::min(y1, int(roi.roi.y_offset));
+    x2 = std::max(x2, int(roi.roi.x_offset + roi.roi.width));
+    y2 = std::max(y2, int(roi.roi.y_offset + roi.roi.height));
+  }
 
-  for(const auto & roi : prev_image_rois_.ssd_rois.rois){
-    for(int x = roi.roi.x_offset; x < std::min(int(roi.roi.x_offset + roi.roi.width), curr_image_rois_.image.cols); x += step_ ){
-      for(int y = roi.roi.y_offset; y < std::min(int(roi.roi.y_offset + roi.roi.height), curr_image_rois_.image.rows); y += step_){
-        prevPts.emplace_back(x, y);
+  if(y2 - y1 < 2 || x2 - x1 < 2){
+    return *in_map_roi_msg;
+  }
+
+  x1 = std::max(0, x1 - bound);
+  x2 = std::min(x2 + bound, curr_image_rois_.image->cols - 1);
+  y1 = std::max(0, y1 - bound);
+  y2 = std::min(y2 + bound, curr_image_rois_.image->rows - 1);
+  cv::Rect opticalFlowRoi(x1, y1, x2 - x1, y2 - y1);
+  cv::Mat srcImage(*prev_image_rois_.image, opticalFlowRoi);
+  cv::Mat dstImage(*curr_image_rois_.image, opticalFlowRoi);
+
+
+  std::unordered_map<int, std::vector<int> > id2ptIdxVec;
+  // calculating the tracking points
+  for(const auto & roi : prev_image_rois_.ssd_rois->rois){
+    for(int x = roi.roi.x_offset; x < std::min(int(roi.roi.x_offset + roi.roi.width), curr_image_rois_.image->cols); x += step_ ){
+      for(int y = roi.roi.y_offset; y < std::min(int(roi.roi.y_offset + roi.roi.height), curr_image_rois_.image->rows); y += step_){
+        id2ptIdxVec[roi.id].emplace_back(prevPts.size());
+        prevPts.emplace_back(x - x1, y - y1);
       }
     }
   }
 
   auto t1 = std::chrono::high_resolution_clock::now();
-  cv::calcOpticalFlowPyrLK(prev_image_rois_.image, curr_image_rois_.image, prevPts, nextPts, status, err);
+  cv::calcOpticalFlowPyrLK(srcImage, dstImage, prevPts, nextPts, status, err);
   auto t2 = std::chrono::high_resolution_clock::now();
   RCLCPP_INFO_STREAM(get_logger(), "prevPts = " << prevPts.size() << ", optical flow t = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());  
   
 
-  std::unordered_map<int, std::unordered_map<int, cv::Point2i> > hash;
-  for(size_t i = 0; i < status.size(); i++){
-    if(status[i]){
-      int x1 = prevPts[i].x;
-      int x2 = nextPts[i].x;
-      int y1 = prevPts[i].y;
-      int y2 = nextPts[i].y;
-      hash[x1][y1] = cv::Point2i{x2, y2};
-    }
-  }
-
   TrafficLightRoiArray out_msg;
   out_msg = *in_map_roi_msg;
   for(size_t i = 0; i < out_msg.rois.size(); i++){
-    const auto& old_roi = in_map_roi_msg->rois[i];
-    int next_x_sum = 0, next_y_sum = 0, count = 0;
-    for(int x = old_roi.roi.x_offset; x < std::min(int(old_roi.roi.x_offset + old_roi.roi.width), curr_image_rois_.image.cols); x += step_ ){
-      for(int y = old_roi.roi.y_offset; y < std::min(int(old_roi.roi.y_offset + old_roi.roi.height), curr_image_rois_.image.rows); y += step_){
-        if(hash.count(x) && hash[x].count(y)){
-          next_x_sum += hash[x][y].x;
-          next_y_sum += hash[x][y].y;
+    int roi_id = out_msg.rois[i].id;
+    if(id2ptIdxVec.count(roi_id) && id2ptIdxVec[roi_id].empty() == false){
+      int next_x_sum = 0, next_y_sum = 0, count = 0;
+      for(int ptIdx : id2ptIdxVec[roi_id]){
+        if(status[ptIdx]){
+          next_x_sum += nextPts[ptIdx].x;
+          next_y_sum += nextPts[ptIdx].y;
           count++;
         }
       }
-    }
-    if(count != 0){
-      // center coordinates of the predicted roi
-      int cx = next_x_sum / count;
-      int cy = next_y_sum / count;
-      out_msg.rois[i].roi.x_offset = cx - old_roi.roi.width / 2;
-      out_msg.rois[i].roi.y_offset = cy - old_roi.roi.height / 2;
-      out_msg.rois[i].roi.width = old_roi.roi.width;
-      out_msg.rois[i].roi.height = old_roi.roi.height;
+      if(count != 0){
+        int cx = next_x_sum / count + x1;
+        int cy = next_y_sum / count + y1;
+        out_msg.rois[i].roi.x_offset = cx - out_msg.rois[i].roi.width / 2;
+        out_msg.rois[i].roi.y_offset = cy - out_msg.rois[i].roi.height / 2;
+      }
     }
   }
   return out_msg;
@@ -379,24 +412,25 @@ TrafficLightRoiArray TrafficLightOpticalFlowBasedDetectorNodelet::performOptical
 void TrafficLightOpticalFlowBasedDetectorNodelet::lastRoiCallback(
   const TrafficLightRoiArray::ConstSharedPtr input_msg)
 {
-  if(curr_image_rois_.valid
-     && curr_image_rois_.map_rois.header.stamp == input_msg->header.stamp
+  if(curr_image_rois_.image != nullptr
+     && curr_image_rois_.map_rois != nullptr
+     && curr_image_rois_.map_rois->header.stamp == input_msg->header.stamp
      && input_msg->rois.empty() == false){
-    curr_image_rois_.ssd_rois = *input_msg;
-    RCLCPP_WARN(get_logger(), "curr image roi num = %d", int(curr_image_rois_.ssd_rois.rois.size()));
+    curr_image_rois_.ssd_rois = std::make_unique<TrafficLightRoiArray>(*input_msg);
+    RCLCPP_WARN(get_logger(), "curr image roi num = %d", int(curr_image_rois_.ssd_rois->rois.size()));
   }
   else{
-    curr_image_rois_.valid = false;
+    curr_image_rois_.setInvalid();
     RCLCPP_WARN(get_logger(), "curr image invalid");
   }
 }
 
 bool TrafficLightOpticalFlowBasedDetectorNodelet::rosMsg2CvMat(
-  const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image)
+  const sensor_msgs::msg::Image::ConstSharedPtr image_msg, std::unique_ptr<cv::Mat> & image)
 {
   try {
-    image = cv_bridge::toCvCopy(image_msg, "rgb8")->image;
-    cv::cvtColor(image, image, cv::COLOR_RGB2GRAY);
+    image = std::make_unique<cv::Mat>(cv_bridge::toCvCopy(image_msg, "rgb8")->image);
+    cv::cvtColor(*image, *image, cv::COLOR_RGB2GRAY);
   } catch (cv_bridge::Exception & e) {
     RCLCPP_ERROR(
       this->get_logger(), "Failed to convert sensor_msgs::msg::Image to cv::Mat \n%s", e.what());

@@ -58,12 +58,21 @@ namespace traffic_light
 
 using namespace autoware_auto_perception_msgs::msg;
 
+/**
+ * struct to save the map/rois, ssd/rois and cv::Mat image of one frame.
+ * Sometimes the timestamp of image and rois don't match, in this case, the data of that frame is invalid.
+ * We don't bother to set a flag for every member, so just use smart pointer.
+ * If the pointer is nullptr, means the data invalid
+*/
 struct cvMatRoi
 {
-cv::Mat image;
-TrafficLightRoiArray map_rois;
-TrafficLightRoiArray ssd_rois;
-bool valid;
+void setInvalid();
+
+bool isValid();
+// use unique pointer to avoid copying data
+std::unique_ptr<cv::Mat> image;
+std::unique_ptr<TrafficLightRoiArray> map_rois;
+std::unique_ptr<TrafficLightRoiArray> ssd_rois;
 };
 
 class TrafficLightOpticalFlowBasedDetectorNodelet : public rclcpp::Node
@@ -71,7 +80,7 @@ class TrafficLightOpticalFlowBasedDetectorNodelet : public rclcpp::Node
 public:
   explicit TrafficLightOpticalFlowBasedDetectorNodelet(const rclcpp::NodeOptions & node_options);
 private:
-  bool rosMsg2CvMat(const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image);
+  bool rosMsg2CvMat(const sensor_msgs::msg::Image::ConstSharedPtr image_msg, std::unique_ptr<cv::Mat> & image);
 
   inline bool headerValid(const std_msgs::msg::Header& header)
   {
