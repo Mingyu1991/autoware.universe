@@ -42,6 +42,7 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
+#include <tier4_autoware_utils/tier4_autoware_utils.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/optflow.hpp>
@@ -75,34 +76,62 @@ std::unique_ptr<TrafficLightRoiArray> map_rois;
 std::unique_ptr<TrafficLightRoiArray> ssd_rois;
 };
 
+/**
+ * @brief Sometimes because of deviation from map, localization or sensor calibration,
+ * the traffic lights are not within the rois estimated by "traffic_light_map_based_detector" nodelet.
+ * This nodelet is to optimize the traffic light roi positions so that the traffic lights are close to
+ * the center of the rois sent to the ssd detector by using optical flow to track the traffic lights 
+ * detected from last frame. 
+ * 
+ * 
+ * ---------------------------------- /map/rois --------------/rought/rois --------------------------------
+ * |traffic_light_map_based_detector| --------->|this nodelet|------------>|traffic_light_ssd_fine_detector|
+ * ----------------------------------           --------------             --------------------------------
+ *                                                     ^       /rois                        |
+ *                                                     |____________________________________|
+ */
 class TrafficLightOpticalFlowBasedDetectorNodelet : public rclcpp::Node
 {
 public:
   explicit TrafficLightOpticalFlowBasedDetectorNodelet(const rclcpp::NodeOptions & node_options);
 private:
+/**
+ * @brief convert ros image message to cv::Mat
+ * 
+ * @param image_msg input ros message
+ * @param image output cv::Mat image
+ * @return true conversion succeed
+ * @return false conversion failed
+ */
   bool rosMsg2CvMat(const sensor_msgs::msg::Image::ConstSharedPtr image_msg, std::unique_ptr<cv::Mat> & image);
-
-  inline bool headerValid(const std_msgs::msg::Header& header)
-  {
-    return header.stamp.sec != 0 || header.stamp.nanosec != 0;
-  }
-  
-  TrafficLightRoi predictRoi(const TrafficLightRoi& ssd_roi, const TrafficLightRoi& map_roi);
-
-  TrafficLightRoi predictRoi(const TrafficLightRoi& ssd_roi, const TrafficLightRoi& map_roi, const TrafficLightRoi& last_map_roi);
-
+/**
+ * @brief receive current frame image and map/rois with same timestamps,
+ * perform optical flow and output rois for ssd detection
+ * 
+ * @param in_image_msg image message
+ * @param in_map_roi_msg map/rois message
+ */
   void imageMapRoiCallback(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
                            const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
 
-  void mapRoiCallback(const TrafficLightRoiArray::ConstSharedPtr input_msg);
-
-  void lastRoiCallback(const TrafficLightRoiArray::ConstSharedPtr input_msg);
-
-  TrafficLightRoiArray performPartialOpticalFlow(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
-                                                 const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
-
-  TrafficLightRoiArray performOpticalFlow(const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
-                                          const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
+/**
+ * @brief receive ssd bounding boxes(considered as rois) of current frame for tracking the traffic light in the next frame 
+ * 
+ * @param input_msg ssd rois message
+ */
+  void ssdRoiCallback(const TrafficLightRoiArray::ConstSharedPtr input_msg);
+/**
+ * @brief for every map/roi, check if the traffic light was detected by ssd in previous frame.
+ * If no, just publish this map/roi.
+ * For all the map/roi whose corresponding traffic lights were detected by ssd in previous frame,
+ * crop the image containing all of them from current image and previous image, perform sparse 
+ * optical flow tracking only the points within the ssd rois to save time.
+ * For every ssd/roi from previous frame, find their corresponding points in current frame and calculate
+ * the center position (cx, cy), and publish the new roi centered at (cx, cy)
+ * @param in_map_roi_msg 
+ * @return TrafficLightRoiArray 
+ */
+  TrafficLightRoiArray performOpticalFlow(const TrafficLightRoiArray::ConstSharedPtr in_map_roi_msg);
 
   typedef message_filters::sync_policies::ExactTime<sensor_msgs::msg::Image, TrafficLightRoiArray> SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
@@ -119,8 +148,6 @@ private:
   cvMatRoi prev_image_rois_;
   //current frame image and rois
   cvMatRoi curr_image_rois_;
-
-  const uint8_t step_ = 1;
 };
 }  // namespace traffic_light
 #endif  // TRAFFIC_LIGHT_OPTICAL_FLOW_BASED_DETECTOR__NODELET_HPP_
