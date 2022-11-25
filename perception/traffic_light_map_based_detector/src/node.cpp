@@ -84,10 +84,33 @@ void roundInImageFrame(
   point.y =
     std::max(std::min(point.y, static_cast<double>(static_cast<int>(camera_info.height) - 1)), 0.0);
 }
+
+double calLinearFunction(double x_low, double y_low, double x_high, double y_high, double x)
+{
+  assert(x_high > x_low);
+  if(x <= x_low) return y_low;
+  else if(x >= x_high) return y_high;
+  else return y_low + (x - x_low) * (y_high - y_low) / (x_high - x_low);
+}
 }  // namespace
 
 namespace traffic_light
 {
+double MapBasedDetector::Config::getVibrationHeight(double dist) const
+{
+  return ::calLinearFunction(dist_low, vibration_height_low, dist_high, vibration_height_high, dist);
+}
+
+double MapBasedDetector::Config::getVibrationWidth(double dist) const
+{
+  return ::calLinearFunction(dist_low, vibration_width_low, dist_high, vibration_width_high, dist);
+}
+
+double MapBasedDetector::Config::getVibrationDepth(double dist) const
+{
+  return ::calLinearFunction(dist_low, vibration_depth_low, dist_high, vibration_depth_high, dist);
+}
+
 MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
 : Node("traffic_light_map_based_detector", node_options),
   tf_buffer_(this->get_clock()),
@@ -112,11 +135,16 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
 
   // parameter declaration needs default values: are 0.0 goof defaults for this?
-  config_.max_vibration_pitch = declare_parameter<double>("max_vibration_pitch", 0.0);
-  config_.max_vibration_yaw = declare_parameter<double>("max_vibration_yaw", 0.0);
-  config_.max_vibration_height = declare_parameter<double>("max_vibration_height", 0.0);
-  config_.max_vibration_width = declare_parameter<double>("max_vibration_width", 0.0);
-  config_.max_vibration_depth = declare_parameter<double>("max_vibration_depth", 0.0);
+  config_.max_vibration_pitch = declare_parameter<double>("max_vibration_pitch", 0.01745329251);
+  config_.max_vibration_yaw = declare_parameter<double>("max_vibration_yaw", 0.01745329251);
+  config_.dist_low = declare_parameter<double>("dist_low", 30.0);
+  config_.vibration_height_low = declare_parameter<double>("vibration_height_low", 0.5);
+  config_.vibration_width_low = declare_parameter<double>("vibration_width_low", 0.5);
+  config_.vibration_depth_low = declare_parameter<double>("vibration_depth_low", 0.5);
+  config_.dist_high = declare_parameter<double>("dist_high", 200.0);
+  config_.vibration_height_high = declare_parameter<double>("vibration_height_high", 0.1);
+  config_.vibration_width_high = declare_parameter<double>("vibration_width_high", 0.1);
+  config_.vibration_depth_high = declare_parameter<double>("vibration_depth_high", 0.1);
 }
 
 void MapBasedDetector::cameraInfoCallback(
@@ -201,6 +229,14 @@ bool MapBasedDetector::getTrafficLightRoi(
   // id
   tl_roi.id = traffic_light.id();
 
+  // get the distance form camera to center of traffic light
+  tf2::Transform tf_map2tl_center(tf2::Quaternion(0, 0, 0, 1),
+      tf2::Vector3((tl_left_down_point.x() + tl_right_down_point.x()) / 2, 
+                   (tl_left_down_point.y() + tl_right_down_point.y()) / 2, 
+                   (tl_left_down_point.z() + tl_right_down_point.z() + tl_height) / 2));
+    tf2::Transform tf_camera2tl_center = tf_map2camera.inverse() * tf_map2tl_center;
+  double dist2tl = tf_camera2tl_center.getOrigin().length();
+
   // for roi.x_offset and roi.y_offset
   {
     tf2::Transform tf_map2tl(
@@ -212,11 +248,11 @@ bool MapBasedDetector::getTrafficLightRoi(
     // max vibration
     const double max_vibration_x =
       std::sin(config.max_vibration_yaw * 0.5) * tf_camera2tl.getOrigin().z() +
-      config.max_vibration_width * 0.5;
+      config.getVibrationWidth(dist2tl) * 0.5;
     const double max_vibration_y =
       std::sin(config.max_vibration_pitch * 0.5) * tf_camera2tl.getOrigin().z() +
-      config.max_vibration_height * 0.5;
-    const double max_vibration_z = config.max_vibration_depth * 0.5;
+      config.getVibrationHeight(dist2tl) * 0.5;
+    const double max_vibration_z = config.getVibrationDepth(dist2tl) * 0.5;
     // target position in camera coordinate
     geometry_msgs::msg::Point point3d;
     point3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
@@ -241,11 +277,11 @@ bool MapBasedDetector::getTrafficLightRoi(
     // max vibration
     const double max_vibration_x =
       std::sin(config.max_vibration_yaw * 0.5) * tf_camera2tl.getOrigin().z() +
-      config.max_vibration_width * 0.5;
+      config.getVibrationWidth(dist2tl) * 0.5;
     const double max_vibration_y =
       std::sin(config.max_vibration_pitch * 0.5) * tf_camera2tl.getOrigin().z() +
-      config.max_vibration_height * 0.5;
-    const double max_vibration_z = config.max_vibration_depth * 0.5;
+      config.getVibrationHeight(dist2tl) * 0.5;
+    const double max_vibration_z = config.getVibrationDepth(dist2tl) * 0.5;
     // target position in camera coordinate
     geometry_msgs::msg::Point point3d;
     point3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
@@ -261,6 +297,11 @@ bool MapBasedDetector::getTrafficLightRoi(
     if (tl_roi.roi.width < 1 || tl_roi.roi.height < 1) {
       return false;
     }
+    //for debug only
+    float dx = tf_camera2tl.getOrigin().x();
+    float dy = tf_camera2tl.getOrigin().y();
+    float dz = tf_camera2tl.getOrigin().z();
+    tl_roi.dist = std::sqrt(dx * dx + dy * dy + dz * dz);
   }
   return true;
 }

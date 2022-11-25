@@ -63,13 +63,28 @@ public:
   explicit MapBasedDetector(const rclcpp::NodeOptions & node_options);
 
 private:
+/**
+ * @brief to make ssd work well, it's necessary to ensure the traffic light is within the rough roi and occupy
+ * proper area. If the traffic light is very small compared to the roi, the detection rate would decrease.
+ * On the other side, if the traffic light is very large and nearly as large as the roi, the detection rate also decreases.
+ * Therefore, the vibration height/width/depth increases when the traffic light and the sensor are getting closer.
+ * A simple linear function is used to calculate it.
+ */
   struct Config
   {
+    double getVibrationHeight(double dist) const;
+    double getVibrationWidth(double dist) const;
+    double getVibrationDepth(double dist) const;
     double max_vibration_pitch;
     double max_vibration_yaw;
-    double max_vibration_height;
-    double max_vibration_width;
-    double max_vibration_depth;
+    double dist_low;
+    double vibration_height_low;
+    double vibration_width_low;
+    double vibration_depth_low;
+    double dist_high;
+    double vibration_height_high;
+    double vibration_width_high;
+    double vibration_depth_high;
   };
 
   struct IdLessThan
