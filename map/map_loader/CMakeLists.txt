@@ -34,6 +34,22 @@ ament_auto_add_library(lanelet2_map_visualization_node SHARED
   src/lanelet2_map_loader/lanelet2_map_visualization_node.cpp
 )
 
+# surrounding map loader
+ament_auto_add_library(surrounding_pointcloud_map_loader_node SHARED
+  src/surrounding_pointcloud_map_loader/surrounding_pointcloud_map_loader_node.cpp
+)
+target_link_libraries(surrounding_pointcloud_map_loader_node ${PCL_LIBRARIES})
+
+target_include_directories(surrounding_pointcloud_map_loader_node
+  SYSTEM PUBLIC
+    ${PCL_INCLUDE_DIRS}
+)
+
+rclcpp_components_register_node(surrounding_pointcloud_map_loader_node
+  PLUGIN "SurroundingPointCloudMapLoaderNode"
+  EXECUTABLE surrounding_pointcloud_map_loader
+)
+
 rclcpp_components_register_node(lanelet2_map_visualization_node
   PLUGIN "Lanelet2MapVisualizationNode"
   EXECUTABLE lanelet2_map_visualization

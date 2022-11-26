@@ -83,6 +83,16 @@ def launch_setup(context, *args, **kwargs):
         ],
         extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
     )
+    
+    surrounding_pointcloud_map_loader = ComposableNode(
+        package="map_loader",
+        plugin="SurroundingPointCloudMapLoaderNode",
+        name="surrounding_pointcloud_map_loader",
+        parameters=[
+            {"pcd_paths_or_directory": ["[", LaunchConfiguration("pointcloud_map_path"), "]"]}
+        ],
+        extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
+    )
 
     map_tf_generator = ComposableNode(
         package="map_tf_generator",
@@ -106,6 +116,7 @@ def launch_setup(context, *args, **kwargs):
             lanelet2_map_loader,
             lanelet2_map_visualization,
             pointcloud_map_loader,
+            surrounding_pointcloud_map_loader,
             map_tf_generator,
         ],
         output="screen",
