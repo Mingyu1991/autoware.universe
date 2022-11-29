@@ -218,6 +218,7 @@ void TrafficLightSSDFineDetectorNodelet::callback(
     num_rois -= num_infer;
     ++batch_count;
   }
+  detectionPostprocess(in_roi_msg, out_rois);
   out_rois.header = in_roi_msg->header;
   output_roi_pub_->publish(out_rois);
   const auto exe_end_time = high_resolution_clock::now();
@@ -356,6 +357,59 @@ bool TrafficLightSSDFineDetectorNodelet::cnnOutput2BoxDetection(
   //   detections.push_back(det);
   // }
   return true;
+}
+
+void TrafficLightSSDFineDetectorNodelet::detectionPostprocess(
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr rough_roi_msg,
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray & detections)
+{
+  std::unordered_map<autoware_auto_perception_msgs::msg::TrafficLightRoi::_id_type,
+                     autoware_auto_perception_msgs::msg::TrafficLightRoi const*> id2rough_roi;
+  for(const auto & rough_roi : rough_roi_msg->rois){
+    id2rough_roi[rough_roi.id] = &rough_roi;
+  }
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray filtered_detections;
+  /**
+   * The rough roi is always larger than the actual detection bbox.
+   * Assume there are two traffic lights (i, j) close to each other on the image.
+   * When the ssd is detecting i in the rough roi R, it's possible that j is detected as i.
+   * This is very dangerous when the traffic light of next cross is detected as the traffic light of this cross.
+   * To solve this, the following steps are performed:
+   * 1. Check whether i and j are close enough to each other
+   * 2. If yes, compare the area of detected ssd bbox (Sb) with the expected area of i (Si) and expected area of j (Sj).
+   * 3. If Sb is closer to Sj, remove it.
+   */
+  for(auto it = detections.rois.begin(); it != detections.rois.end(); ){
+    bool keep = true;
+    const auto & roi1 = *id2rough_roi[it->id];
+    int expected_area_1 = roi1.expected_height * roi1.expected_width;
+    int box_area = it->roi.height * it->roi.width;
+    cv::Point expected_center_1 = getRoiCenter(roi1.roi);
+    
+    for(const auto & roi2 : rough_roi_msg->rois){
+      if(it->id == roi2.id){
+        continue;
+      }
+      int expected_area_2 = roi2.expected_height * roi2.expected_width;
+      cv::Point expected_center_2 = getRoiCenter(roi2.roi);
+      // check if the two traffic light centers are close
+      if(std::abs(expected_center_1.x - expected_center_2.x) <= roi1.roi.width
+      && std::abs(expected_center_1.y - expected_center_2.y) <= roi1.roi.height){
+        // if the area of the box is closer to roi2, remove the detection
+        if(std::abs(expected_area_1 - box_area) > std::abs(box_area - expected_area_2)){
+          keep = false;
+          RCLCPP_INFO(get_logger(), "erase id: %d, box: (%d, %d, %d, %d)", it->id, it->roi.x_offset, it->roi.y_offset, it->roi.width, it->roi.height);
+          break;
+        }
+      }
+    }
+    if(keep){
+      it++;
+    }
+    else{
+      it = detections.rois.erase(it);
+    }
+  }
 }
 
 bool TrafficLightSSDFineDetectorNodelet::rosMsg2CvMat(

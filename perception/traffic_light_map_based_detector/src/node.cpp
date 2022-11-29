@@ -315,6 +315,8 @@ bool MapBasedDetector::getTrafficLightRoi(
     origin_roi.height = point2d.y - origin_roi.y_offset;
     //for debug only
     tl_roi.dist = dist2tl;
+    tl_roi.expected_height = origin_roi.height;
+    tl_roi.expected_width = origin_roi.width;
   }
   return true;
 }
