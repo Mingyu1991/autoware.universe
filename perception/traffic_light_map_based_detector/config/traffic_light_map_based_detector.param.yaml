@@ -1,5 +1,6 @@
 /**:
   ros__parameters:
+    max_detection_range: 250.0
     max_vibration_pitch: 0.01745329251   # -0.5 ~ 0.5 deg
     max_vibration_yaw: 0.01745329251     # -0.5 ~ 0.5 deg
     # The vibration height/width/depth should be larger when the traffic light is closer to the sensor

@@ -75,6 +75,7 @@ private:
     double getVibrationHeight(double dist) const;
     double getVibrationWidth(double dist) const;
     double getVibrationDepth(double dist) const;
+    double max_detection_range;
     double max_vibration_pitch;
     double max_vibration_yaw;
     double dist_low;

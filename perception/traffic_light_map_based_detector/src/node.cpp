@@ -134,7 +134,7 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
 
-  // parameter declaration needs default values: are 0.0 goof defaults for this?
+  config_.max_detection_range = declare_parameter<double>("max_detection_range", 250.0);
   config_.max_vibration_pitch = declare_parameter<double>("max_vibration_pitch", 0.01745329251);
   config_.max_vibration_yaw = declare_parameter<double>("max_vibration_yaw", 0.01745329251);
   config_.dist_low = declare_parameter<double>("dist_low", 30.0);
@@ -236,6 +236,8 @@ bool MapBasedDetector::getTrafficLightRoi(
                    (tl_left_down_point.z() + tl_right_down_point.z() + tl_height) / 2));
     tf2::Transform tf_camera2tl_center = tf_map2camera.inverse() * tf_map2tl_center;
   double dist2tl = tf_camera2tl_center.getOrigin().length();
+  // roi of the traffic light without any angle or distance safety boundary
+  sensor_msgs::msg::RegionOfInterest origin_roi;
 
   // for roi.x_offset and roi.y_offset
   {
@@ -265,6 +267,13 @@ bool MapBasedDetector::getTrafficLightRoi(
     roundInImageFrame(pinhole_camera_model, point2d);
     tl_roi.roi.x_offset = point2d.x;
     tl_roi.roi.y_offset = point2d.y;
+
+    point3d.x = tf_camera2tl.getOrigin().x();
+    point3d.y = tf_camera2tl.getOrigin().y();
+    point3d.z = tf_camera2tl.getOrigin().z();
+    point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+    origin_roi.x_offset = point2d.x;
+    origin_roi.y_offset = point2d.y;
   }
 
   // for roi.width and roi.height
@@ -297,11 +306,15 @@ bool MapBasedDetector::getTrafficLightRoi(
     if (tl_roi.roi.width < 1 || tl_roi.roi.height < 1) {
       return false;
     }
+
+    point3d.x = tf_camera2tl.getOrigin().x();
+    point3d.y = tf_camera2tl.getOrigin().y();
+    point3d.z = tf_camera2tl.getOrigin().z();
+    point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+    origin_roi.width = point2d.x - origin_roi.x_offset;
+    origin_roi.height = point2d.y - origin_roi.y_offset;
     //for debug only
-    float dx = tf_camera2tl.getOrigin().x();
-    float dy = tf_camera2tl.getOrigin().y();
-    float dz = tf_camera2tl.getOrigin().z();
-    tl_roi.dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    tl_roi.dist = dist2tl;
   }
   return true;
 }
@@ -381,8 +394,7 @@ void MapBasedDetector::getVisibleTrafficLights(
     tl_central_point.x = (tl_right_down_point.x() + tl_left_down_point.x()) / 2.0;
     tl_central_point.y = (tl_right_down_point.y() + tl_left_down_point.y()) / 2.0;
     tl_central_point.z = (tl_right_down_point.z() + tl_left_down_point.z() + tl_height) / 2.0;
-    constexpr double max_distance_range = 200.0;
-    if (!isInDistanceRange(tl_central_point, camera_pose.position, max_distance_range)) {
+    if (!isInDistanceRange(tl_central_point, camera_pose.position, config_.max_detection_range)) {
       continue;
     }
 

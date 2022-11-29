@@ -36,6 +36,17 @@ inline std::vector<float> toFloatVector(const std::vector<double> double_vector)
   return std::vector<float>(double_vector.begin(), double_vector.end());
 }
 
+inline cv::Point getRoiCenter(const sensor_msgs::msg::RegionOfInterest& roi)
+{
+  return cv::Point(roi.x_offset + roi.width / 2, roi.y_offset + roi.height / 2);
+}
+
+inline int distSquare(const cv::Point& p1, const cv::Point& p2)
+{
+  return (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y);
+}
+
+
 TrafficLightSSDFineDetectorNodelet::TrafficLightSSDFineDetectorNodelet(
   const rclcpp::NodeOptions & options)
 : Node("traffic_light_ssd_fine_detector_node", options)
@@ -256,73 +267,49 @@ bool TrafficLightSSDFineDetectorNodelet::cnnOutput2BoxDetection(
   if (tlr_id > class_num_ - 1) {
     return false;
   }
-  // sometimes one rough roi might contain multiple traffic lights
-  // for every rough roi, we assume the center of the rough roi is also the center of the traffic light
-  // projected from the lanelet2 map to the camera
-  // then for every traffic light (roi center), we calculate the distance to everh other traffic light
-  // if the distance is smaller than the size of the roi, we consider this rough roi might contain multiple traffic lights
-  std::vector<bool> multiTLinRoi(rough_roi_msg->rois.size(), false);
-  for(size_t i = 0; i < rough_roi_msg->rois.size(); i++){
-    int cx1 = rough_roi_msg->rois[i].roi.x_offset + rough_roi_msg->rois[i].roi.width / 2;
-    int cy1 = rough_roi_msg->rois[i].roi.y_offset + rough_roi_msg->rois[i].roi.height / 2;
-    for(size_t j = i + 1; j < rough_roi_msg->rois.size(); j++){
-      int cx2 = rough_roi_msg->rois[j].roi.x_offset + rough_roi_msg->rois[i].roi.width / 2;
-      int cy2 = rough_roi_msg->rois[j].roi.y_offset + rough_roi_msg->rois[i].roi.height / 2;
-      if(std::abs(cx1 - cx2) <= rough_roi_msg->rois[i].roi.width
-         && std::abs(cy1 - cy2) <= rough_roi_msg->rois[i].roi.height){
-        multiTLinRoi[i] = true;
-      }
-      if(std::abs(cx1 - cx2) <= rough_roi_msg->rois[j].roi.width
-         && std::abs(cy1 - cy2) <= rough_roi_msg->rois[j].roi.height){
-        multiTLinRoi[j] = true;  
-      }
-    }
-  }
-
+  /**
+   * Assume the rough roi is R and the traffic light corresponding to R is T.
+   * if R might contain multiple traffic lights, it's difficult to figure out whether
+   * the ssd bbox with highest score is T.
+   * It might be very dangerous if the traffic light from next cross is detected as the traffic light from this cross.
+   * To solve this, for every R, we will find out all traffic lights that might be within it.
+   * Then for every ssd bbox, calculate the distance from the bbox to every traffic light within R
+   * and select the best(highest score) ssd bbox from all bboxes that are closest to the R.
+   * 
+   * Here it's assumed that the center of Rough roi (Rc) should be close to center of the corresponding traffic light(Tc)
+   * and we use Rc as Tc
+   */
   for (int i = 0; i < num_rois; ++i) {
-    /**
-     * @brief if the rough roi might contain multiple traffic lights,
-     * then we can't figure out whether the ssd bbox with highest score is the one corresponds to the rough roi.
-     * It might be very dangerous if the traffic light from next cross is detected as the traffic light from this cross.
-     * To avoid this, instead of selecting the one with highest score,
-     * we would select the largest one from bboxes with score higher than score_thresh_.
-     * However, this function must return one bbox for every rough roi for following process.
-     * If there might be multiple traffic lights in the rough roi but there no detection having score
-     * higher than score_thresh_, we would just select the one with highest score.
-     */
-    bool selectLargestBox = false;
-    if(multiTLinRoi[i]){
-      for(int j = 0; j < detection_per_class_; j++){
-        if(scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_] >= score_thresh_){
-          selectLargestBox = true;
-          break;
-        }
+    cv::Point center_i = getRoiCenter(rough_roi_msg->rois[i].roi); 
+    // firstly list all traffic lights that might be within R
+    std::vector<cv::Point> tl_centers;
+    for(size_t j = 0; j < rough_roi_msg->rois.size(); j++){
+      if(i == int(j)) continue;
+      cv::Point center_j = getRoiCenter(rough_roi_msg->rois[j].roi);
+      if(std::abs(center_i.x - center_j.x) <= rough_roi_msg->rois[i].roi.width
+      && std::abs(center_i.y - center_j.y) <= rough_roi_msg->rois[i].roi.height){
+        tl_centers.push_back(center_j);
       }
     }
     size_t best_box_idx = 0;
     float best_score = 0;
-    
-    if(selectLargestBox){
-      float maxArea = std::numeric_limits<float>::lowest();
-      for(int j = 0; j < detection_per_class_; j++){
-        float score = scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_];
-        size_t box_idx = i * detection_per_class_ * 4 + j * 4;
-        if(score >= score_thresh_){
-          float area = (boxes[box_idx + 2] - boxes[box_idx]) * (boxes[box_idx + 3] - boxes[box_idx + 1]);
-          if(area > maxArea){
-            maxArea = area;
-            best_box_idx = box_idx;
-            best_score = score;
-          }
+    for(int j = 0; j < detection_per_class_; j++){
+      float score = scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_];
+      size_t box_idx = i * detection_per_class_ * 4 + j * 4;
+      int box_cx = (boxes[box_idx] + boxes[box_idx + 2]) * in_imgs.at(i).cols / 2 + rough_roi_msg->rois[i].roi.x_offset;
+      int box_cy = (boxes[box_idx + 1] + boxes[box_idx + 3]) * in_imgs.at(i).rows / 2 + rough_roi_msg->rois[i].roi.y_offset;
+      cv::Point box_center(box_cx, box_cy);
+      // calculate Rc
+      int dist_center_i = distSquare(box_center, center_i);
+      // flag if the distance from box to current roi is smallest
+      bool box_near_center_i = true;
+      for(const cv::Point& tl_center : tl_centers){
+        if(distSquare(box_center, tl_center) < dist_center_i){
+          box_near_center_i = false;
+          break;
         }
       }
-      RCLCPP_INFO_STREAM(get_logger(), "stamp = " << std::setprecision(17) << rclcpp::Time(rough_roi_msg->header.stamp).seconds()
-                                       << ", id = " << rough_roi_msg->rois[i].id);
-    }
-    else{
-      for(int j = 0; j < detection_per_class_; j++){
-        float score = scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_];
-        size_t box_idx = i * detection_per_class_ * 4 + j * 4;
+      if(box_near_center_i){
         if(score > best_score){
           best_score = score;
           best_box_idx = box_idx;
