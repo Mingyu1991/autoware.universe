@@ -39,6 +39,7 @@
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
+#include <autoware_auto_perception_msgs/msg/traffic_light_rough_roi_array.hpp>
 #include <autoware_auto_planning_msgs/msg/had_map_route.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
@@ -102,7 +103,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
   rclcpp::Subscription<autoware_auto_planning_msgs::msg::HADMapRoute>::SharedPtr route_sub_;
 
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
+  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>::SharedPtr roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
 
   tf2_ros::Buffer tf_buffer_;
@@ -133,11 +134,11 @@ private:
   bool isInImageFrame(
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const geometry_msgs::msg::Point & point) const;
-  bool getTrafficLightRoi(
+  bool getTrafficLightRoughRoi(
     const geometry_msgs::msg::Pose & camera_pose,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const lanelet::ConstLineString3d traffic_light, const Config & config,
-    autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi);
+    autoware_auto_perception_msgs::msg::TrafficLightRoughRoi & tl_roi);
   void publishVisibleTrafficLights(
     const geometry_msgs::msg::PoseStamped camera_pose_stamped,
     const std::vector<lanelet::ConstLineString3d> & visible_traffic_lights,
