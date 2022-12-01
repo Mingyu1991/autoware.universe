@@ -292,34 +292,27 @@ tf2::Transform TrafficLightSSDFineDetectorNodelet::poseEstimation(
   const autoware_auto_perception_msgs::msg::TrafficLightRoughRoi& roi,
   const image_geometry::PinholeCameraModel& pinhole_camera_model)
 {
-  tf2::Vector3 roi_center2map(roi.center.x, roi.center.y, roi.center.z);
-  tf2::Transform tf_map2cam(
-    tf2::Quaternion(roi.tf_map2cam.rotation.x, roi.tf_map2cam.rotation.y, roi.tf_map2cam.rotation.z, roi.tf_map2cam.rotation.w),
-    tf2::Vector3(roi.tf_map2cam.translation.x, roi.tf_map2cam.translation.y, roi.tf_map2cam.translation.z));
-  tf2::Vector3 roi_center2cam = tf_map2cam * roi_center2map;
-  
-                                    
+  tf2::Transform tf_tl2map, tf_map2base, tf_base2cam;
+  tf2::fromMsg(roi.tf_tl2map, tf_tl2map);
+  tf2::fromMsg(roi.tf_map2base, tf_map2base);
+  tf2::fromMsg(roi.tf_base2cam, tf_base2cam);
+  tf2::Vector3 roi_center2cam = tf_base2cam * tf_map2base * tf_tl2map.getOrigin();
+
   cv::Point2d det_pt_2d(detection.roi.x_offset + detection.roi.width / 2, detection.roi.y_offset + detection.roi.height / 2);
   cv::Point3d det_pt_3d = pinhole_camera_model.projectPixelTo3dRay(pinhole_camera_model.rectifyPoint(det_pt_2d));
   double len = std::sqrt(det_pt_3d.dot(det_pt_3d));
   tf2::Vector3 target(det_pt_3d.x * roi_center2cam.length() / len, det_pt_3d.y * roi_center2cam.length() / len, det_pt_3d.z * roi_center2cam.length() / len);
-  
-  double init_dist = roi_center2cam.distance(target);
 
-  double roll_exp, pitch_exp, yaw_exp;
+  double init_dist = roi_center2cam.distance(target);
   double min_dist = std::numeric_limits<double>::max();
   double best_d_pitch = 0, best_d_yaw = 0, best_d_roll = 0;
-  tf2::Matrix3x3 m(tf_map2cam.getRotation());
-  m.getEulerYPR(yaw_exp, pitch_exp, roll_exp);
-  for(double d_pitch = 0; d_pitch <= 0; d_pitch += 0.001){
-    for(double d_yaw = -1; d_yaw <= 1; d_yaw += 0.001){
-      for(double d_roll = -1; d_roll <= 1; d_roll += 0.001){
-        double roll_new = roll_exp + d_roll;
-        double pitch_new = pitch_exp + d_pitch;
-        double yaw_new = yaw_exp + d_yaw;
-        m.setEulerYPR(yaw_new, pitch_new, roll_new);
-        tf2::Transform tf(m, tf_map2cam.getOrigin());
-        tf2::Vector3 source = tf * roi_center2map;
+  for(double d_pitch = -1.0; d_pitch <= 1.0; d_pitch += 0.01){
+    for(double d_yaw = -1.0; d_yaw <= 1.0; d_yaw += 0.01){
+      for(double d_roll = 0; d_roll <= 0; d_roll += 0.01){
+        tf2::Quaternion q;
+        q.setEuler(M_PI * d_pitch / 180.0, M_PI * d_roll / 180.0, M_PI * d_yaw / 180.0);
+        tf2::Transform tf(q);
+        tf2::Vector3 source = tf_base2cam * tf * tf_map2base * tf_tl2map.getOrigin();
         double dist = source.distance(target);
         if(dist < min_dist){
           min_dist = dist;
@@ -327,11 +320,12 @@ tf2::Transform TrafficLightSSDFineDetectorNodelet::poseEstimation(
           best_d_yaw = d_yaw;
           best_d_roll = d_roll;
         }
-      }      
+      }
     }
   }
-  RCLCPP_INFO(get_logger(), "    id: %d, yaw: %.3lf, pitch: %.3lf, roll = %.3lf, init dist = %.2lf, best dist = %.2lf", 
-    roi.id, best_d_yaw, best_d_pitch, best_d_roll, init_dist, min_dist);
+  RCLCPP_INFO(get_logger(), "    id: %d, origin pt = (%.2lf, %.2lf, %.2lf), new pt = (%.2lf, %.2lf, %.2lf), yaw: %.3lf, pitch: %.3lf, roll = %.3lf, init dist = %.2lf, best dist = %.2lf", 
+    roi.id, roi_center2cam.x(), roi_center2cam.y(), roi_center2cam.z(),
+    target.x(), target.y(), target.z(), best_d_yaw, best_d_pitch, best_d_roll, init_dist, min_dist);
   return tf2::Transform();
 }
 
@@ -345,26 +339,7 @@ void TrafficLightSSDFineDetectorNodelet::detectionPostProcess(const sensor_msgs:
   for(const auto & detection : detections.rois){
     for(const auto & roi : rough_rois.rois){
       if(detection.id == roi.id){
-        // geometry_msgs::msg::Transform tf_map2cam = roi.tf_map2cam;
-        // geometry_msgs::msg::Vector3 map2center = roi.center;
-        // const auto & rotation = roi.tf_map2cam.rotation;
-        // const auto & translation = roi.tf_map2cam.translation;
-        // tf2::Transform tf_center2cam_exp(tf2::Quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
-        //                                   tf2::Vector3(translation.x, translation.y, translation.z));
         poseEstimation(detection, roi, pinhole_camera_model);
-        // double distcam2tl = tf_center2cam_exp.getOrigin().length();
-
-        // cv::Point2d point2d(detection.roi.x_offset + detection.roi.width / 2, detection.roi.y_offset + detection.roi.height / 2);
-        // cv::Point3d point3d = pinhole_camera_model.projectPixelTo3dRay(pinhole_camera_model.rectifyPoint(point2d));
-        // double point3dlen = std::hypot(point3d.x, point3d.y, point3d.z);
-
-        // point3d.x = point3d.x * distcam2tl / point3dlen;
-        // point3d.y = point3d.y * distcam2tl / point3dlen;
-        // point3d.z = point3d.z * distcam2tl / point3dlen;
-        
-        // RCLCPP_INFO(get_logger(), "map pos = (%.2lf, %.2lf, %.2lf), det pos = (%.2lf, %.2lf, %.2lf)",
-        //   tf_center2cam_exp.getOrigin().x(), tf_center2cam_exp.getOrigin().y(), tf_center2cam_exp.getOrigin().z(),
-        //   point3d.x, point3d.y, point3d.z);
       }
     }
   }

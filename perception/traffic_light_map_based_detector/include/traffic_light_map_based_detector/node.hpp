@@ -123,11 +123,11 @@ private:
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg);
   void routeCallback(const autoware_auto_planning_msgs::msg::HADMapRoute::ConstSharedPtr input_msg);
   void getVisibleTrafficLights(
-    const TrafficLightSet & all_traffic_lights, const geometry_msgs::msg::Pose & camera_pose,
+    const TrafficLightSet & all_traffic_lights, const tf2::Transform & camera_pose,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     std::vector<lanelet::ConstLineString3d> & visible_traffic_lights);
   bool isInDistanceRange(
-    const geometry_msgs::msg::Point & tl_point, const geometry_msgs::msg::Point & camera_point,
+    const tf2::Vector3 & tl_point, const tf2::Vector3 & camera_point,
     const double max_distance_range) const;
   bool isInAngleRange(
     const double & tl_yaw, const double & camera_yaw, const double max_angle_range) const;
@@ -135,12 +135,14 @@ private:
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const geometry_msgs::msg::Point & point) const;
   bool getTrafficLightRoughRoi(
-    const geometry_msgs::msg::Pose & camera_pose,
+    const tf2::Transform& tf_map2base,
+    const tf2::Transform& tf_base2cam,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const lanelet::ConstLineString3d traffic_light, const Config & config,
     autoware_auto_perception_msgs::msg::TrafficLightRoughRoi & tl_roi);
   void publishVisibleTrafficLights(
-    const geometry_msgs::msg::PoseStamped camera_pose_stamped,
+    const tf2::Transform& tf_map2cam,
+    const std_msgs::msg::Header& header,
     const std::vector<lanelet::ConstLineString3d> & visible_traffic_lights,
     const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub);
 };
