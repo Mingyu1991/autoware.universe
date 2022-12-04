@@ -15,7 +15,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 #include <traffic_light_roi_visualizer/nodelet.hpp>
-
+#include <fstream>
 #include <memory>
 #include <string>
 #include <utility>
@@ -53,26 +53,34 @@ TrafficLightRoiVisualizerNodelet::TrafficLightRoiVisualizerNodelet(
 
 void TrafficLightRoiVisualizerNodelet::connectCb()
 {
-  if (image_pub_.getNumSubscribers() == 0) {
-    image_sub_.unsubscribe();
-    traffic_signals_sub_.unsubscribe();
-    roi_sub_.unsubscribe();
-    if (enable_fine_detection_) {
-      rough_roi_sub_.unsubscribe();
-    }
-  } else if (!image_sub_.getSubscriber()) {
-    image_sub_.subscribe(this, "~/input/image", "raw", rmw_qos_profile_sensor_data);
-    roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
-    traffic_signals_sub_.subscribe(
-      this, "~/input/traffic_signals", rclcpp::QoS{1}.get_rmw_qos_profile());
-    if (enable_fine_detection_) {
-      rough_roi_sub_.subscribe(this, "~/input/rough/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
-    }
+  image_sub_.subscribe(this, "~/input/image", "raw", rmw_qos_profile_sensor_data);
+  roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
+  traffic_signals_sub_.subscribe(
+    this, "~/input/traffic_signals", rclcpp::QoS{1}.get_rmw_qos_profile());
+  if (enable_fine_detection_) {
+    rough_roi_sub_.subscribe(this, "~/input/rough/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
   }
+  // if (image_pub_.getNumSubscribers() == 0) {
+  //   image_sub_.unsubscribe();
+  //   traffic_signals_sub_.unsubscribe();
+  //   roi_sub_.unsubscribe();
+  //   if (enable_fine_detection_) {
+  //     rough_roi_sub_.unsubscribe();
+  //   }
+  // } else if (!image_sub_.getSubscriber()) {
+  //   image_sub_.subscribe(this, "~/input/image", "raw", rmw_qos_profile_sensor_data);
+  //   roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
+  //   traffic_signals_sub_.subscribe(
+  //     this, "~/input/traffic_signals", rclcpp::QoS{1}.get_rmw_qos_profile());
+  //   if (enable_fine_detection_) {
+  //     rough_roi_sub_.subscribe(this, "~/input/rough/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
+  //   }
+  // }
 }
 
+template <typename T>
 bool TrafficLightRoiVisualizerNodelet::createRect(
-  cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
+  cv::Mat & image, const T & tl_roi,
   const cv::Scalar & color)
 {
   cv::rectangle(
@@ -84,9 +92,9 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
     cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   return true;
 }
-
+template <typename T>
 bool TrafficLightRoiVisualizerNodelet::createRect(
-  cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
+  cv::Mat & image, const T & tl_roi,
   const ClassificationResult & result)
 {
   cv::Scalar color;
@@ -104,16 +112,17 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
     color, 3);
+  
 
-  int offset = 40;
-  cv::putText(
-    image, std::to_string(result.prob),
-    cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 0)), cv::FONT_HERSHEY_COMPLEX,
-    1.1, color, 3);
+  // int offset = 40;
+  // cv::putText(
+  //   image, std::to_string(result.prob),
+  //   cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 0)), cv::FONT_HERSHEY_COMPLEX,
+  //   1.1, color, 3);
 
-  cv::putText(
-    image, result.label, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 1)),
-    cv::FONT_HERSHEY_COMPLEX, 1.1, color, 2);
+  // cv::putText(
+  //   image, result.label, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 1)),
+  //   cv::FONT_HERSHEY_COMPLEX, 1.1, color, 2);
 
   return true;
 }
@@ -176,7 +185,7 @@ bool TrafficLightRoiVisualizerNodelet::getRoiFromId(
 void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & input_tl_roi_msg,
-  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
+  const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr &
     input_tl_rough_roi_msg,
   const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
     input_traffic_signals_msg)
@@ -211,6 +220,30 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
       get_logger(), "Could not convert from '%s' to 'bgr8'.", input_image_msg->encoding.c_str());
   }
   image_pub_.publish(cv_ptr->toImageMsg());
+
+  //debug only
+  if(input_tl_rough_roi_msg->rois.size()){
+    std::string dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221122/data/";
+    double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
+    std::string image_path = dir + std::to_string(stamp) + ".jpg";
+    cv::Mat image = cv_ptr->image;
+    cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+    cv::imwrite(image_path, image);
+
+    std::string rough_roi_path = dir + std::to_string(stamp) + "_roi.txt";
+    std::ofstream f1(rough_roi_path);
+    for(const auto & roi : input_tl_rough_roi_msg->rois){
+      f1 << roi.id << " " << roi.roi.x_offset << " " << roi.roi.y_offset << " " << roi.roi.width << " " << roi.roi.height << std::endl;
+    }
+    f1.close();
+
+    std::string bbox_path = dir + std::to_string(stamp) + "_bbox.txt";
+    std::ofstream f2(bbox_path);
+    for(const auto & roi : input_tl_roi_msg->rois){
+      f2 << roi.id << " " << roi.roi.x_offset << " " << roi.roi.y_offset << " " << roi.roi.width << " " << roi.roi.height << std::endl;
+    }
+    f2.close();
+  }
 }
 
 }  // namespace traffic_light

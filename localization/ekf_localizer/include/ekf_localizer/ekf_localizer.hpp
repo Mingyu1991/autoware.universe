@@ -107,6 +107,32 @@ private:
   rclcpp::Time latest_time_;
 };
 
+class FakeSimple1DFilter
+{
+public:
+  FakeSimple1DFilter()
+  {
+    x_ = 0;
+  };
+  void init(const double init_obs, const double obs_stddev, const rclcpp::Time time)
+  {
+    (void)obs_stddev;
+    (void)time;
+    x_ = init_obs;
+  };
+  void update(const double obs, const double obs_stddev, const rclcpp::Time time)
+  {
+    (void)obs_stddev;
+    (void)time;
+    x_ = obs;
+  };
+  void set_proc_stddev(const double proc_stddev) { (void)proc_stddev; }
+  double get_x() { return x_; }
+
+private:
+  double x_;
+};
+
 class EKFLocalizer : public rclcpp::Node
 {
 public:
@@ -154,7 +180,7 @@ private:
   TimeDelayKalmanFilter ekf_;
   Simple1DFilter z_filter_;
   Simple1DFilter roll_filter_;
-  Simple1DFilter pitch_filter_;
+  FakeSimple1DFilter pitch_filter_;
 
   /* parameters */
   bool show_debug_info_;

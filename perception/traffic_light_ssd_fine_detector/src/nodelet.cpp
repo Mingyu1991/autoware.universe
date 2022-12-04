@@ -194,6 +194,7 @@ void TrafficLightSSDFineDetectorNodelet::callback(
   const sensor_msgs::msg::CameraInfo::ConstSharedPtr cam_info_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr in_roi_msg)
 {  
+  (void)cam_info_msg;
   if (in_image_msg->width < 2 || in_image_msg->height < 2) {
     return;
   }
@@ -275,7 +276,7 @@ void TrafficLightSSDFineDetectorNodelet::callback(
     num_rois -= num_infer;
     ++batch_count;
   }
-  detectionPostProcess(*cam_info_msg, *in_roi_msg, out_rois);
+  //detectionPostProcess(*cam_info_msg, *in_roi_msg, out_rois);
   out_rois.header = in_roi_msg->header;
   output_roi_pub_->publish(out_rois);
   const auto exe_end_time = high_resolution_clock::now();
@@ -306,7 +307,7 @@ tf2::Transform TrafficLightSSDFineDetectorNodelet::poseEstimation(
   double init_dist = roi_center2cam.distance(target);
   double min_dist = std::numeric_limits<double>::max();
   double best_d_pitch = 0, best_d_yaw = 0, best_d_roll = 0;
-  for(double d_pitch = -1.0; d_pitch <= 1.0; d_pitch += 0.01){
+  for(double d_pitch = 0; d_pitch <= 0; d_pitch += 0.01){
     for(double d_yaw = -1.0; d_yaw <= 1.0; d_yaw += 0.01){
       for(double d_roll = 0; d_roll <= 0; d_roll += 0.01){
         tf2::Quaternion q;
@@ -395,82 +396,82 @@ bool TrafficLightSSDFineDetectorNodelet::cnnOutput2BoxDetection(
    * Here it's assumed that the center of Rough roi (Rc) should be close to center of the corresponding traffic light(Tc)
    * and we use Rc as Tc
    */
-  for (int i = 0; i < num_rois; ++i) {
-    cv::Point center_i = getRoiCenter(rough_roi_msg->rois[i].roi); 
-    // firstly list all traffic lights that might be within R
-    std::vector<cv::Point> tl_centers;
-    for(size_t j = 0; j < rough_roi_msg->rois.size(); j++){
-      if(i == int(j)) continue;
-      cv::Point center_j = getRoiCenter(rough_roi_msg->rois[j].roi);
-      if(std::abs(center_i.x - center_j.x) <= rough_roi_msg->rois[i].roi.width
-      && std::abs(center_i.y - center_j.y) <= rough_roi_msg->rois[i].roi.height){
-        tl_centers.push_back(center_j);
-      }
-    }
-    size_t best_box_idx = 0;
-    float best_score = 0;
-    for(int j = 0; j < detection_per_class_; j++){
-      float score = scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_];
-      size_t box_idx = i * detection_per_class_ * 4 + j * 4;
-      int box_cx = (boxes[box_idx] + boxes[box_idx + 2]) * in_imgs.at(i).cols / 2 + rough_roi_msg->rois[i].roi.x_offset;
-      int box_cy = (boxes[box_idx + 1] + boxes[box_idx + 3]) * in_imgs.at(i).rows / 2 + rough_roi_msg->rois[i].roi.y_offset;
-      cv::Point box_center(box_cx, box_cy);
-      // calculate Rc
-      int dist_center_i = distSquare(box_center, center_i);
-      // flag if the distance from box to current roi is smallest
-      bool box_near_center_i = true;
-      for(const cv::Point& tl_center : tl_centers){
-        if(distSquare(box_center, tl_center) < dist_center_i){
-          box_near_center_i = false;
-          break;
-        }
-      }
-      if(box_near_center_i){
-        if(score > best_score){
-          best_score = score;
-          best_box_idx = box_idx;
-        }
-      }
-    }
-    
-    cv::Point lt, rb;
-    lt.x = boxes[best_box_idx] * in_imgs.at(i).cols;
-    lt.y = boxes[best_box_idx + 1] * in_imgs.at(i).rows;
-    rb.x = boxes[best_box_idx + 2] * in_imgs.at(i).cols;
-    rb.y = boxes[best_box_idx + 3] * in_imgs.at(i).rows;
-    fitInFrame(lt, rb, cv::Size(in_imgs.at(i).cols, in_imgs.at(i).rows));
-    Detection det;
-    det.x = lt.x;
-    det.y = lt.y;
-    det.w = rb.x - lt.x;
-    det.h = rb.y - lt.y;
-    det.prob = best_score;
-    detections.push_back(det);
-  }
-  // (void)rough_roi_msg;
   // for (int i = 0; i < num_rois; ++i) {
-  //   std::vector<float> tlr_scores;
-  //   Detection det;
-  //   for (int j = 0; j < detection_per_class_; ++j) {
-  //     tlr_scores.push_back(scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_]);
+  //   cv::Point center_i = getRoiCenter(rough_roi_msg->rois[i].roi); 
+  //   // firstly list all traffic lights that might be within R
+  //   std::vector<cv::Point> tl_centers;
+  //   for(size_t j = 0; j < rough_roi_msg->rois.size(); j++){
+  //     if(i == int(j)) continue;
+  //     cv::Point center_j = getRoiCenter(rough_roi_msg->rois[j].roi);
+  //     if(std::abs(center_i.x - center_j.x) <= rough_roi_msg->rois[i].roi.width
+  //     && std::abs(center_i.y - center_j.y) <= rough_roi_msg->rois[i].roi.height){
+  //       tl_centers.push_back(center_j);
+  //     }
   //   }
-  //   std::vector<float>::iterator iter = std::max_element(tlr_scores.begin(), tlr_scores.end());
-  //   size_t index = std::distance(tlr_scores.begin(), iter);
-  //   size_t box_index = i * detection_per_class_ * 4 + index * 4;
+  //   size_t best_box_idx = 0;
+  //   float best_score = 0;
+  //   for(int j = 0; j < detection_per_class_; j++){
+  //     float score = scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_];
+  //     size_t box_idx = i * detection_per_class_ * 4 + j * 4;
+  //     int box_cx = (boxes[box_idx] + boxes[box_idx + 2]) * in_imgs.at(i).cols / 2 + rough_roi_msg->rois[i].roi.x_offset;
+  //     int box_cy = (boxes[box_idx + 1] + boxes[box_idx + 3]) * in_imgs.at(i).rows / 2 + rough_roi_msg->rois[i].roi.y_offset;
+  //     cv::Point box_center(box_cx, box_cy);
+  //     // calculate Rc
+  //     int dist_center_i = distSquare(box_center, center_i);
+  //     // flag if the distance from box to current roi is smallest
+  //     bool box_near_center_i = true;
+  //     for(const cv::Point& tl_center : tl_centers){
+  //       if(distSquare(box_center, tl_center) < dist_center_i){
+  //         box_near_center_i = false;
+  //         break;
+  //       }
+  //     }
+  //     if(box_near_center_i){
+  //       if(score > best_score){
+  //         best_score = score;
+  //         best_box_idx = box_idx;
+  //       }
+  //     }
+  //   }
+    
   //   cv::Point lt, rb;
-  //   lt.x = boxes[box_index] * in_imgs.at(i).cols;
-  //   lt.y = boxes[box_index + 1] * in_imgs.at(i).rows;
-  //   rb.x = boxes[box_index + 2] * in_imgs.at(i).cols;
-  //   rb.y = boxes[box_index + 3] * in_imgs.at(i).rows;
+  //   lt.x = boxes[best_box_idx] * in_imgs.at(i).cols;
+  //   lt.y = boxes[best_box_idx + 1] * in_imgs.at(i).rows;
+  //   rb.x = boxes[best_box_idx + 2] * in_imgs.at(i).cols;
+  //   rb.y = boxes[best_box_idx + 3] * in_imgs.at(i).rows;
   //   fitInFrame(lt, rb, cv::Size(in_imgs.at(i).cols, in_imgs.at(i).rows));
+  //   Detection det;
   //   det.x = lt.x;
   //   det.y = lt.y;
   //   det.w = rb.x - lt.x;
   //   det.h = rb.y - lt.y;
-
-  //   det.prob = tlr_scores[index];
+  //   det.prob = best_score;
   //   detections.push_back(det);
   // }
+  (void)rough_roi_msg;
+  for (int i = 0; i < num_rois; ++i) {
+    std::vector<float> tlr_scores;
+    Detection det;
+    for (int j = 0; j < detection_per_class_; ++j) {
+      tlr_scores.push_back(scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_]);
+    }
+    std::vector<float>::iterator iter = std::max_element(tlr_scores.begin(), tlr_scores.end());
+    size_t index = std::distance(tlr_scores.begin(), iter);
+    size_t box_index = i * detection_per_class_ * 4 + index * 4;
+    cv::Point lt, rb;
+    lt.x = boxes[box_index] * in_imgs.at(i).cols;
+    lt.y = boxes[box_index + 1] * in_imgs.at(i).rows;
+    rb.x = boxes[box_index + 2] * in_imgs.at(i).cols;
+    rb.y = boxes[box_index + 3] * in_imgs.at(i).rows;
+    fitInFrame(lt, rb, cv::Size(in_imgs.at(i).cols, in_imgs.at(i).rows));
+    det.x = lt.x;
+    det.y = lt.y;
+    det.w = rb.x - lt.x;
+    det.h = rb.y - lt.y;
+
+    det.prob = tlr_scores[index];
+    detections.push_back(det);
+  }
   return true;
 }
 

@@ -150,6 +150,7 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
 void MapBasedDetector::cameraInfoCallback(
   const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg)
 {
+  const double stamp_offset = 0.12;
   if (all_traffic_lights_ptr_ == nullptr && route_traffic_lights_ptr_ == nullptr) {
     return;
   }
@@ -169,7 +170,8 @@ void MapBasedDetector::cameraInfoCallback(
       input_msg->header.frame_id, "sensor_kit_base_link", input_msg->header.stamp,
       rclcpp::Duration::from_seconds(0.2));
     tf2::fromMsg(transform.transform, tf_base2cam);
-    transform = tf_buffer_.lookupTransform("sensor_kit_base_link", "map", input_msg->header.stamp,
+    transform = tf_buffer_.lookupTransform("sensor_kit_base_link", "map", 
+      rclcpp::Time(input_msg->header.stamp) + rclcpp::Duration::from_seconds(stamp_offset),
       rclcpp::Duration::from_seconds(0.2));
     tf2::fromMsg(transform.transform, tf_map2base);
     tf_map2cam = tf_base2cam * tf_map2base;
