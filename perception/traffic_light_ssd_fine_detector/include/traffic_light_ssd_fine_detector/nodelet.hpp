@@ -70,14 +70,6 @@ private:
     const float * scores, const float * boxes, const int tlr_id,
     const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<Detection> & detections,
     const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr rough_roi_msg);
-  cv::Point3d detPixel2Point3d(const cv::Point2i& det2d, const image_geometry::PinholeCameraModel & pinhole_camera_model,
-                               double dist2tl);
-  void detectionPostProcess(const sensor_msgs::msg::CameraInfo& cam_info, 
-                           const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray& rough_rois,
-                           autoware_auto_perception_msgs::msg::TrafficLightRoiArray& detections);
-  tf2::Transform poseEstimation(const autoware_auto_perception_msgs::msg::TrafficLightRoi& detection,
-                                const autoware_auto_perception_msgs::msg::TrafficLightRoughRoi& roi,
-                                const image_geometry::PinholeCameraModel& pinhole_camera_model);
   bool rosMsg2CvMat(const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image);
   bool fitInFrame(cv::Point & lt, cv::Point & rb, const cv::Size & size);
   void cvRect2TlRoiMsg(
