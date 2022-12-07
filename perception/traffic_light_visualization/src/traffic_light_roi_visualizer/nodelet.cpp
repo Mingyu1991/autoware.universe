@@ -78,23 +78,25 @@ void TrafficLightRoiVisualizerNodelet::connectCb()
   // }
 }
 
-template <typename T>
 bool TrafficLightRoiVisualizerNodelet::createRect(
-  cv::Mat & image, const T & tl_roi,
+  cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
   const cv::Scalar & color)
 {
   cv::rectangle(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 3);
+    color, 2);
   cv::putText(
     image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
+  cv::putText(
+    image, std::to_string(tl_roi.dist), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + 30),
+    cv::FONT_HERSHEY_COMPLEX, 1.0, cv::Scalar{255, 0, 0}, 1, CV_AA);
   return true;
 }
-template <typename T>
+
 bool TrafficLightRoiVisualizerNodelet::createRect(
-  cv::Mat & image, const T & tl_roi,
+  cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
   const ClassificationResult & result)
 {
   cv::Scalar color;
@@ -111,7 +113,7 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   cv::rectangle(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 3);
+    color, 2);
   
 
   // int offset = 40;
@@ -185,7 +187,7 @@ bool TrafficLightRoiVisualizerNodelet::getRoiFromId(
 void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & input_tl_roi_msg,
-  const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr &
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
     input_tl_rough_roi_msg,
   const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
     input_traffic_signals_msg)
@@ -195,14 +197,16 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
     cv_ptr = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
     for (auto tl_rough_roi : input_tl_rough_roi_msg->rois) {
       // visualize rough roi
-      createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
+      //createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
 
       ClassificationResult result;
       bool has_correspond_traffic_signal =
         getClassificationResult(tl_rough_roi.id, *input_traffic_signals_msg, result);
       autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
       bool has_correspond_roi = getRoiFromId(tl_rough_roi.id, input_tl_roi_msg, tl_roi);
-
+      if(has_correspond_roi){
+        createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
+      }
       if (has_correspond_roi && has_correspond_traffic_signal) {
         // has fine detection and classification results
         createRect(cv_ptr->image, tl_roi, result);
@@ -223,7 +227,7 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
 
   //debug only
   if(input_tl_rough_roi_msg->rois.size()){
-    std::string dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221122/data/";
+    std::string dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221206/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
     cv::Mat image = cv_ptr->image;

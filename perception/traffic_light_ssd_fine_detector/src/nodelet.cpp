@@ -46,76 +46,12 @@ inline int distSquare(const cv::Point& p1, const cv::Point& p2)
   return (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y);
 }
 
-inline bool roiOverlapping(const sensor_msgs::msg::RegionOfInterest& roi1, const sensor_msgs::msg::RegionOfInterest& roi2)
-{
-  int x1 = std::max(roi1.x_offset, roi2.x_offset);
-  int x2 = std::min(roi1.x_offset + roi1.width, roi2.x_offset + roi2.width);
-  int y1 = std::max(roi1.y_offset, roi2.y_offset);
-  int y2 = std::min(roi1.y_offset + roi1.height, roi2.y_offset + roi2.height);
-  return x2 > x1 && y2 > y1;
-}
-
-void test(const sensor_msgs::msg::CameraInfo& cam_info, const cv::Mat& origin_img)
-{
-  (void)origin_img;
-  image_geometry::PinholeCameraModel pinhole_camera_model;
-  pinhole_camera_model.fromCameraInfo(cam_info);
-  // cv::Mat rectified_img;
-  // cv::Mat unrectified_img;
-  // double stamp = rclcpp::Time(cam_info.header.stamp).seconds();
-  // std::string dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221130/images/" + std::to_string(stamp);
-  
-  // pinhole_camera_model.rectifyImage(origin_img, rectified_img);
-  // pinhole_camera_model.unrectifyImage(rectified_img, unrectified_img);
-  // cv::imwrite(dir + "_origin.jpg", origin_img);
-  // cv::imwrite(dir + "_rectified.jpg", rectified_img);
-  // cv::imwrite(dir + "_unrectified.jpg", unrectified_img);
-  double max_err = 0.0;
-  for(float x = -200; x <= 200; x += 3){
-    for(float y = -200; y <= 200; y += 3){
-      for(float z = 1; z <= 200; z += 3){
-        cv::Point3d point3d(x, y, z);
-        cv::Point2d point2d = pinhole_camera_model.unrectifyPoint(pinhole_camera_model.project3dToPixel(point3d));
-        if(point2d.x < 0 || point2d.x >= cam_info.width || point2d.y < 0 || point2d.y >= cam_info.height){
-          continue;
-        }
-        cv::Point3d test = pinhole_camera_model.projectPixelTo3dRay(pinhole_camera_model.rectifyPoint(point2d));
-        double len1 = std::sqrt(point3d.dot(point3d));
-        double len2 = std::sqrt(test.dot(test));
-        test.x *= len1 / len2;
-        test.y *= len1 / len2;
-        test.z *= len1 / len2;
-        max_err = std::max(max_err, std::abs((test.x - point3d.x)));
-        max_err = std::max(max_err, std::abs((test.y - point3d.y)));
-        max_err = std::max(max_err, std::abs((test.z - point3d.z)));
-      }
-    }
-  }
-  std::cout << "max err = " << max_err << std::endl;
-  // for(float x = -20; x <=20; x += 2){
-  //   float y = 0;
-  //   float z = 10;
-  //   cv::Point3d point3d(x, y, z);
-  //   cv::Point2d point2d = pinhole_camera_model.unrectifyPoint(pinhole_camera_model.project3dToPixel(point3d));
-  //   cv::Point3d test = pinhole_camera_model.projectPixelTo3dRay(pinhole_camera_model.rectifyPoint(point2d));
-  //   //cv::Point3d test = pinhole_camera_model.projectPixelTo3dRay(point2d);
-  //   //cv::Point2d point2d = pinhole_camera_model.project3dToPixel(point3d);
-  //   //cv::Point3d test = pinhole_camera_model.projectPixelTo3dRay(point2d);
-  //   std::cout << "pt3d = " << x << ", " << y << ", " << z << ", test = " << test.x << ", " << test.y << ", " << test.z
-  //     << ", point2d = " << point2d.x << ", " << point2d.y << std::endl;
-  // }
-}
-
-
 TrafficLightSSDFineDetectorNodelet::TrafficLightSSDFineDetectorNodelet(
   const rclcpp::NodeOptions & options)
-: Node("traffic_light_ssd_fine_detector_node", options),
-  tf_buffer_(this->get_clock()),
-  tf_listener_(tf_buffer_)
+: Node("traffic_light_ssd_fine_detector_node", options)
 {
   using std::placeholders::_1;
   using std::placeholders::_2;
-  using std::placeholders::_3;
 
   std::vector<std::string> labels;
   const int max_batch_size = this->declare_parameter("max_batch_size", 8);
@@ -174,12 +110,12 @@ TrafficLightSSDFineDetectorNodelet::TrafficLightSSDFineDetectorNodelet(
   exe_time_pub_ =
     this->create_publisher<tier4_debug_msgs::msg::Float32Stamped>("~/debug/exe_time_ms", 1);
   if (is_approximate_sync_) {
-    approximate_sync_.reset(new ApproximateSync(ApproximateSyncPolicy(10), image_sub_, cam_info_sub_, roi_sub_));
+    approximate_sync_.reset(new ApproximateSync(ApproximateSyncPolicy(10), image_sub_, roi_sub_));
     approximate_sync_->registerCallback(
-      std::bind(&TrafficLightSSDFineDetectorNodelet::callback, this, _1, _2, _3));
+      std::bind(&TrafficLightSSDFineDetectorNodelet::callback, this, _1, _2));
   } else {
-    sync_.reset(new Sync(SyncPolicy(10), image_sub_, cam_info_sub_, roi_sub_));
-    sync_->registerCallback(std::bind(&TrafficLightSSDFineDetectorNodelet::callback, this, _1, _2, _3));
+    sync_.reset(new Sync(SyncPolicy(10), image_sub_, roi_sub_));
+    sync_->registerCallback(std::bind(&TrafficLightSSDFineDetectorNodelet::callback, this, _1, _2));
   }
 }
 
@@ -188,25 +124,21 @@ void TrafficLightSSDFineDetectorNodelet::connectCb()
   std::lock_guard<std::mutex> lock(connect_mutex_);
   if (output_roi_pub_->get_subscription_count() == 0) {
     image_sub_.unsubscribe();
-    cam_info_sub_.unsubscribe();
     roi_sub_.unsubscribe();
   } else if (!image_sub_.getSubscriber()) {
     image_sub_.subscribe(this, "~/input/image", "raw", rmw_qos_profile_sensor_data);
-    cam_info_sub_.subscribe();
-    cam_info_sub_.subscribe(this, "~/input/camera_info", rclcpp::SensorDataQoS().get_rmw_qos_profile());
     roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
   }
 }
 
 void TrafficLightSSDFineDetectorNodelet::callback(
   const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
-  const sensor_msgs::msg::CameraInfo::ConstSharedPtr cam_info_msg,
-  const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr in_roi_msg)
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg)
 {  
-  (void)cam_info_msg;
   if (in_image_msg->width < 2 || in_image_msg->height < 2) {
     return;
   }
+
   using std::chrono::high_resolution_clock;
   using std::chrono::milliseconds;
   const auto exe_start_time = high_resolution_clock::now();
@@ -329,7 +261,7 @@ bool TrafficLightSSDFineDetectorNodelet::cvMat2CnnInput(
 bool TrafficLightSSDFineDetectorNodelet::cnnOutput2BoxDetection(
   const float * scores, const float * boxes, const int tlr_id, const std::vector<cv::Mat> & in_imgs,
   const int num_rois, std::vector<Detection> & detections,
-  const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr rough_roi_msg)
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr rough_roi_msg)
 {
   if (tlr_id > class_num_ - 1) {
     return false;
@@ -400,7 +332,6 @@ bool TrafficLightSSDFineDetectorNodelet::cnnOutput2BoxDetection(
   }
   return true;
 }
-
 
 bool TrafficLightSSDFineDetectorNodelet::rosMsg2CvMat(
   const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image)

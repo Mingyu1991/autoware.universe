@@ -23,20 +23,15 @@
 #include <trt_ssd.hpp>
 
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_light_rough_roi_array.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <tier4_debug_msgs/msg/float32_stamped.hpp>
-#include <image_geometry/pinhole_camera_model.h>
+
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/time_synchronizer.h>
-#include <geometry_msgs/msg/pose_stamped.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include <chrono>
 #include <fstream>
@@ -59,8 +54,7 @@ public:
   void connectCb();
   void callback(
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg,
-    const sensor_msgs::msg::CameraInfo::ConstSharedPtr cam_info_msg,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr
+    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr
       traffic_light_roi_msg);
 
 private:
@@ -69,7 +63,7 @@ private:
   bool cnnOutput2BoxDetection(
     const float * scores, const float * boxes, const int tlr_id,
     const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<Detection> & detections,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr rough_roi_msg);
+    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr rough_roi_msg);
   bool rosMsg2CvMat(const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image);
   bool fitInFrame(cv::Point & lt, cv::Point & rb, const cv::Size & size);
   void cvRect2TlRoiMsg(
@@ -81,8 +75,7 @@ private:
   // variables
   std::shared_ptr<image_transport::ImageTransport> image_transport_;
   image_transport::SubscriberFilter image_sub_;
-  message_filters::Subscriber<sensor_msgs::msg::CameraInfo> cam_info_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray> roi_sub_;
+  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
   std::mutex connect_mutex_;
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr
     output_roi_pub_;
@@ -90,13 +83,13 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
 
   typedef message_filters::sync_policies::ExactTime<
-    sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo, autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>
+    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
     SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   std::shared_ptr<Sync> sync_;
 
   typedef message_filters::sync_policies::ApproximateTime<
-    sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo, autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>
+    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
     ApproximateSyncPolicy;
   typedef message_filters::Synchronizer<ApproximateSyncPolicy> ApproximateSync;
   std::shared_ptr<ApproximateSync> approximate_sync_;
@@ -115,9 +108,6 @@ private:
   std::vector<float> std_;
 
   std::unique_ptr<ssd::Net> net_ptr_;
-
-  tf2_ros::Buffer tf_buffer_;
-  tf2_ros::TransformListener tf_listener_;
 };  // TrafficLightSSDFineDetectorNodelet
 
 }  // namespace traffic_light

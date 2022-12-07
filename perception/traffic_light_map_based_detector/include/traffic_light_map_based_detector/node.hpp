@@ -39,7 +39,6 @@
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_light_rough_roi_array.hpp>
 #include <autoware_auto_planning_msgs/msg/had_map_route.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
@@ -103,7 +102,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
   rclcpp::Subscription<autoware_auto_planning_msgs::msg::HADMapRoute>::SharedPtr route_sub_;
 
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>::SharedPtr roi_pub_;
+  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
 
   tf2_ros::Buffer tf_buffer_;
@@ -123,26 +122,24 @@ private:
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg);
   void routeCallback(const autoware_auto_planning_msgs::msg::HADMapRoute::ConstSharedPtr input_msg);
   void getVisibleTrafficLights(
-    const TrafficLightSet & all_traffic_lights, const tf2::Transform & camera_pose,
+    const TrafficLightSet & all_traffic_lights, const geometry_msgs::msg::Pose & camera_pose,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     std::vector<lanelet::ConstLineString3d> & visible_traffic_lights);
   bool isInDistanceRange(
-    const tf2::Vector3 & tl_point, const tf2::Vector3 & camera_point,
+    const geometry_msgs::msg::Point & tl_point, const geometry_msgs::msg::Point & camera_point,
     const double max_distance_range) const;
   bool isInAngleRange(
     const double & tl_yaw, const double & camera_yaw, const double max_angle_range) const;
   bool isInImageFrame(
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const geometry_msgs::msg::Point & point) const;
-  bool getTrafficLightRoughRoi(
-    const tf2::Transform& tf_map2base,
-    const tf2::Transform& tf_base2cam,
+  bool getTrafficLightRoi(
+    const geometry_msgs::msg::Pose & camera_pose,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const lanelet::ConstLineString3d traffic_light, const Config & config,
-    autoware_auto_perception_msgs::msg::TrafficLightRoughRoi & tl_roi);
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi);
   void publishVisibleTrafficLights(
-    const tf2::Transform& tf_map2cam,
-    const std_msgs::msg::Header& header,
+    const geometry_msgs::msg::PoseStamped camera_pose_stamped,
     const std::vector<lanelet::ConstLineString3d> & visible_traffic_lights,
     const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub);
 };

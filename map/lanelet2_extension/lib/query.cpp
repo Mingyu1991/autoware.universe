@@ -128,7 +128,8 @@ std::vector<lanelet::AutowareTrafficLightConstPtr> query::autowareTrafficLights(
   const lanelet::ConstLanelets lanelets)
 {
   std::vector<lanelet::AutowareTrafficLightConstPtr> tl_reg_elems;
-
+  //convert O(n*n) to O(n)
+  std::unordered_set<lanelet::Id> id_set;
   for (auto i = lanelets.begin(); i != lanelets.end(); i++) {
     lanelet::ConstLanelet ll = *i;
     std::vector<lanelet::AutowareTrafficLightConstPtr> ll_tl_re =
@@ -138,17 +139,9 @@ std::vector<lanelet::AutowareTrafficLightConstPtr> query::autowareTrafficLights(
     for (auto tli = ll_tl_re.begin(); tli != ll_tl_re.end(); tli++) {
       lanelet::AutowareTrafficLightConstPtr tl_ptr = *tli;
       lanelet::Id id = tl_ptr->id();
-      bool unique_id = true;
-
-      for (auto ii = tl_reg_elems.begin(); ii != tl_reg_elems.end(); ii++) {
-        if (id == (*ii)->id()) {
-          unique_id = false;
-          break;
-        }
-      }
-
-      if (unique_id) {
+      if (id_set.count(id) == 0) {
         tl_reg_elems.push_back(tl_ptr);
+        id_set.insert(id);
       }
     }
   }
