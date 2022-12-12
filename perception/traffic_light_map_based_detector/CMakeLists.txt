@@ -5,20 +5,26 @@ find_package(autoware_cmake REQUIRED)
 autoware_package()
 
 find_package(Eigen3 REQUIRED)
+find_package( PCL 1.8 REQUIRED )
 
 include_directories(
   SYSTEM
     ${EIGEN3_INCLUDE_DIR}
+    ${PCL_INCLUDE_DIRS}
 )
 
 ament_auto_add_library(traffic_light_map_based_detector SHARED
   src/node.cpp
+  src/occlusion_predictor.cpp
 )
 
 rclcpp_components_register_node(traffic_light_map_based_detector
   PLUGIN "traffic_light::MapBasedDetector"
   EXECUTABLE traffic_light_map_based_detector_node
 )
+
+link_directories(${PCL_LIBRARY_DIRS} )
+target_link_libraries( traffic_light_map_based_detector ${PCL_LIBRARIES} )
 
 ament_auto_package(INSTALL_TO_SHARE
   launch
