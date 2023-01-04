@@ -82,10 +82,18 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
   const cv::Scalar & color)
 {
-  cv::rectangle(
-    image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
-    cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 2);
+  if(tl_roi.occluded == false){
+    cv::rectangle(
+      image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
+      cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
+      color, 2);
+  }
+  else{
+    cv::rectangle(
+      image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
+      cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
+      cv::Scalar{255, 255, 0}, 2);
+  }
   cv::putText(
     image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
@@ -197,16 +205,16 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
     cv_ptr = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
     for (auto tl_rough_roi : input_tl_rough_roi_msg->rois) {
       // visualize rough roi
-      //createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
+      createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
 
       ClassificationResult result;
       bool has_correspond_traffic_signal =
         getClassificationResult(tl_rough_roi.id, *input_traffic_signals_msg, result);
       autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
       bool has_correspond_roi = getRoiFromId(tl_rough_roi.id, input_tl_roi_msg, tl_roi);
-      if(has_correspond_roi){
-        createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
-      }
+      // if(has_correspond_roi){
+      //   createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
+      // }
       if (has_correspond_roi && has_correspond_traffic_signal) {
         // has fine detection and classification results
         createRect(cv_ptr->image, tl_roi, result);

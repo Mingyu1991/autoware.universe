@@ -42,9 +42,17 @@
 #include <tier4_autoware_utils/geometry/geometry.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <vector>
 #include <map>
 #include <set>
+#include <lanelet2_extension/regulatory_elements/autoware_traffic_light.hpp>
+#include <lanelet2_extension/utility/query.hpp>
+#include <lanelet2_core/LaneletMap.h>
+#include <lanelet2_routing/RoutingGraph.h>
+#include <lanelet2_traffic_rules/TrafficRulesFactory.h>
 
 
 namespace traffic_light
@@ -85,6 +93,25 @@ public:
 private:
   using id_type = autoware_auto_perception_msgs::msg::PredictedObject::_object_id_type;
   std::map<std::string, OcclusionObjectStatusSequence> tracked_objects;
+};
+
+class CloudOcclusionPredictor
+{
+public:
+  void pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
+
+  void update(const sensor_msgs::msg::CameraInfo& camera_info,
+              const tf2_ros::Buffer& tf_buffer);
+
+  bool predict(const lanelet::ConstLineString3d& traffic_light);
+
+  sensor_msgs::msg::PointCloud2 debug(const std::vector<lanelet::ConstLineString3d>& traffic_lights);
+private:
+  bool closeToLineSegment(const pcl::PointXYZ& pt, const tf2::Vector3& cam, const tf2::Vector3& tl, float dis_thres);
+
+  std::list<sensor_msgs::msg::PointCloud2> history_clouds_;
+  tf2::Transform tf_cloud2map_;
+  tf2::Transform tf_cloud2camera_;
 };
 
 }
