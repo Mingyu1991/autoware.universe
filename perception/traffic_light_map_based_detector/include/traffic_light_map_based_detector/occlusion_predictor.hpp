@@ -42,8 +42,10 @@
 #include <tier4_autoware_utils/geometry/geometry.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <tf2_eigen/tf2_eigen.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/common/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <vector>
 #include <map>
@@ -53,7 +55,6 @@
 #include <lanelet2_core/LaneletMap.h>
 #include <lanelet2_routing/RoutingGraph.h>
 #include <lanelet2_traffic_rules/TrafficRulesFactory.h>
-
 
 namespace traffic_light
 {
@@ -103,15 +104,29 @@ public:
   void update(const sensor_msgs::msg::CameraInfo& camera_info,
               const tf2_ros::Buffer& tf_buffer);
 
-  bool predict(const lanelet::ConstLineString3d& traffic_light);
+  uint32_t predict(const lanelet::ConstLineString3d& traffic_light);
+
+  float getCloudDelay();
 
   sensor_msgs::msg::PointCloud2 debug(const std::vector<lanelet::ConstLineString3d>& traffic_lights);
 private:
   bool closeToLineSegment(const pcl::PointXYZ& pt, const tf2::Vector3& cam, const tf2::Vector3& tl, float dis_thres);
 
+  void cloudPreprocess(const sensor_msgs::msg::CameraInfo& camera_info);
+
   std::list<sensor_msgs::msg::PointCloud2> history_clouds_;
-  tf2::Transform tf_cloud2map_;
-  tf2::Transform tf_cloud2camera_;
+  /**
+   * static points in map frame
+  */
+  pcl::PointCloud<pcl::PointXYZ> static_pts_;
+  /**
+   * dynamic points in map frame
+  */
+  pcl::PointCloud<pcl::PointXYZ> dynamic_pts_;
+  pcl::PointCloud<pcl::PointXYZ> debug_cloud_;
+  tf2::Transform tf_map2cloud_;
+  tf2::Transform tf_map2camera_;
+  double cloud_delay_;
 };
 
 }

@@ -98,13 +98,10 @@ private:
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
   rclcpp::Subscription<autoware_auto_planning_msgs::msg::HADMapRoute>::SharedPtr route_sub_;
-  rclcpp::Subscription<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr objects_sub_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
 
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr debug_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr debug_cam_info_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr debug_cloud_pub_;
 
   tf2_ros::Buffer tf_buffer_;
@@ -119,13 +116,11 @@ private:
   lanelet::traffic_rules::TrafficRulesPtr traffic_rules_ptr_;
   lanelet::routing::RoutingGraphPtr routing_graph_ptr_;
   Config config_;
-  OcclusionPredictor occlusion_predictor_;
   CloudOcclusionPredictor cloud_occlusion_predictor_;
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg);
   void routeCallback(const autoware_auto_planning_msgs::msg::HADMapRoute::ConstSharedPtr input_msg);
-  void objectCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr input_msg);
   void getVisibleTrafficLights(
     const TrafficLightSet & all_traffic_lights, const geometry_msgs::msg::Pose & camera_pose,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,

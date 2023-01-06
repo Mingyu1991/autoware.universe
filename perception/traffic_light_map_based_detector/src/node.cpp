@@ -128,9 +128,6 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   route_sub_ = create_subscription<autoware_auto_planning_msgs::msg::HADMapRoute>(
     "~/input/route", rclcpp::QoS{1}.transient_local(),
     std::bind(&MapBasedDetector::routeCallback, this, _1));
-  objects_sub_ = create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>(
-    "~/input/objects", rclcpp::SensorDataQoS(),
-    std::bind(&MapBasedDetector::objectCallback, this, _1));
   point_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
     "~/input/cloud", rclcpp::SensorDataQoS(),
     std::bind(&CloudOcclusionPredictor::pointCloudCallback, &this->cloud_occlusion_predictor_, _1));
@@ -138,8 +135,6 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
-  debug_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/debug/predicted_bbox", 1);
-  debug_cam_info_pub_ = this->create_publisher<sensor_msgs::msg::CameraInfo>("/sensing/camera/traffic_light/image_raw/camera_info", 1);
   debug_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("~/traffic_light/debug_cloud", 1);
 
   config_.max_detection_range = declare_parameter<double>("max_detection_range", 250.0);
@@ -157,11 +152,7 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
 
 void MapBasedDetector::cameraInfoCallback(
   const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg)
-{
-  auto debug_objcts = occlusion_predictor_.predict(input_msg->header.stamp);
-  debug_pub_->publish(debug_objcts);
-  debug_cam_info_pub_->publish(*input_msg);
-  
+{  
   const double stamp_offset = 0.12;
   if (all_traffic_lights_ptr_ == nullptr && route_traffic_lights_ptr_ == nullptr) {
     return;
@@ -219,22 +210,15 @@ void MapBasedDetector::cameraInfoCallback(
           camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi)) {
       continue;
     }
-    auto t1 = std::chrono::high_resolution_clock::now();
-    bool occluded = cloud_occlusion_predictor_.predict(traffic_light);
-    tl_roi.occluded = occluded;
-    auto t2 = std::chrono::high_resolution_clock::now();
-    std::cout << "t = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << std::endl;
+    uint32_t occlusion_num = cloud_occlusion_predictor_.predict(traffic_light);
+    tl_roi.occluded = occlusion_num >= 3;
+    tl_roi.occlusion_num = occlusion_num;
+    tl_roi.cloud_delay = cloud_occlusion_predictor_.getCloudDelay();
     output_msg.rois.push_back(tl_roi);
   }
   roi_pub_->publish(output_msg);
   debug_cloud_pub_->publish(cloud_occlusion_predictor_.debug(visible_traffic_lights));
   publishVisibleTrafficLights(camera_pose_stamped, visible_traffic_lights, viz_pub_);
-}
-
-void MapBasedDetector::objectCallback(
-  const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr input_msg)
-{
-  occlusion_predictor_.update(input_msg);
 }
 
 bool MapBasedDetector::getTrafficLightRoi(

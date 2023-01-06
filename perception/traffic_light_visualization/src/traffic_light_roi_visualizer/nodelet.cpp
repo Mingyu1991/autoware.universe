@@ -95,11 +95,17 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
       cv::Scalar{255, 255, 0}, 2);
   }
   cv::putText(
-    image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
+    image, std::to_string(tl_roi.cloud_delay), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
+  // cv::putText(
+  //   image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
+  //   cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   cv::putText(
-    image, std::to_string(tl_roi.dist), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + 30),
+    image, std::to_string(tl_roi.occlusion_num), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + 30),
     cv::FONT_HERSHEY_COMPLEX, 1.0, cv::Scalar{255, 0, 0}, 1, CV_AA);
+  // cv::putText(
+  //   image, std::to_string(tl_roi.dist), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + 30),
+  //   cv::FONT_HERSHEY_COMPLEX, 1.0, cv::Scalar{255, 0, 0}, 1, CV_AA);
   return true;
 }
 
@@ -235,7 +241,7 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
 
   //debug only
   if(input_tl_rough_roi_msg->rois.size()){
-    std::string dir = "/home/mingyuli/Desktop/tasks/2022/traffic-light/reports/20221206/data/";
+    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20220105/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
     cv::Mat image = cv_ptr->image;
