@@ -96,6 +96,13 @@ private:
   std::map<std::string, OcclusionObjectStatusSequence> tracked_objects;
 };
 
+struct Ray
+{
+  float azimuth;
+  float elevation;
+  float dist;
+};
+
 class CloudOcclusionPredictor
 {
 public:
@@ -126,6 +133,10 @@ private:
   pcl::PointCloud<pcl::PointXYZ> debug_cloud_;
   tf2::Transform tf_map2cloud_;
   tf2::Transform tf_map2camera_;
+  std::map<int, std::map<int, std::vector<Ray> > > lidar_rays_;
+  float max_azimuth_range_;
+  float max_elevation_range_;
+  int cloud_size_;
   double cloud_delay_;
 };
 

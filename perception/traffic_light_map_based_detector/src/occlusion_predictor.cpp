@@ -8,6 +8,16 @@ Eigen::Affine3d tf2Eigen(const tf2::Transform& tf)
   stamped_tf.transform = tf2::toMsg(tf);
   return tf2::transformToEigen(stamped_tf);
 }
+
+traffic_light::Ray point2ray(const pcl::PointXYZ& pt)
+{
+  traffic_light::Ray ray;
+  ray.dist = std::sqrt(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z);
+  ray.elevation = RAD2DEG(std::atan2(pt.y, std::hypot(pt.x, pt.z)));
+  ray.azimuth = RAD2DEG(std::atan2(pt.x, pt.z));
+  return ray;
+}
+
 }
 
 
@@ -198,6 +208,9 @@ void CloudOcclusionPredictor::update(const sensor_msgs::msg::CameraInfo& camera_
 void CloudOcclusionPredictor::cloudPreprocess(const sensor_msgs::msg::CameraInfo& camera_info)
 {
   (void)camera_info;
+  const float min_dist_to_cam = 1.0f;
+  lidar_rays_.clear();
+  cloud_size_= 0;
   if(history_clouds_.empty()){
     return;
   }
@@ -216,16 +229,35 @@ void CloudOcclusionPredictor::cloudPreprocess(const sensor_msgs::msg::CameraInfo
   pcl::transformPointCloud(cloud_map, cloud_camera, ::tf2Eigen(tf_map2camera_.inverse()));
   // the points in map frame that are within camera fov
   pcl::PointCloud<pcl::PointXYZ> cloud_in_camera_fov;
+  float min_azimuth = std::numeric_limits<float>::max();
+  float max_azimuth = std::numeric_limits<float>::lowest();
+  float min_elevation = std::numeric_limits<float>::max();
+  float max_elevation = std::numeric_limits<float>::lowest();
   for(size_t i = 0; i < cloud_camera.size(); i++){
     if(cloud_camera[i].z <= 0){
       continue;
     }
+    float dist_to_cam = std::sqrt(cloud_camera[i].x * cloud_camera[i].x + cloud_camera[i].y * cloud_camera[i].y + cloud_camera[i].z * cloud_camera[i].z);
+    if(dist_to_cam <= min_dist_to_cam){
+      continue;
+    }
     cv::Point2d pixel = pinhole_camera_model.project3dToPixel(cv::Point3d(cloud_camera[i].x, cloud_camera[i].y, cloud_camera[i].z));
-    if(pixel.x >= 0 && pixel.x < camera_info.width && pixel.y >= 0 && pixel.y < camera_info.height){
+    if(pixel.x >= 0 
+    && pixel.x < camera_info.width 
+    && pixel.y >= 0 
+    && pixel.y < camera_info.height){
       cloud_in_camera_fov.push_back(cloud_map[i]);
+      Ray ray = ::point2ray(cloud_camera[i]);
+      lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
+      min_azimuth = std::min(min_azimuth, ray.azimuth);
+      max_azimuth = std::max(max_azimuth, ray.azimuth);
+      min_elevation = std::min(min_elevation, ray.elevation);
+      max_elevation = std::max(max_elevation, ray.elevation);
+      cloud_size_++;
     }
   }
-  
+  max_azimuth_range_ = max_azimuth - min_azimuth;
+  max_elevation_range_ = max_elevation - min_elevation;
   static_pts_ = cloud_in_camera_fov;
   dynamic_pts_.clear();
 }
@@ -236,49 +268,74 @@ sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(const std::vector<l
   if(history_clouds_.empty()){
     return sensor_msgs::msg::PointCloud2();
   }
-  debug_cloud_ = static_pts_;
-  // debug_cloud_.push_back(pcl::PointXYZ(tf_map2camera_.getOrigin().x(), tf_map2camera_.getOrigin().y(), tf_map2camera_.getOrigin().z()));
-  // for(const auto & traffic_light : traffic_lights){
-  //   const double tl_height = traffic_light.attributeOr("height", 0.0);
-  //   const auto & tl_left_down_point = traffic_light.front();
-  //   const auto & tl_right_down_point = traffic_light.back();
-  //   tf2::Vector3 tl_center((tl_left_down_point.x() + tl_right_down_point.x()) / 2, 
-  //                          (tl_left_down_point.y() + tl_right_down_point.y()) / 2, 
-  //                          (tl_left_down_point.z() + tl_right_down_point.z() + tl_height) / 2);
-  //   debug_cloud_.push_back(pcl::PointXYZ(tl_center.x(), tl_center.y(), tl_center.z()));
-  // }
+  debug_cloud_.clear();
+  //debug_cloud_.push_back(pcl::PointXYZ(tf_map2camera_.getOrigin().x(), tf_map2camera_.getOrigin().y(), tf_map2camera_.getOrigin().z()));
+  debug_cloud_.push_back(pcl::PointXYZ(0, 0, 0));
+  for(const auto & traffic_light : traffic_lights){
+    double tl_height = traffic_light.attributeOr("height", 0.0);
+    tf2::Vector3 tl_bottom_left(traffic_light.front().x(), traffic_light.front().y(), traffic_light.front().z());
+    tf2::Vector3 tl_bottom_right(traffic_light.back().x(), traffic_light.back().y(), traffic_light.back().z());
+    tf2::Vector3 tl_top_left(traffic_light.front().x(), traffic_light.front().y(), traffic_light.front().z() + tl_height);
+    // transform the traffic light from map frame to camera frame
+    tl_top_left = tf_map2camera_.inverse() * tl_top_left;
+    tl_bottom_right = tf_map2camera_.inverse() * tl_bottom_right;
+    debug_cloud_.push_back(pcl::PointXYZ(tl_top_left.x(), tl_top_left.y(), tl_top_left.z()));
+    debug_cloud_.push_back(pcl::PointXYZ(tl_bottom_right.x(), tl_bottom_right.y(), tl_bottom_right.z()));
+  }
   sensor_msgs::msg::PointCloud2 msg;
   pcl::toROSMsg(debug_cloud_, msg);
   msg.header = history_clouds_.front().header;
-  msg.header.frame_id = "map";
+  msg.header.frame_id = "traffic_light_left_camera/camera_optical_link";
   return msg;
 }
 
 uint32_t CloudOcclusionPredictor::predict(const lanelet::ConstLineString3d& traffic_light)
 {
-  const float dis_thres = 0.3;
-  //const int num_thres = 3;
-  if(history_clouds_.empty()){
+  // const float dis_thres = 0.3;
+  // if(history_clouds_.empty()){
+  //   return false;
+  // }
+
+
+  // const double tl_height = traffic_light.attributeOr("height", 0.0);
+  // const auto & tl_left_down_point = traffic_light.front();
+  // const auto & tl_right_down_point = traffic_light.back();
+  // tf2::Vector3 tl_center((tl_left_down_point.x() + tl_right_down_point.x()) / 2, 
+  //                         (tl_left_down_point.y() + tl_right_down_point.y()) / 2, 
+  //                         (tl_left_down_point.z() + tl_right_down_point.z() + tl_height) / 2);
+  // tf2::Vector3 cam_position = tf_map2camera_.getOrigin();
+  // uint32_t num_occlusion = 0;
+  // for(const auto & pt : static_pts_){
+  //   auto tmp = num_occlusion;
+  //   num_occlusion += closeToLineSegment(pt, cam_position, tl_center, dis_thres);
+  //   if(num_occlusion > tmp){
+  //     debug_cloud_.push_back(pt);
+  //   }
+  // }
+  // return num_occlusion;
+  double tl_height = traffic_light.attributeOr("height", 0.0);
+  tf2::Vector3 tl_bottom_left(traffic_light.front().x(), traffic_light.front().y(), traffic_light.front().z());
+  tf2::Vector3 tl_bottom_right(traffic_light.back().x(), traffic_light.back().y(), traffic_light.back().z());
+  tf2::Vector3 tl_top_left(traffic_light.front().x(), traffic_light.front().y(), traffic_light.front().z() + tl_height);
+  // transform the traffic light from map frame to camera frame
+  tl_top_left = tf_map2camera_.inverse() * tl_top_left;
+  tl_bottom_right = tf_map2camera_.inverse() * tl_bottom_right;
+  Ray tl_top_left_ray = ::point2ray(pcl::PointXYZ(tl_top_left.x(), tl_top_left.y(), tl_top_left.z()));
+  Ray tl_bottom_right_ray = ::point2ray(pcl::PointXYZ(tl_bottom_right.x(), tl_bottom_right.y(), tl_bottom_right.z()));
+
+  float tl_azimuth_range = tl_bottom_right_ray.azimuth - tl_top_left_ray.azimuth;
+  float tl_elevation_range = tl_bottom_right_ray.elevation - tl_top_left_ray.elevation;
+  if(max_azimuth_range_ < 1e-2 || max_elevation_range_ < 1e-2){
+    std::cout << "Warning: azimuth range or elevation range close to zero!" << std::endl;
     return false;
   }
-
-
-  const double tl_height = traffic_light.attributeOr("height", 0.0);
-  const auto & tl_left_down_point = traffic_light.front();
-  const auto & tl_right_down_point = traffic_light.back();
-  tf2::Vector3 tl_center((tl_left_down_point.x() + tl_right_down_point.x()) / 2, 
-                          (tl_left_down_point.y() + tl_right_down_point.y()) / 2, 
-                          (tl_left_down_point.z() + tl_right_down_point.z() + tl_height) / 2);
-  tf2::Vector3 cam_position = tf_map2camera_.getOrigin();
-  uint32_t num_occlusion = 0;
-  for(const auto & pt : static_pts_){
-    auto tmp = num_occlusion;
-    num_occlusion += closeToLineSegment(pt, cam_position, tl_center, dis_thres);
-    if(num_occlusion > tmp){
-      debug_cloud_.push_back(pt);
-    }
-  }
-  return num_occlusion;
+  int tl_expect_pt_size = std::abs(cloud_size_ * tl_azimuth_range * tl_elevation_range / max_azimuth_range_ / max_elevation_range_);
+  std::cout << "tl_azimuth_range = " << tl_azimuth_range
+    << ", tl_elevation_range = " << tl_elevation_range
+    << ", max_azimuth_range_ = " << max_azimuth_range_
+    << ", max_elevation_range_ = " << max_elevation_range_
+    << ", tl_expect_pt_size = " << tl_expect_pt_size << std::endl;
+  return false;
 }
 
 bool CloudOcclusionPredictor::closeToLineSegment(const pcl::PointXYZ& pt, const tf2::Vector3& cam, const tf2::Vector3& tl, float dis_thres)
