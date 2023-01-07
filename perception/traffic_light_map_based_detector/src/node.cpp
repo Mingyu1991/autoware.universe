@@ -198,8 +198,10 @@ void MapBasedDetector::cameraInfoCallback(
   } else {
     return;
   }
-
+  auto t0 = std::chrono::high_resolution_clock::now();
   cloud_occlusion_predictor_.update(*input_msg, tf_buffer_);
+  auto t1 = std::chrono::high_resolution_clock::now();
+  std::cout << "update t = " << std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() << std::endl;
   /*
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.
@@ -210,7 +212,10 @@ void MapBasedDetector::cameraInfoCallback(
           camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi)) {
       continue;
     }
+    auto t2 = std::chrono::high_resolution_clock::now();
     uint32_t occlusion_num = cloud_occlusion_predictor_.predict(traffic_light);
+    auto t3 = std::chrono::high_resolution_clock::now();
+    std::cout << "predict t = " << std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() << std::endl;
     tl_roi.occluded = occlusion_num >= 3;
     tl_roi.occlusion_num = occlusion_num;
     tl_roi.cloud_delay = cloud_occlusion_predictor_.getCloudDelay();
