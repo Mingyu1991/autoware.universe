@@ -119,6 +119,9 @@ public:
 private:
   void cloudPreprocess(const sensor_msgs::msg::CameraInfo& camera_info);
 
+  pcl::PointCloud<pcl::PointXYZ> sampleTrafficLight(
+    const lanelet::ConstLineString3d& traffic_light, uint32_t horizontal_sample_num, uint32_t vertical_sample_num);
+
   std::list<sensor_msgs::msg::PointCloud2> history_clouds_;
   pcl::PointCloud<pcl::PointXYZ> debug_cloud_;
   geometry_msgs::msg::TransformStamped map2cloud_;
