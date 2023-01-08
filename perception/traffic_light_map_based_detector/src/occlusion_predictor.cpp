@@ -2,13 +2,6 @@
 
 namespace
 {
-Eigen::Affine3d tf2Eigen(const tf2::Transform& tf)
-{
-  geometry_msgs::msg::TransformStamped stamped_tf;
-  stamped_tf.transform = tf2::toMsg(tf);
-  return tf2::transformToEigen(stamped_tf);
-}
-
 traffic_light::Ray point2ray(const pcl::PointXYZ& pt)
 {
   traffic_light::Ray ray;
@@ -184,23 +177,18 @@ void CloudOcclusionPredictor::update(const sensor_msgs::msg::CameraInfo& camera_
    * get necessary tf information
   */
   try {
-    geometry_msgs::msg::Transform transform = tf_buffer.lookupTransform(
+    // transformation between lidar and map when the cloud was captured
+    map2cloud_ = tf_buffer.lookupTransform(
       "map", history_clouds_.front().header.frame_id, rclcpp::Time(history_clouds_.front().header.stamp),
-      rclcpp::Duration::from_seconds(0.2)).transform;
-    tf_map2cloud_ = tf2::Transform (
-      tf2::Quaternion(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w),
-      tf2::Vector3(transform.translation.x, transform.translation.y, transform.translation.z));
-
-    transform = tf_buffer.lookupTransform(
-      "map", camera_info.header.frame_id, rclcpp::Time(camera_info.header.stamp),
-      rclcpp::Duration::from_seconds(0.2)).transform;
-    tf_map2camera_ = tf2::Transform (
-      tf2::Quaternion(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w),
-      tf2::Vector3(transform.translation.x, transform.translation.y, transform.translation.z));
+      rclcpp::Duration::from_seconds(0.2));
+    // transformation between map and camera when the image was captured
+    camera2map_ = tf_buffer.lookupTransform(
+      camera_info.header.frame_id, "map", rclcpp::Time(camera_info.header.stamp),
+      rclcpp::Duration::from_seconds(0.2));
   } catch (tf2::TransformException & ex) {
     std::cout << "Error: cannot get transform from map frame to " << history_clouds_.front().header.frame_id << std::endl;
     return;
-  }  
+  }
 
   cloudPreprocess(camera_info);
 }
@@ -220,17 +208,11 @@ void CloudOcclusionPredictor::cloudPreprocess(const sensor_msgs::msg::CameraInfo
   pinhole_camera_model.fromCameraInfo(camera_info);
   // origin cloud in lidar frame
   pcl::PointCloud<pcl::PointXYZ> cloud_lidar;
-  // cloud in map frame
-  pcl::PointCloud<pcl::PointXYZ> cloud_map;
   // cloud in camera frame
   pcl::PointCloud<pcl::PointXYZ> cloud_camera;
   pcl::fromROSMsg(history_clouds_.front(), cloud_lidar);
   // todo: split dynamic pts from static pts
-  pcl::PointCloud<pcl::PointXYZ> static_pts_map;
-  pcl::transformPointCloud(cloud_lidar, cloud_map, ::tf2Eigen(tf_map2cloud_));
-  pcl::transformPointCloud(cloud_map, cloud_camera, ::tf2Eigen(tf_map2camera_.inverse()));
-  // the points in map frame that are within camera fov
-  pcl::PointCloud<pcl::PointXYZ> cloud_in_camera_fov;
+  pcl::transformPointCloud(cloud_lidar, cloud_camera, (tf2::transformToEigen(camera2map_) * tf2::transformToEigen(map2cloud_)).matrix());
   float min_azimuth = std::numeric_limits<float>::max();
   float max_azimuth = std::numeric_limits<float>::lowest();
   float min_elevation = std::numeric_limits<float>::max();
@@ -248,7 +230,6 @@ void CloudOcclusionPredictor::cloudPreprocess(const sensor_msgs::msg::CameraInfo
     && pixel.x < camera_info.width 
     && pixel.y >= 0 
     && pixel.y < camera_info.height){
-      cloud_in_camera_fov.push_back(cloud_map[i]);
       Ray ray = ::point2ray(cloud_camera[i]);
       lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
       min_azimuth = std::min(min_azimuth, ray.azimuth);
@@ -260,8 +241,6 @@ void CloudOcclusionPredictor::cloudPreprocess(const sensor_msgs::msg::CameraInfo
   }
   max_azimuth_range_ = max_azimuth - min_azimuth;
   max_elevation_range_ = max_elevation - min_elevation;
-  static_pts_ = cloud_in_camera_fov;
-  dynamic_pts_.clear();
 }
 
 sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(const std::vector<lanelet::ConstLineString3d>& traffic_lights)
@@ -271,16 +250,17 @@ sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(const std::vector<l
     return sensor_msgs::msg::PointCloud2();
   }
   debug_cloud_.clear();
-  //debug_cloud_.push_back(pcl::PointXYZ(tf_map2camera_.getOrigin().x(), tf_map2camera_.getOrigin().y(), tf_map2camera_.getOrigin().z()));
   debug_cloud_.push_back(pcl::PointXYZ(0, 0, 0));
+  tf2::Transform tf_camera2map;
+  tf2::fromMsg(camera2map_.transform, tf_camera2map);
   for(const auto & traffic_light : traffic_lights){
     double tl_height = traffic_light.attributeOr("height", 0.0);
     tf2::Vector3 tl_bottom_left(traffic_light.front().x(), traffic_light.front().y(), traffic_light.front().z());
     tf2::Vector3 tl_bottom_right(traffic_light.back().x(), traffic_light.back().y(), traffic_light.back().z());
     tf2::Vector3 tl_top_left(traffic_light.front().x(), traffic_light.front().y(), traffic_light.front().z() + tl_height);
     // transform the traffic light from map frame to camera frame
-    tl_top_left = tf_map2camera_.inverse() * tl_top_left;
-    tl_bottom_right = tf_map2camera_.inverse() * tl_bottom_right;
+    tl_top_left = tf_camera2map * tl_top_left;
+    tl_bottom_right = tf_camera2map * tl_bottom_right;
     debug_cloud_.push_back(pcl::PointXYZ(tl_top_left.x(), tl_top_left.y(), tl_top_left.z()));
     debug_cloud_.push_back(pcl::PointXYZ(tl_bottom_right.x(), tl_bottom_right.y(), tl_bottom_right.z()));
   }
@@ -293,30 +273,6 @@ sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(const std::vector<l
 
 uint32_t CloudOcclusionPredictor::predict(const lanelet::ConstLineString3d& traffic_light)
 {
-  // const float dis_thres = 0.3;
-  // if(history_clouds_.empty()){
-  //   return false;
-  // }
-
-
-  // const double tl_height = traffic_light.attributeOr("height", 0.0);
-  // const auto & tl_left_down_point = traffic_light.front();
-  // const auto & tl_right_down_point = traffic_light.back();
-  // tf2::Vector3 tl_center((tl_left_down_point.x() + tl_right_down_point.x()) / 2, 
-  //                         (tl_left_down_point.y() + tl_right_down_point.y()) / 2, 
-  //                         (tl_left_down_point.z() + tl_right_down_point.z() + tl_height) / 2);
-  // tf2::Vector3 cam_position = tf_map2camera_.getOrigin();
-  // uint32_t num_occlusion = 0;
-  // for(const auto & pt : static_pts_){
-  //   auto tmp = num_occlusion;
-  //   num_occlusion += closeToLineSegment(pt, cam_position, tl_center, dis_thres);
-  //   if(num_occlusion > tmp){
-  //     debug_cloud_.push_back(pt);
-  //   }
-  // }
-  // return num_occlusion;
-
-
   const float azimuth_window_size = 1.5f;
   const float elevation_window_size = 1.5f;
   const float min_dist_from_occlusion_to_tl = 5.0f;
@@ -330,20 +286,27 @@ uint32_t CloudOcclusionPredictor::predict(const lanelet::ConstLineString3d& traf
     (tl_top_left.y() + tl_bottom_right.y()) * 0.5,
     (tl_top_left.z() + tl_bottom_right.z()) * 0.5);
   // transform the traffic light from map frame to camera frame
-  tl_top_left = tf_map2camera_.inverse() * tl_top_left;
-  tl_bottom_right = tf_map2camera_.inverse() * tl_bottom_right;
-  tl_center = tf_map2camera_.inverse() * tl_center;
+  tf2::Transform tf_camera2map;
+  tf2::fromMsg(camera2map_.transform, tf_camera2map);
+  tl_top_left = tf_camera2map * tl_top_left;
+  tl_bottom_right = tf_camera2map * tl_bottom_right;
+  tl_center = tf_camera2map * tl_center;
   // calculate the azimuth and elevation range of the traffic light in camera frame
   Ray tl_top_left_ray = ::point2ray(pcl::PointXYZ(tl_top_left.x(), tl_top_left.y(), tl_top_left.z()));
   Ray tl_bottom_right_ray = ::point2ray(pcl::PointXYZ(tl_bottom_right.x(), tl_bottom_right.y(), tl_bottom_right.z()));
 
-  float tl_azimuth_range = tl_bottom_right_ray.azimuth - tl_top_left_ray.azimuth;
-  float tl_elevation_range = tl_bottom_right_ray.elevation - tl_top_left_ray.elevation;
+  float min_azimuth = std::min(tl_top_left_ray.azimuth, tl_bottom_right_ray.azimuth);
+  float max_azimuth = std::max(tl_top_left_ray.azimuth, tl_bottom_right_ray.azimuth);
+  float min_elevation = std::min(tl_top_left_ray.elevation, tl_bottom_right_ray.elevation);
+  float max_elevation = std::max(tl_top_left_ray.elevation, tl_bottom_right_ray.elevation);
+
+  float tl_azimuth_range = max_azimuth - min_azimuth;
+  float tl_elevation_range = max_elevation - min_elevation;
 
   // the average azimuth angle and elevation angle of the traffic light
-  float azimuth_aver = (tl_bottom_right_ray.azimuth + tl_top_left_ray.azimuth) * 0.5;
-  float elevation_aver = (tl_bottom_right_ray.elevation + tl_top_left_ray.elevation) * 0.5;
-  
+  float azimuth_aver = (max_azimuth + min_azimuth) * 0.5;
+  float elevation_aver = (max_elevation + min_elevation) * 0.5;
+  // count the number of points within a window centered at the traffic light
   int point_num_in_window = 0;
   for(float azimuth = azimuth_aver - azimuth_window_size; azimuth <= azimuth_aver + azimuth_window_size; azimuth += 1.0f){
     for(float elevation = elevation_aver - elevation_window_size; elevation <= elevation_aver + elevation_window_size; elevation += 1.0f){
@@ -365,7 +328,7 @@ uint32_t CloudOcclusionPredictor::predict(const lanelet::ConstLineString3d& traf
   else{
     tl_expect_pt_size = std::abs(cloud_size_ * tl_azimuth_range * tl_elevation_range / max_azimuth_range_ / max_elevation_range_);
   }
-  (void)tl_expect_pt_size;
+  tl_expect_pt_size = std::max(tl_expect_pt_size, 1);
   uint32_t occlusion_num = 0;
   /**
    * count the number of point within the traffic light area and closer than the traffic light
@@ -386,48 +349,7 @@ uint32_t CloudOcclusionPredictor::predict(const lanelet::ConstLineString3d& traf
       }
     }
   }
-  // std::cout << "tl_azimuth_range = " << tl_azimuth_range
-  //   << ", tl_elevation_range = " << tl_elevation_range
-  //   << ", max_azimuth_range_ = " << max_azimuth_range_
-  //   << ", max_elevation_range_ = " << max_elevation_range_
-  //   << ", tl_expect_pt_size = " << tl_expect_pt_size << std::endl;
-  return occlusion_num;
-}
-
-bool CloudOcclusionPredictor::closeToLineSegment(const pcl::PointXYZ& pt, const tf2::Vector3& cam, const tf2::Vector3& tl, float dis_thres)
-{
-  tf2::Vector3 p1(pt.x, pt.y, pt.z);
-  if(p1.distance(cam) <= 1 || p1.distance(tl) <= 2){
-    return false;
-  }
-  float x1 = cam.getX();
-  float y1 = cam.getY();
-  float z1 = cam.getZ();
-  float x2 = tl.getX();
-  float y2 = tl.getY();
-  float z2 = tl.getZ();
-
-  float dx = x2 - x1;
-  float dy = y2 - y1;
-  float dz = z2 - z1;
-  float ddx = pt.x - x1;
-  float ddy = pt.y - y1;
-  float ddz = pt.z - z1;
-
-  float dot = ddx * dx + ddy * dy + ddz * dz;
-  float len = dx * dx + dy * dy + dz * dz;
-  if(len == 0){
-    return false;
-  }
-
-  float param = dot / len;
-  if(param > 0 && param < 1){
-    float xx = x1 + param * dx;
-    float yy = y1 + param * dy;
-    float zz = z1 + param * dz;
-    return tf2::Vector3(xx, yy, zz).distance(p1) <= dis_thres;
-  }
-  return false;
+  return 100 * occlusion_num / tl_expect_pt_size;
 }
 
 float CloudOcclusionPredictor::getCloudDelay()

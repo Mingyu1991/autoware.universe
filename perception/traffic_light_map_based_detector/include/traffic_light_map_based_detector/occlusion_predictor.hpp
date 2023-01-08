@@ -117,22 +117,12 @@ public:
 
   sensor_msgs::msg::PointCloud2 debug(const std::vector<lanelet::ConstLineString3d>& traffic_lights);
 private:
-  bool closeToLineSegment(const pcl::PointXYZ& pt, const tf2::Vector3& cam, const tf2::Vector3& tl, float dis_thres);
-
   void cloudPreprocess(const sensor_msgs::msg::CameraInfo& camera_info);
 
   std::list<sensor_msgs::msg::PointCloud2> history_clouds_;
-  /**
-   * static points in map frame
-  */
-  pcl::PointCloud<pcl::PointXYZ> static_pts_;
-  /**
-   * dynamic points in map frame
-  */
-  pcl::PointCloud<pcl::PointXYZ> dynamic_pts_;
   pcl::PointCloud<pcl::PointXYZ> debug_cloud_;
-  tf2::Transform tf_map2cloud_;
-  tf2::Transform tf_map2camera_;
+  geometry_msgs::msg::TransformStamped map2cloud_;
+  geometry_msgs::msg::TransformStamped camera2map_;
   std::map<int, std::map<int, std::vector<Ray> > > lidar_rays_;
   float max_azimuth_range_;
   float max_elevation_range_;

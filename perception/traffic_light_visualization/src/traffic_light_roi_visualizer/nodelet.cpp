@@ -241,7 +241,7 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
 
   //debug only
   if(input_tl_rough_roi_msg->rois.size()){
-    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20220105/data/";
+    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20220107/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
     cv::Mat image = cv_ptr->image;

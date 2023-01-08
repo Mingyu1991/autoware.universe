@@ -213,11 +213,11 @@ void MapBasedDetector::cameraInfoCallback(
       continue;
     }
     auto t2 = std::chrono::high_resolution_clock::now();
-    uint32_t occlusion_num = cloud_occlusion_predictor_.predict(traffic_light);
+    uint32_t occlusion_rate = cloud_occlusion_predictor_.predict(traffic_light);
     auto t3 = std::chrono::high_resolution_clock::now();
     std::cout << "predict t = " << std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() << std::endl;
-    tl_roi.occluded = occlusion_num >= 3;
-    tl_roi.occlusion_num = occlusion_num;
+    tl_roi.occluded = occlusion_rate >= 40;
+    tl_roi.occlusion_num = occlusion_rate;
     tl_roi.cloud_delay = cloud_occlusion_predictor_.getCloudDelay();
     output_msg.rois.push_back(tl_roi);
   }
