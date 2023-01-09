@@ -131,11 +131,23 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   point_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
     "~/input/cloud", rclcpp::SensorDataQoS(),
     std::bind(&CloudOcclusionPredictor::pointCloudCallback, &this->cloud_occlusion_predictor_, _1));
+  objects_sub_ = create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>(
+    "~/input/objects", rclcpp::SensorDataQoS(),
+    std::bind(&CloudOcclusionPredictor::perceptionObjectsCallback, &this->cloud_occlusion_predictor_, _1));
   // publishers
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
   debug_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("~/traffic_light/debug_cloud", 1);
+
+  cloud_obj_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>(
+    "/traffic_light/debug_cloud_object", 1);
+  camera_obj_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>(
+    "/traffic_light/debug_camera_object", 1);
+  cloud_cloud_stamp_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+    "/traffic_light/debug_cloud_cloud_stamp", 1);
+  cloud_camera_stamp_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+    "/traffic_light/debug_cloud_camera_stamp", 1);
 
   config_.max_detection_range = declare_parameter<double>("max_detection_range", 250.0);
   config_.max_vibration_pitch = declare_parameter<double>("max_vibration_pitch", 0.01745329251);
@@ -198,10 +210,7 @@ void MapBasedDetector::cameraInfoCallback(
   } else {
     return;
   }
-  auto t0 = std::chrono::high_resolution_clock::now();
   cloud_occlusion_predictor_.update(*input_msg, tf_buffer_);
-  auto t1 = std::chrono::high_resolution_clock::now();
-  std::cout << "update t = " << std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() << std::endl;
   /*
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.
@@ -212,10 +221,7 @@ void MapBasedDetector::cameraInfoCallback(
           camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi)) {
       continue;
     }
-    auto t2 = std::chrono::high_resolution_clock::now();
     uint32_t occlusion_rate = cloud_occlusion_predictor_.predict(traffic_light);
-    auto t3 = std::chrono::high_resolution_clock::now();
-    std::cout << "predict t = " << std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() << std::endl;
     tl_roi.occluded = occlusion_rate >= 40;
     tl_roi.occlusion_num = occlusion_rate;
     tl_roi.cloud_delay = cloud_occlusion_predictor_.getCloudDelay();
@@ -223,6 +229,10 @@ void MapBasedDetector::cameraInfoCallback(
   }
   roi_pub_->publish(output_msg);
   debug_cloud_pub_->publish(cloud_occlusion_predictor_.debug(visible_traffic_lights));
+  cloud_obj_pub_->publish(cloud_occlusion_predictor_.cloud_objects_);
+  camera_obj_pub_->publish(cloud_occlusion_predictor_.camera_objects_);
+  cloud_cloud_stamp_pub_->publish(cloud_occlusion_predictor_.cloud_cloud_stamp_);
+  cloud_camera_stamp_pub_->publish(cloud_occlusion_predictor_.cloud_camera_stamp_);
   publishVisibleTrafficLights(camera_pose_stamped, visible_traffic_lights, viz_pub_);
 }
 

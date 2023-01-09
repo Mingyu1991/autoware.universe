@@ -8,8 +8,10 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
   include/geometry/spatial_hash.hpp
   include/geometry/intersection.hpp
   include/geometry/spatial_hash_config.hpp
+  include/geometry/bounding_box_3d.hpp
   src/spatial_hash.cpp
   src/bounding_box.cpp
+  src/bounding_box_3d.cpp
 )
 
 if(BUILD_TESTING)

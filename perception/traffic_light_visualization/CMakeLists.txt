@@ -5,13 +5,22 @@ find_package(autoware_cmake REQUIRED)
 autoware_package()
 
 find_package(OpenCV REQUIRED)
+find_package( PCL 1.8 REQUIRED )
 
 ament_auto_add_library(traffic_light_roi_visualizer_nodelet SHARED
   src/traffic_light_roi_visualizer/nodelet.cpp
 )
 
+include_directories(
+  SYSTEM
+    ${PCL_INCLUDE_DIRS}
+)
+
+link_directories(${PCL_LIBRARY_DIRS} )
+
 target_link_libraries(traffic_light_roi_visualizer_nodelet
   ${OpenCV_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 rclcpp_components_register_node(traffic_light_roi_visualizer_nodelet

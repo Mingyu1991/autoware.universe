@@ -19,7 +19,11 @@
 #include <memory>
 #include <string>
 #include <utility>
-
+#include <cv_bridge/cv_bridge.h>
+#include <image_geometry/pinhole_camera_model.h>
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
 namespace traffic_light
 {
 TrafficLightRoiVisualizerNodelet::TrafficLightRoiVisualizerNodelet(
@@ -30,13 +34,15 @@ TrafficLightRoiVisualizerNodelet::TrafficLightRoiVisualizerNodelet(
   using std::placeholders::_2;
   using std::placeholders::_3;
   using std::placeholders::_4;
+  using std::placeholders::_5;
+  using std::placeholders::_6;
   enable_fine_detection_ = this->declare_parameter("enable_fine_detection", false);
 
   if (enable_fine_detection_) {
     sync_with_rough_roi_.reset(new SyncWithRoughRoi(
-      SyncPolicyWithRoughRoi(10), image_sub_, roi_sub_, rough_roi_sub_, traffic_signals_sub_));
+      SyncPolicyWithRoughRoi(10), image_sub_, roi_sub_, rough_roi_sub_, traffic_signals_sub_, camera_info_sub_, point_cloud_sub_));
     sync_with_rough_roi_->registerCallback(
-      std::bind(&TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback, this, _1, _2, _3, _4));
+      std::bind(&TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback, this, _1, _2, _3, _4, _5, _6));
   } else {
     sync_.reset(new Sync(SyncPolicy(10), image_sub_, roi_sub_, traffic_signals_sub_));
     sync_->registerCallback(
@@ -57,6 +63,8 @@ void TrafficLightRoiVisualizerNodelet::connectCb()
   roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
   traffic_signals_sub_.subscribe(
     this, "~/input/traffic_signals", rclcpp::QoS{1}.get_rmw_qos_profile());
+  camera_info_sub_.subscribe(this, "/sensing/camera/traffic_light/camera_info", rmw_qos_profile_sensor_data);
+  point_cloud_sub_.subscribe(this, "/traffic_light/debug_cloud_camera_stamp", rclcpp::QoS{1}.get_rmw_qos_profile());
   if (enable_fine_detection_) {
     rough_roi_sub_.subscribe(this, "~/input/rough/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
   }
@@ -204,7 +212,9 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
     input_tl_rough_roi_msg,
   const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
-    input_traffic_signals_msg)
+    input_traffic_signals_msg,
+  const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg,
+  const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg)
 {
   cv_bridge::CvImagePtr cv_ptr;
   try {
@@ -241,10 +251,29 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
 
   //debug only
   if(input_tl_rough_roi_msg->rois.size()){
+    cv_bridge::CvImagePtr bridge = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
+    image_geometry::PinholeCameraModel pinhole_camera_model;
+    pinhole_camera_model.fromCameraInfo(*camera_info_msg);
+    int count = 0;
+    
+    pcl::PointCloud<pcl::PointXYZ> cloud_camera_stamp;
+    pcl::fromROSMsg(*cloud_msg, cloud_camera_stamp);
+
+    for(const auto & pt : cloud_camera_stamp){
+      cv::Point2d pixel = pinhole_camera_model.project3dToPixel(cv::Point3d(pt.x, pt.y, pt.z));
+      if(pixel.x >= 0 
+      && pixel.x < camera_info_msg->width 
+      && pixel.y >= 0 
+      && pixel.y < camera_info_msg->height){
+        cv::circle(bridge->image, cv::Point(pixel.x, pixel.y), 3, cv::Scalar(255, 0, 0), 5);
+        count++;
+      }
+    }
+    std::cout << count << " pts drawed" << std::endl;
     std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20220107/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
-    cv::Mat image = cv_ptr->image;
+    cv::Mat image = bridge->image;
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
     cv::imwrite(image_path, image);
 

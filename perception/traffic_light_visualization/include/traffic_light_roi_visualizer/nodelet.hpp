@@ -22,7 +22,8 @@
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
 #include <sensor_msgs/msg/image.hpp>
-
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
@@ -62,7 +63,9 @@ public:
     const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
       input_tl_rough_roi_msg,
     const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
-      input_traffic_signals_msg);
+      input_traffic_signals_msg,
+    const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg,
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg);
 
 private:
   std::map<int, std::string> state2label_{
@@ -107,6 +110,10 @@ private:
     rough_roi_sub_;
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficSignalArray>
     traffic_signals_sub_;
+  message_filters::Subscriber<sensor_msgs::msg::CameraInfo>
+    camera_info_sub_;
+  message_filters::Subscriber<sensor_msgs::msg::PointCloud2>
+    point_cloud_sub_;
   image_transport::Publisher image_pub_;
   typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
@@ -118,7 +125,8 @@ private:
   typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
     autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
-    autoware_auto_perception_msgs::msg::TrafficSignalArray>
+    autoware_auto_perception_msgs::msg::TrafficSignalArray,
+    sensor_msgs::msg::CameraInfo, sensor_msgs::msg::PointCloud2>
     SyncPolicyWithRoughRoi;
   typedef message_filters::Synchronizer<SyncPolicyWithRoughRoi> SyncWithRoughRoi;
   std::shared_ptr<SyncWithRoughRoi> sync_with_rough_roi_;
