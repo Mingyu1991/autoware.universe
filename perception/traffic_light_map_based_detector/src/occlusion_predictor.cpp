@@ -94,6 +94,9 @@ bool SingleObjectPredictor::predict(double stamp, ObjectStatus& object) const
 
 void ObjectsPredictor::update(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)
 {
+  const float length_offset = 1.0;
+  const float width_offset = 0.5;
+  const float height_offset = 1.0;
   assert(msg->header.frame_id == "map");
   double stamp = rclcpp::Time(msg->header.stamp).seconds();
   std::set<std::string> updated_ids;
@@ -102,7 +105,11 @@ void ObjectsPredictor::update(const autoware_auto_perception_msgs::msg::Predicte
     if(tracked_objects_.count(id_str) == 0){
       tracked_objects_.emplace(id_str, SingleObjectPredictor());
     }
-    tracked_objects_.find(id_str)->second.update(input_obj, stamp);
+    autoware_auto_perception_msgs::msg::PredictedObject object = input_obj;
+    object.shape.dimensions.x += length_offset;
+    object.shape.dimensions.y += width_offset;
+    object.shape.dimensions.z += height_offset;
+    tracked_objects_.find(id_str)->second.update(object, stamp);
     updated_ids.insert(id_str);
   }
   // remove un-detected objects
@@ -223,7 +230,6 @@ void CloudOcclusionPredictor::cloudPreprocess(const sensor_msgs::msg::CameraInfo
   pcl::PointCloud<pcl::PointXYZ> cloud_in_camera_fov;
   pcl::fromROSMsg(history_clouds_.front(), cloud_lidar);
   pcl::transformPointCloud(cloud_lidar, cloud_camera, (tf2::transformToEigen(camera2map_) * tf2::transformToEigen(map2cloud_)).matrix());
-  pcl::transformPointCloud(cloud_lidar, debug_cloud_, tf2::transformToEigen(map2cloud_).matrix());
   for(size_t i = 0; i < cloud_camera.size(); i++){
     if(cloud_camera[i].z <= 0){
       continue;
@@ -244,7 +250,7 @@ void CloudOcclusionPredictor::cloudPreprocess(const sensor_msgs::msg::CameraInfo
   for(const pcl::PointXYZ& pt : cloud_in_camera_fov){
     Ray ray = ::point2ray(pt);
     lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
-  } 
+  }
 }
 
 void CloudOcclusionPredictor::compensateObjectMovements(
@@ -252,13 +258,13 @@ void CloudOcclusionPredictor::compensateObjectMovements(
   const sensor_msgs::msg::CameraInfo& camera_info)
 {
   debug_cloud_.clear();
-  pcl::PointCloud<pcl::PointXYZ> cloud_cloud_stamp, cloud_camera_stamp;
+  pcl::PointCloud<pcl::PointXYZ> cloud_camera_stamp;
   // transform the cloud from camera frame to map frame
   pcl::transformPointCloud(cloud, cloud, tf2::transformToEigen(camera2map_).inverse().matrix());
   auto cloud_stamp = history_clouds_.front().header.stamp;
   auto camera_stamp = camera_info.header.stamp;
   const auto& objects_cloud_stamp = objects_predictor_.predict(cloud_stamp);
-  const auto& objects_camera_stamp = objects_predictor_.predict(rclcpp::Time(camera_stamp) - rclcpp::Duration::from_seconds(0.12));
+  const auto& objects_camera_stamp = objects_predictor_.predict(rclcpp::Time(camera_stamp) + rclcpp::Duration::from_seconds(0.03));
   for(const auto& object_cloud_stamp : objects_cloud_stamp.objects){
     const auto & old_position = object_cloud_stamp.kinematics.initial_pose_with_covariance.pose.position;
     for(const auto & object_camera_stamp : objects_camera_stamp.objects){
@@ -270,7 +276,7 @@ void CloudOcclusionPredictor::compensateObjectMovements(
         autoware::common::geometry::BoundingBox3D bbox(object_cloud_stamp);
         for(auto & pt : cloud){
           if(bbox.contains(tf2::Vector3(pt.x, pt.y, pt.z))){
-            cloud_cloud_stamp.push_back(pt);
+            cloud_camera_stamp.push_back(pt);
             pt.x += dx;
             pt.y += dy;
             pt.z += dz;
@@ -281,13 +287,8 @@ void CloudOcclusionPredictor::compensateObjectMovements(
       }
     }
   }
-  cloud_objects_ = objects_cloud_stamp;
-  camera_objects_ = objects_camera_stamp;
   pcl::transformPointCloud(cloud_camera_stamp, cloud_camera_stamp, tf2::transformToEigen(camera2map_).matrix());
-  pcl::toROSMsg(cloud_cloud_stamp, cloud_cloud_stamp_);
   pcl::toROSMsg(cloud_camera_stamp, cloud_camera_stamp_);
-  cloud_cloud_stamp_.header = history_clouds_.front().header;
-  cloud_cloud_stamp_.header.frame_id = "map";
   cloud_camera_stamp_.header = camera_info.header;
   pcl::transformPointCloud(cloud, cloud, tf2::transformToEigen(camera2map_).matrix());
 }

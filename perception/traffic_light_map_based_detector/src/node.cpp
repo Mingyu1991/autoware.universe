@@ -229,9 +229,7 @@ void MapBasedDetector::cameraInfoCallback(
   }
   roi_pub_->publish(output_msg);
   debug_cloud_pub_->publish(cloud_occlusion_predictor_.debug(visible_traffic_lights));
-  cloud_obj_pub_->publish(cloud_occlusion_predictor_.cloud_objects_);
-  camera_obj_pub_->publish(cloud_occlusion_predictor_.camera_objects_);
-  cloud_cloud_stamp_pub_->publish(cloud_occlusion_predictor_.cloud_cloud_stamp_);
+  //cloud_cloud_stamp_pub_->publish(cloud_occlusion_predictor_.cloud_cloud_stamp_);
   cloud_camera_stamp_pub_->publish(cloud_occlusion_predictor_.cloud_camera_stamp_);
   publishVisibleTrafficLights(camera_pose_stamped, visible_traffic_lights, viz_pub_);
 }

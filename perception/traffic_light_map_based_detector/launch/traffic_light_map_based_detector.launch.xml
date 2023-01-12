@@ -2,7 +2,7 @@
 <launch>
   <arg name="input/vector_map" default="/map/vector_map"/>
   <arg name="input/camera_info" default="/camera/camera_info"/>
-  <arg name="input/cloud" default="/sensing/lidar/concatenated/pointcloud"/>
+  <arg name="input/cloud" default="/sensing/lidar/top/pointcloud_raw"/>
   <arg name="input/route" default="/planning/mission_planning/route"/>
   <arg name="input/objects" default="/perception/object_recognition/objects"/>
   <arg name="output/rois" default="~/output/rois"/>

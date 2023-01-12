@@ -153,10 +153,7 @@ public:
   float getCloudDelay();
 
   sensor_msgs::msg::PointCloud2 debug(const std::vector<lanelet::ConstLineString3d>& traffic_lights);
-  sensor_msgs::msg::PointCloud2 cloud_cloud_stamp_;
   sensor_msgs::msg::PointCloud2 cloud_camera_stamp_;
-  autoware_auto_perception_msgs::msg::PredictedObjects cloud_objects_;
-  autoware_auto_perception_msgs::msg::PredictedObjects camera_objects_;
 private:
   void compensateObjectMovements(
     pcl::PointCloud<pcl::PointXYZ>& cloud, 

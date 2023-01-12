@@ -251,45 +251,30 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
 
   //debug only
   if(input_tl_rough_roi_msg->rois.size()){
-    cv_bridge::CvImagePtr bridge = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
     image_geometry::PinholeCameraModel pinhole_camera_model;
     pinhole_camera_model.fromCameraInfo(*camera_info_msg);
-    int count = 0;
     
     pcl::PointCloud<pcl::PointXYZ> cloud_camera_stamp;
     pcl::fromROSMsg(*cloud_msg, cloud_camera_stamp);
 
-    for(const auto & pt : cloud_camera_stamp){
+    for(size_t idx = 0; idx < cloud_camera_stamp.size(); idx++){
+      cv::Scalar color = idx % 2 == 0? cv::Scalar(255, 0, 0) : cv::Scalar(0, 255, 0);
+      const pcl::PointXYZ& pt = cloud_camera_stamp[idx];
       cv::Point2d pixel = pinhole_camera_model.project3dToPixel(cv::Point3d(pt.x, pt.y, pt.z));
       if(pixel.x >= 0 
       && pixel.x < camera_info_msg->width 
       && pixel.y >= 0 
       && pixel.y < camera_info_msg->height){
-        cv::circle(bridge->image, cv::Point(pixel.x, pixel.y), 3, cv::Scalar(255, 0, 0), 5);
-        count++;
+        pixel = pinhole_camera_model.rectifyPoint(pixel);
+        cv::circle(cv_ptr->image, cv::Point(pixel.x, pixel.y), 3, color, 1);
       }
     }
-    std::cout << count << " pts drawed" << std::endl;
-    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20220107/data/";
+    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230111/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
-    cv::Mat image = bridge->image;
+    cv::Mat image = cv_ptr->image;
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
     cv::imwrite(image_path, image);
-
-    std::string rough_roi_path = dir + std::to_string(stamp) + "_roi.txt";
-    std::ofstream f1(rough_roi_path);
-    for(const auto & roi : input_tl_rough_roi_msg->rois){
-      f1 << roi.id << " " << roi.roi.x_offset << " " << roi.roi.y_offset << " " << roi.roi.width << " " << roi.roi.height << std::endl;
-    }
-    f1.close();
-
-    std::string bbox_path = dir + std::to_string(stamp) + "_bbox.txt";
-    std::ofstream f2(bbox_path);
-    for(const auto & roi : input_tl_roi_msg->rois){
-      f2 << roi.id << " " << roi.roi.x_offset << " " << roi.roi.y_offset << " " << roi.roi.width << " " << roi.roi.height << std::endl;
-    }
-    f2.close();
   }
 }
 
