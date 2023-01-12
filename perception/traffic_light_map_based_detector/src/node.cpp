@@ -210,7 +210,7 @@ void MapBasedDetector::cameraInfoCallback(
   } else {
     return;
   }
-  cloud_occlusion_predictor_.update(*input_msg, tf_buffer_);
+  cloud_occlusion_predictor_.update(*input_msg, tf_buffer_, visible_traffic_lights);
   /*
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.

@@ -146,7 +146,9 @@ public:
     const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg);
 
   void update(
-    const sensor_msgs::msg::CameraInfo& camera_info, const tf2_ros::Buffer& tf_buffer);
+    const sensor_msgs::msg::CameraInfo& camera_info, 
+    const tf2_ros::Buffer& tf_buffer,
+    const std::vector<lanelet::ConstLineString3d>& traffic_lights);
 
   uint32_t predict(const lanelet::ConstLineString3d& traffic_light);
 
@@ -159,7 +161,14 @@ private:
     pcl::PointCloud<pcl::PointXYZ>& cloud, 
     const sensor_msgs::msg::CameraInfo& camera_info);
 
-  void cloudPreprocess(const sensor_msgs::msg::CameraInfo& camera_info);
+  void cloudPreprocess(
+    const sensor_msgs::msg::CameraInfo& camera_info,
+    const std::vector<lanelet::ConstLineString3d>& traffic_lights);
+
+  void filterCloudByHeight(
+    const pcl::PointCloud<pcl::PointXYZ>& cloud_in,
+    const std::vector<lanelet::ConstLineString3d>& traffic_lights,
+    pcl::PointCloud<pcl::PointXYZ>& cloud_out);
 
   pcl::PointCloud<pcl::PointXYZ> sampleTrafficLight(
     const lanelet::ConstLineString3d& traffic_light, uint32_t horizontal_sample_num, uint32_t vertical_sample_num);
@@ -168,6 +177,7 @@ private:
   pcl::PointCloud<pcl::PointXYZ> debug_cloud_;
   geometry_msgs::msg::TransformStamped map2cloud_;
   geometry_msgs::msg::TransformStamped camera2map_;
+  geometry_msgs::msg::TransformStamped map2camera_;
   geometry_msgs::msg::TransformStamped map2base_;
   std::map<int, std::map<int, std::vector<Ray> > > lidar_rays_;
   ObjectsPredictor objects_predictor_;
