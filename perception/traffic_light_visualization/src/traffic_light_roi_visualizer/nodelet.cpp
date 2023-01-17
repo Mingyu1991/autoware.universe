@@ -90,7 +90,7 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
   const cv::Scalar & color)
 {
-  if(tl_roi.occluded == false){
+  if(tl_roi.occlusion_num < 40){
     cv::rectangle(
       image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
       cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
@@ -102,14 +102,11 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
       cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
       cv::Scalar{255, 255, 0}, 2);
   }
-  cv::putText(
-    image, std::to_string(tl_roi.cloud_delay), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
-    cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   // cv::putText(
   //   image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
   //   cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   cv::putText(
-    image, std::to_string(tl_roi.occlusion_num), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + 30),
+    image, std::to_string(tl_roi.occlusion_num), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::FONT_HERSHEY_COMPLEX, 1.0, cv::Scalar{255, 0, 0}, 1, CV_AA);
   // cv::putText(
   //   image, std::to_string(tl_roi.dist), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + 30),
@@ -197,7 +194,7 @@ bool TrafficLightRoiVisualizerNodelet::getRoiFromId(
   int id, const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & rois,
   autoware_auto_perception_msgs::msg::TrafficLightRoi & correspond_roi)
 {
-  for (const auto roi : rois->rois) {
+  for (const auto& roi : rois->rois) {
     if (roi.id == id) {
       correspond_roi = roi;
       return true;
@@ -256,20 +253,23 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
     
     pcl::PointCloud<pcl::PointXYZ> cloud_camera_stamp;
     pcl::fromROSMsg(*cloud_msg, cloud_camera_stamp);
-
-    for(size_t idx = 0; idx < cloud_camera_stamp.size(); idx++){
+    int idx = 0;
+    for(pcl::PointXYZ pt : cloud_camera_stamp){
+      //cv::Scalar color = pt.z < 0? cv::Scalar(255, 0, 0) : cv::Scalar(0, 255, 0);
       cv::Scalar color = idx % 2 == 0? cv::Scalar(255, 0, 0) : cv::Scalar(0, 255, 0);
-      const pcl::PointXYZ& pt = cloud_camera_stamp[idx];
+      pt.z = std::abs(pt.z);
       cv::Point2d pixel = pinhole_camera_model.project3dToPixel(cv::Point3d(pt.x, pt.y, pt.z));
       if(pixel.x >= 0 
       && pixel.x < camera_info_msg->width 
       && pixel.y >= 0 
       && pixel.y < camera_info_msg->height){
         pixel = pinhole_camera_model.rectifyPoint(pixel);
+        //cv_ptr->image.at<cv::Vec3b>(pixel.y, pixel.x) = cv::Vec3b(uchar(color[0]), uchar(color[1]), uchar(color[2]));
         cv::circle(cv_ptr->image, cv::Point(pixel.x, pixel.y), 3, color, 1);
+        idx += 1;
       }
     }
-    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230111/data/";
+    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230113/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
     cv::Mat image = cv_ptr->image;

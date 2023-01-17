@@ -83,6 +83,8 @@ private:
     double vibration_height_high;
     double vibration_width_high;
     double vibration_depth_high;
+    double azimuth_occlusion_resolution;
+    double elevation_occlusion_resolution;    
   };
 
   struct IdLessThan

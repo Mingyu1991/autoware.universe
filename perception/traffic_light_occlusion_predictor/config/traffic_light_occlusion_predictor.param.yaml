@@ -1,0 +1,4 @@
+/**:
+  ros__parameters:
+    azimuth_occlusion_resolution: 0.15 # degree
+    elevation_occlusion_resolution: 0.08  # degree

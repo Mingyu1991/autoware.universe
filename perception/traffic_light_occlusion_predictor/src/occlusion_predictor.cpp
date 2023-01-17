@@ -1,4 +1,4 @@
-#include "traffic_light_map_based_detector/occlusion_predictor.hpp"
+#include "traffic_light_occlusion_predictor/occlusion_predictor.hpp"
 
 namespace
 {
@@ -151,6 +151,7 @@ autoware_auto_perception_msgs::msg::PredictedObjects
 void CloudOcclusionPredictor::pointCloudCallback(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
+  std::cout << "receive point cloud " << std::endl;
   // sometimes the top lidar doesn't give any point. we need to filter out these clouds
   size_t cloud_size =  msg->width * msg->height;
   if(cloud_size >= 100000){
@@ -161,6 +162,7 @@ void CloudOcclusionPredictor::pointCloudCallback(
 void CloudOcclusionPredictor::perceptionObjectsCallback(
   const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)
 {
+  std::cout << "receive perception objects" << std::endl;
   objects_predictor_.update(msg);
 }
 

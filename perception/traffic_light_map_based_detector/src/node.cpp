@@ -160,12 +160,14 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   config_.vibration_height_high = declare_parameter<double>("vibration_height_high", 0.1);
   config_.vibration_width_high = declare_parameter<double>("vibration_width_high", 0.1);
   config_.vibration_depth_high = declare_parameter<double>("vibration_depth_high", 0.1);
+  config_.azimuth_occlusion_resolution = declare_parameter<double>("azimuth_occlusion_resolution", 0.1);
+  config_.elevation_occlusion_resolution = declare_parameter<double>("elevation_occlusion_resolution", 0.1);
 }
 
 void MapBasedDetector::cameraInfoCallback(
   const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg)
 {  
-  const double stamp_offset = 0.12;
+  const double stamp_offset = 0.0;
   if (all_traffic_lights_ptr_ == nullptr && route_traffic_lights_ptr_ == nullptr) {
     return;
   }
@@ -210,7 +212,7 @@ void MapBasedDetector::cameraInfoCallback(
   } else {
     return;
   }
-  cloud_occlusion_predictor_.update(*input_msg, tf_buffer_, visible_traffic_lights);
+  
   /*
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.
@@ -221,16 +223,14 @@ void MapBasedDetector::cameraInfoCallback(
           camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi)) {
       continue;
     }
-    uint32_t occlusion_rate = cloud_occlusion_predictor_.predict(traffic_light);
-    tl_roi.occluded = occlusion_rate >= 40;
-    tl_roi.occlusion_num = occlusion_rate;
-    tl_roi.cloud_delay = cloud_occlusion_predictor_.getCloudDelay();
     output_msg.rois.push_back(tl_roi);
   }
+  cloud_occlusion_predictor_.update(*input_msg, tf_buffer_, output_msg.rois);
+  for(auto& roi : output_msg.rois){
+    roi.occlusion_num = cloud_occlusion_predictor_.predict(roi, config_.azimuth_occlusion_resolution, config_.elevation_occlusion_resolution);
+  }
   roi_pub_->publish(output_msg);
-  debug_cloud_pub_->publish(cloud_occlusion_predictor_.debug(visible_traffic_lights));
-  //cloud_cloud_stamp_pub_->publish(cloud_occlusion_predictor_.cloud_cloud_stamp_);
-  cloud_camera_stamp_pub_->publish(cloud_occlusion_predictor_.cloud_camera_stamp_);
+  cloud_camera_stamp_pub_->publish(cloud_occlusion_predictor_.debug(*input_msg));
   publishVisibleTrafficLights(camera_pose_stamped, visible_traffic_lights, viz_pub_);
 }
 
@@ -277,14 +277,14 @@ bool MapBasedDetector::getTrafficLightRoi(
       config.getVibrationHeight(dist2tl) * 0.5;
     const double max_vibration_z = config.getVibrationDepth(dist2tl) * 0.5;
     // target position in camera coordinate
-    geometry_msgs::msg::Point point3d;
-    point3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
-    point3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
-    point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-    if (point3d.z <= 0.0) {
+    tl_roi.top_left_3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
+    tl_roi.top_left_3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
+    tl_roi.top_left_3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+    if (tl_roi.top_left_3d.z <= 0.0) {
       return false;
     }
-    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+    cv::Point3d roi_top_left(tl_roi.top_left_3d.x, tl_roi.top_left_3d.y, tl_roi.top_left_3d.z);
+    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_top_left);
     roundInImageFrame(pinhole_camera_model, point2d);
     tl_roi.roi.x_offset = point2d.x;
     tl_roi.roi.y_offset = point2d.y;
@@ -306,14 +306,14 @@ bool MapBasedDetector::getTrafficLightRoi(
       config.getVibrationHeight(dist2tl) * 0.5;
     const double max_vibration_z = config.getVibrationDepth(dist2tl) * 0.5;
     // target position in camera coordinate
-    geometry_msgs::msg::Point point3d;
-    point3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
-    point3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
-    point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-    if (point3d.z <= 0.0) {
+    tl_roi.bottom_right_3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
+    tl_roi.bottom_right_3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
+    tl_roi.bottom_right_3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+    if (tl_roi.bottom_right_3d.z <= 0.0) {
       return false;
     }
-    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+    cv::Point3d roi_bottom_right(tl_roi.bottom_right_3d.x, tl_roi.bottom_right_3d.y, tl_roi.bottom_right_3d.z);
+    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_bottom_right);
     roundInImageFrame(pinhole_camera_model, point2d);
     tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
     tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
