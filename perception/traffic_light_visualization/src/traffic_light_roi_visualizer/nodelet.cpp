@@ -213,7 +213,6 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg,
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg)
 {
-  RCLCPP_INFO(get_logger(), "receive rough roi");
   cv_bridge::CvImagePtr cv_ptr;
   try {
     cv_ptr = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
@@ -254,27 +253,24 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
     
     pcl::PointCloud<pcl::PointXYZ> cloud_camera_stamp;
     pcl::fromROSMsg(*cloud_msg, cloud_camera_stamp);
-    int idx = 0;
-    for(pcl::PointXYZ pt : cloud_camera_stamp){
-      //cv::Scalar color = pt.z < 0? cv::Scalar(255, 0, 0) : cv::Scalar(0, 255, 0);
-      cv::Scalar color = idx % 2 == 0? cv::Scalar(255, 0, 0) : cv::Scalar(0, 255, 0);
-      pt.z = std::abs(pt.z);
-      cv::Point2d pixel = pinhole_camera_model.project3dToPixel(cv::Point3d(pt.x, pt.y, pt.z));
-      if(pixel.x >= 0 
-      && pixel.x < camera_info_msg->width 
-      && pixel.y >= 0 
-      && pixel.y < camera_info_msg->height){
-        pixel = pinhole_camera_model.rectifyPoint(pixel);
-        //cv_ptr->image.at<cv::Vec3b>(pixel.y, pixel.x) = cv::Vec3b(uchar(color[0]), uchar(color[1]), uchar(color[2]));
-        cv::circle(cv_ptr->image, cv::Point(pixel.x, pixel.y), 3, color, 1);
-        idx += 1;
-      }
-    }
+    // int idx = 0;
+    // for(pcl::PointXYZ pt : cloud_camera_stamp){
+    //   cv::Scalar color(0, 255, 0);
+    //   pt.z = std::abs(pt.z);
+    //   cv::Point2d pixel = pinhole_camera_model.project3dToPixel(cv::Point3d(pt.x, pt.y, pt.z));
+    //   if(pixel.x >= 0 
+    //   && pixel.x < camera_info_msg->width 
+    //   && pixel.y >= 0 
+    //   && pixel.y < camera_info_msg->height){
+    //     pixel = pinhole_camera_model.rectifyPoint(pixel);
+    //     cv::circle(cv_ptr->image, cv::Point(pixel.x, pixel.y), 3, color, 1);
+    //     idx += 1;
+    //   }
+    // }
     
-    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230113/data/";
+    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230117/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
-    RCLCPP_INFO_STREAM(get_logger(), "save image: " << image_path);
     cv::Mat image = cv_ptr->image;
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
     cv::imwrite(image_path, image);

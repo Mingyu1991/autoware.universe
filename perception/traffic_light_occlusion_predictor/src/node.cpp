@@ -47,20 +47,24 @@ TrafficLightOcclusionPredictorNodelet::TrafficLightOcclusionPredictorNodelet(con
   // subscribers
   point_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
     "~/input/cloud", rclcpp::SensorDataQoS(),
-    std::bind(&CloudOcclusionPredictor::pointCloudCallback, &this->cloud_occlusion_predictor_, _1));
+    std::bind(&TrafficLightOcclusionPredictorNodelet::pointCloudCallback, this, _1));
   objects_sub_ = create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>(
     "~/input/objects", rclcpp::SensorDataQoS(),
-    std::bind(&CloudOcclusionPredictor::perceptionObjectsCallback, &this->cloud_occlusion_predictor_, _1));
+    std::bind(&TrafficLightOcclusionPredictorNodelet::perceptionObjectsCallback, this, _1));
   
   sync_.reset(new Sync(SyncPolicy(10), camera_info_sub_, roi_sub_));
   sync_->registerCallback(std::bind(&TrafficLightOcclusionPredictorNodelet::callback, this, _1, _2));
   camera_info_sub_.subscribe(this, "~/input/camera_info", rmw_qos_profile_sensor_data);
   roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
+
   // publishers
   debug_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/traffic_light/debug_cloud_camera_stamp", 1);
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>("~/output/rois", 1);
+  // configuration parameters
   config_.azimuth_occlusion_resolution = declare_parameter<double>("azimuth_occlusion_resolution", 0.1);
   config_.elevation_occlusion_resolution = declare_parameter<double>("elevation_occlusion_resolution", 0.1);
+  config_.min_cloud_size = declare_parameter<int>("min_cloud_size", 100000);
+  config_.enable_point_cloud_compensation = declare_parameter<bool>("enable_point_cloud_compensation", true);
 }
 
 void TrafficLightOcclusionPredictorNodelet::callback(
@@ -68,12 +72,28 @@ void TrafficLightOcclusionPredictorNodelet::callback(
     const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg)
 {  
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray output_msg = * in_roi_msg;
-  cloud_occlusion_predictor_.update(*in_image_info_msg, tf_buffer_, output_msg.rois);
+  cloud_occlusion_predictor_.update(*in_image_info_msg, tf_buffer_, output_msg.rois, config_.enable_point_cloud_compensation);
   for(auto& roi : output_msg.rois){
     roi.occlusion_num = cloud_occlusion_predictor_.predict(roi, config_.azimuth_occlusion_resolution, config_.elevation_occlusion_resolution);
   }
   roi_pub_->publish(output_msg);
   debug_cloud_pub_->publish(cloud_occlusion_predictor_.debug(*in_image_info_msg));
+}
+
+void TrafficLightOcclusionPredictorNodelet::pointCloudCallback(
+  const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
+{
+  //sometimes the top lidar doesn't publish any point and necessary to filter it out
+  int cloud_size = msg->width * msg->height;
+  if(cloud_size >= config_.min_cloud_size){
+    cloud_occlusion_predictor_.receivePointCloud(msg);
+  }
+}
+
+void TrafficLightOcclusionPredictorNodelet::perceptionObjectsCallback(
+    const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)
+{
+  cloud_occlusion_predictor_.receivePerceptionObjects(msg);
 }
 
 }  // namespace traffic_light

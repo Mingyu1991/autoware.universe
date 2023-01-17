@@ -147,17 +147,20 @@ autoware_auto_perception_msgs::msg::PredictedObjects
   return res;
 }
 
-void CloudOcclusionPredictor::pointCloudCallback(
+void CloudOcclusionPredictor::receivePointCloud(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
+  // the timestamps must be increasing
+  double history_stamp = rclcpp::Time(history_clouds_.back().header.stamp).seconds();
+  double msg_stamp = rclcpp::Time(msg->header.stamp).seconds();
+  if(history_clouds_.empty() == false && msg_stamp < history_stamp){
+    return;
+  }
+  history_clouds_.push_back(*msg);
   // sometimes the top lidar doesn't give any point. we need to filter out these clouds
-  size_t cloud_size =  msg->width * msg->height;
-  if(cloud_size >= 100000){
-    history_clouds_.push_back(*msg);
-  }  
 }
 
-void CloudOcclusionPredictor::perceptionObjectsCallback(
+void CloudOcclusionPredictor::receivePerceptionObjects(
   const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)
 {
   objects_predictor_.update(msg);
@@ -166,7 +169,8 @@ void CloudOcclusionPredictor::perceptionObjectsCallback(
 void CloudOcclusionPredictor::update(
   const sensor_msgs::msg::CameraInfo& camera_info, 
   const tf2_ros::Buffer& tf_buffer,
-  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi>& tl_rough_rois)
+  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi>& tl_rough_rois,
+  bool enable_point_cloud_compensation)
 {
   if(history_clouds_.empty()){
     return;
@@ -214,12 +218,13 @@ void CloudOcclusionPredictor::update(
     return;
   }
   
-  cloudPreprocess(camera_info, tl_rough_rois);
+  cloudPreprocess(camera_info, tl_rough_rois, enable_point_cloud_compensation);
 }
 
 void CloudOcclusionPredictor::cloudPreprocess(
   const sensor_msgs::msg::CameraInfo& camera_info,
-  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi>& tl_rough_rois)
+  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi>& tl_rough_rois,
+  bool enable_point_cloud_compensation)
 {
   lidar_rays_.clear();
   if(history_clouds_.empty()){
@@ -232,7 +237,11 @@ void CloudOcclusionPredictor::cloudPreprocess(
   pcl::PointCloud<pcl::PointXYZ> cloud_in_rois;
   tier4_autoware_utils::transformPointCloudFromROSMsg(history_clouds_.front(), cloud_camera, camera2cloud);
   filterCloud(cloud_camera, tl_rough_rois, camera_info, cloud_in_rois);
-  compensateObjectMovements(cloud_in_rois, camera_info);
+  
+  if(enable_point_cloud_compensation){
+    compensateObjectMovements(cloud_in_rois, camera_info);
+  }
+  
   for(const pcl::PointXYZ& pt : cloud_in_rois){
     Ray ray = ::point2ray(pt);
     lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
