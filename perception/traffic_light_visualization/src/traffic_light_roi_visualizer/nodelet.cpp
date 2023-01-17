@@ -213,6 +213,7 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   const sensor_msgs::msg::CameraInfo::ConstSharedPtr& camera_info_msg,
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg)
 {
+  RCLCPP_INFO(get_logger(), "receive rough roi");
   cv_bridge::CvImagePtr cv_ptr;
   try {
     cv_ptr = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
@@ -269,9 +270,11 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
         idx += 1;
       }
     }
+    
     std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230113/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
+    RCLCPP_INFO_STREAM(get_logger(), "save image: " << image_path);
     cv::Mat image = cv_ptr->image;
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
     cv::imwrite(image_path, image);

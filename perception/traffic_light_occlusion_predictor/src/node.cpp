@@ -57,7 +57,7 @@ TrafficLightOcclusionPredictorNodelet::TrafficLightOcclusionPredictorNodelet(con
   camera_info_sub_.subscribe(this, "~/input/camera_info", rmw_qos_profile_sensor_data);
   roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
   // publishers
-  debug_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("~/traffic_light/debug_cloud", 1);
+  debug_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/traffic_light/debug_cloud_camera_stamp", 1);
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>("~/output/rois", 1);
   config_.azimuth_occlusion_resolution = declare_parameter<double>("azimuth_occlusion_resolution", 0.1);
   config_.elevation_occlusion_resolution = declare_parameter<double>("elevation_occlusion_resolution", 0.1);
@@ -73,6 +73,7 @@ void TrafficLightOcclusionPredictorNodelet::callback(
     roi.occlusion_num = cloud_occlusion_predictor_.predict(roi, config_.azimuth_occlusion_resolution, config_.elevation_occlusion_resolution);
   }
   roi_pub_->publish(output_msg);
+  debug_cloud_pub_->publish(cloud_occlusion_predictor_.debug(*in_image_info_msg));
 }
 
 }  // namespace traffic_light

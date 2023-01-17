@@ -1,7 +1,7 @@
 <launch>
   <arg name="input/image" default="/camera/image_raw"/>
   <arg name="input/rois" default="~/input/rois"/>
-  <arg name="input/rough/rois" default="~/occlusion/rois"/>
+  <arg name="input/rough/rois" default="~/rough/rois"/>
   <arg name="input/traffic_signals" default="~/input/traffic_signals"/>
   <arg name="output/image" default="~/debug/rois"/>
   <arg name="enable_fine_detection" default="false"/>

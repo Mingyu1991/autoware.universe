@@ -14,5 +14,3 @@
     vibration_height_high: 0.1
     vibration_width_high: 0.1
     vibration_depth_high: 0.1
-    azimuth_occlusion_resolution: 0.15 # degree
-    elevation_occlusion_resolution: 0.08  # degree

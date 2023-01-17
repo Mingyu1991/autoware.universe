@@ -128,26 +128,10 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   route_sub_ = create_subscription<autoware_auto_planning_msgs::msg::HADMapRoute>(
     "~/input/route", rclcpp::QoS{1}.transient_local(),
     std::bind(&MapBasedDetector::routeCallback, this, _1));
-  point_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-    "~/input/cloud", rclcpp::SensorDataQoS(),
-    std::bind(&CloudOcclusionPredictor::pointCloudCallback, &this->cloud_occlusion_predictor_, _1));
-  objects_sub_ = create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>(
-    "~/input/objects", rclcpp::SensorDataQoS(),
-    std::bind(&CloudOcclusionPredictor::perceptionObjectsCallback, &this->cloud_occlusion_predictor_, _1));
   // publishers
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
-  debug_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("~/traffic_light/debug_cloud", 1);
-
-  cloud_obj_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>(
-    "/traffic_light/debug_cloud_object", 1);
-  camera_obj_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>(
-    "/traffic_light/debug_camera_object", 1);
-  cloud_cloud_stamp_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-    "/traffic_light/debug_cloud_cloud_stamp", 1);
-  cloud_camera_stamp_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-    "/traffic_light/debug_cloud_camera_stamp", 1);
 
   config_.max_detection_range = declare_parameter<double>("max_detection_range", 250.0);
   config_.max_vibration_pitch = declare_parameter<double>("max_vibration_pitch", 0.01745329251);
@@ -160,8 +144,6 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   config_.vibration_height_high = declare_parameter<double>("vibration_height_high", 0.1);
   config_.vibration_width_high = declare_parameter<double>("vibration_width_high", 0.1);
   config_.vibration_depth_high = declare_parameter<double>("vibration_depth_high", 0.1);
-  config_.azimuth_occlusion_resolution = declare_parameter<double>("azimuth_occlusion_resolution", 0.1);
-  config_.elevation_occlusion_resolution = declare_parameter<double>("elevation_occlusion_resolution", 0.1);
 }
 
 void MapBasedDetector::cameraInfoCallback(
@@ -225,12 +207,7 @@ void MapBasedDetector::cameraInfoCallback(
     }
     output_msg.rois.push_back(tl_roi);
   }
-  cloud_occlusion_predictor_.update(*input_msg, tf_buffer_, output_msg.rois);
-  for(auto& roi : output_msg.rois){
-    roi.occlusion_num = cloud_occlusion_predictor_.predict(roi, config_.azimuth_occlusion_resolution, config_.elevation_occlusion_resolution);
-  }
   roi_pub_->publish(output_msg);
-  cloud_camera_stamp_pub_->publish(cloud_occlusion_predictor_.debug(*input_msg));
   publishVisibleTrafficLights(camera_pose_stamped, visible_traffic_lights, viz_pub_);
 }
 

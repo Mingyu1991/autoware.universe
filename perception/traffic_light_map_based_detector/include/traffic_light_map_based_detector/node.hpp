@@ -33,21 +33,23 @@
 #ifndef TRAFFIC_LIGHT_MAP_BASED_DETECTOR__NODE_HPP_
 #define TRAFFIC_LIGHT_MAP_BASED_DETECTOR__NODE_HPP_
 
-
 #include <rclcpp/rclcpp.hpp>
-#include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
-#include <autoware_auto_perception_msgs/msg/predicted_objects.hpp>
-#include <autoware_auto_planning_msgs/msg/had_map_route.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
-#include <sensor_msgs/msg/camera_info.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-#include <visualization_msgs/msg/marker_array.hpp>
 #include <image_geometry/pinhole_camera_model.h>
+#include <tier4_autoware_utils/geometry/geometry.hpp>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
+#include <autoware_auto_planning_msgs/msg/had_map_route.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
-#include <traffic_light_map_based_detector/occlusion_predictor.hpp>
-
+#include <lanelet2_extension/regulatory_elements/autoware_traffic_light.hpp>
+#include <lanelet2_extension/utility/query.hpp>
+#include <lanelet2_core/LaneletMap.h>
+#include <lanelet2_routing/RoutingGraph.h>
+#include <lanelet2_traffic_rules/TrafficRulesFactory.h>
 #include <memory>
 #include <set>
 #include <vector>
@@ -82,9 +84,7 @@ private:
     double dist_high;
     double vibration_height_high;
     double vibration_width_high;
-    double vibration_depth_high;
-    double azimuth_occlusion_resolution;
-    double elevation_occlusion_resolution;    
+    double vibration_depth_high;  
   };
 
   struct IdLessThan
@@ -100,17 +100,9 @@ private:
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
   rclcpp::Subscription<autoware_auto_planning_msgs::msg::HADMapRoute>::SharedPtr route_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
-  rclcpp::Subscription<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr objects_sub_;
 
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr debug_cloud_pub_;
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cloud_obj_pub_;
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr camera_obj_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_cloud_stamp_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_camera_stamp_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
@@ -124,7 +116,6 @@ private:
   lanelet::traffic_rules::TrafficRulesPtr traffic_rules_ptr_;
   lanelet::routing::RoutingGraphPtr routing_graph_ptr_;
   Config config_;
-  CloudOcclusionPredictor cloud_occlusion_predictor_;
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg);

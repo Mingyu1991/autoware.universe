@@ -32,7 +32,6 @@ void SingleObjectPredictor::update(const autoware_auto_perception_msgs::msg::Pre
 {
   // the timestamps must be increasing for binary search
   if(status_.empty() == false && stamp < status_.back().stamp){
-    std::cout << "received old object!" << std::endl;
     return;
   }
   status_.push_back(ObjectStatus{stamp, 
@@ -151,7 +150,6 @@ autoware_auto_perception_msgs::msg::PredictedObjects
 void CloudOcclusionPredictor::pointCloudCallback(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
-  std::cout << "receive point cloud " << std::endl;
   // sometimes the top lidar doesn't give any point. we need to filter out these clouds
   size_t cloud_size =  msg->width * msg->height;
   if(cloud_size >= 100000){
@@ -162,7 +160,6 @@ void CloudOcclusionPredictor::pointCloudCallback(
 void CloudOcclusionPredictor::perceptionObjectsCallback(
   const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)
 {
-  std::cout << "receive perception objects" << std::endl;
   objects_predictor_.update(msg);
 }
 
@@ -240,6 +237,7 @@ void CloudOcclusionPredictor::cloudPreprocess(
     Ray ray = ::point2ray(pt);
     lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
   }
+  debug_cloud_ = cloud_in_rois;
 }
 
 void CloudOcclusionPredictor::filterCloud(
@@ -290,7 +288,6 @@ void CloudOcclusionPredictor::compensateObjectMovements(
   pcl::PointCloud<pcl::PointXYZ>& cloud, 
   const sensor_msgs::msg::CameraInfo& camera_info)
 {
-  pcl::PointCloud<pcl::PointXYZ> cloud_camera_stamp;
   // transform the cloud from camera frame to map frame
   pcl::transformPointCloud(cloud, cloud, tf2::transformToEigen(camera2map_).inverse().matrix());
   auto cloud_stamp = history_clouds_.front().header.stamp;
@@ -309,23 +306,16 @@ void CloudOcclusionPredictor::compensateObjectMovements(
         autoware::common::geometry::BoundingBox3D bbox(object_cloud_stamp);
         for(auto & pt : cloud){
           if(bbox.contains(tf2::Vector3(pt.x, pt.y, pt.z))){
-            //cloud_camera_stamp.push_back(pt);
             pt.x += dx;
             pt.y += dy;
             pt.z += dz;
-            cloud_camera_stamp.push_back(pt);
           }
         }
         break;
       }
     }
   }
-  pcl::transformPointCloud(cloud_camera_stamp, cloud_camera_stamp, tf2::transformToEigen(camera2map_).matrix());
-  
-  pcl::toROSMsg(cloud_camera_stamp, cloud_camera_stamp_);
-  cloud_camera_stamp_.header = camera_info.header;
   pcl::transformPointCloud(cloud, cloud, tf2::transformToEigen(camera2map_).matrix());
-  //debug_cloud_ = cloud_camera_stamp;
 }
 
 sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(const sensor_msgs::msg::CameraInfo& camera_info)
@@ -397,15 +387,11 @@ uint32_t CloudOcclusionPredictor::predict(
           && std::abs(lidar_ray.elevation - tl_ray.elevation) <= elevation_occlusion_resolution
           && lidar_ray.dist < tl_ray.dist - min_dist_from_occlusion_to_tl){
             occluded = true;
-            //debug_cloud_.push_back(lidar_ray.pt);
             break;
           }
         }
       }
     }
-    // pcl::PointXYZ debug_pt = tl_pt;
-    // if(occluded) debug_pt.z *= -1;
-    // debug_cloud_.push_back(debug_pt);
     occluded_num += occluded;
   }
   return 100 * occluded_num / tl_sample_cloud.size();
