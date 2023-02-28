@@ -254,14 +254,14 @@ bool MapBasedDetector::getTrafficLightRoi(
       config.getVibrationHeight(dist2tl) * 0.5;
     const double max_vibration_z = config.getVibrationDepth(dist2tl) * 0.5;
     // target position in camera coordinate
-    tl_roi.top_left_3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
-    tl_roi.top_left_3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
-    tl_roi.top_left_3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-    if (tl_roi.top_left_3d.z <= 0.0) {
+    geometry_msgs::msg::Point point3d;
+    point3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
+    point3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
+    point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+    if (point3d.z <= 0.0) {
       return false;
     }
-    cv::Point3d roi_top_left(tl_roi.top_left_3d.x, tl_roi.top_left_3d.y, tl_roi.top_left_3d.z);
-    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_top_left);
+    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
     roundInImageFrame(pinhole_camera_model, point2d);
     tl_roi.roi.x_offset = point2d.x;
     tl_roi.roi.y_offset = point2d.y;
@@ -283,27 +283,22 @@ bool MapBasedDetector::getTrafficLightRoi(
       config.getVibrationHeight(dist2tl) * 0.5;
     const double max_vibration_z = config.getVibrationDepth(dist2tl) * 0.5;
     // target position in camera coordinate
-    tl_roi.bottom_right_3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
-    tl_roi.bottom_right_3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
-    tl_roi.bottom_right_3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-    if (tl_roi.bottom_right_3d.z <= 0.0) {
+    geometry_msgs::msg::Point point3d;
+    point3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
+    point3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
+    point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+    if (point3d.z <= 0.0) {
       return false;
     }
-    cv::Point3d roi_bottom_right(tl_roi.bottom_right_3d.x, tl_roi.bottom_right_3d.y, tl_roi.bottom_right_3d.z);
-    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_bottom_right);
+    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
     roundInImageFrame(pinhole_camera_model, point2d);
     tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
     tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
     if (tl_roi.roi.width < 1 || tl_roi.roi.height < 1) {
       return false;
     }
-    //for debug only
-    float dx = tf_camera2tl.getOrigin().x();
-    float dy = tf_camera2tl.getOrigin().y();
-    float dz = tf_camera2tl.getOrigin().z();
-    tl_roi.dist = std::sqrt(dx * dx + dy * dy + dz * dz);
   }
-  tl_roi.dist = static_cast<int>(dist2tl);
+  tl_roi.dist = static_cast<float>(dist2tl);
   return true;
 }
 

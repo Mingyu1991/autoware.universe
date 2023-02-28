@@ -3,4 +3,4 @@
     azimuth_occlusion_resolution: 0.15 # degree
     elevation_occlusion_resolution: 0.08  # degree
     min_cloud_size: 100000
-    enable_point_cloud_compensation: true
+    enable_point_cloud_compensation: false

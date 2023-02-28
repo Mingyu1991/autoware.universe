@@ -160,6 +160,7 @@ private:
     const pcl::PointCloud<pcl::PointXYZ>& cloud_in,
     const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi>& tl_rough_rois,
     const sensor_msgs::msg::CameraInfo& camera_info,
+    bool enable_point_cloud_compensation,
     pcl::PointCloud<pcl::PointXYZ>& cloud_out);
 
   void sampleTrafficLightRoi(
@@ -168,13 +169,19 @@ private:
     uint32_t horizontal_sample_num, 
     uint32_t vertical_sample_num,
     pcl::PointCloud<pcl::PointXYZ>& cloud_out);
+  
+  void sampleTrafficLightRoi(
+    const autoware_auto_perception_msgs::msg::TrafficLightRoi& roi,
+    uint32_t horizontal_sample_num, 
+    uint32_t vertical_sample_num,
+    pcl::PointCloud<pcl::PointXYZ>& cloud_out);
 
   std::list<sensor_msgs::msg::PointCloud2> history_clouds_;
   pcl::PointCloud<pcl::PointXYZ> debug_cloud_;
-  geometry_msgs::msg::TransformStamped map2cloud_;
-  geometry_msgs::msg::TransformStamped camera2map_;
-  geometry_msgs::msg::TransformStamped map2camera_;
-  geometry_msgs::msg::TransformStamped map2base_;
+  Eigen::Matrix4d map2cloud_;
+  Eigen::Matrix4d camera2map_;
+  Eigen::Matrix4d camera2cloud_;
+  image_geometry::PinholeCameraModel pinhole_camera_model_;
   std::map<int, std::map<int, std::vector<Ray> > > lidar_rays_;
   ObjectsPredictor objects_predictor_;
   double cloud_delay_;

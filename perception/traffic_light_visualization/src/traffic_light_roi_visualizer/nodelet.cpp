@@ -107,7 +107,7 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   //   cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   cv::putText(
     image, std::to_string(tl_roi.occlusion_num), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
-    cv::FONT_HERSHEY_COMPLEX, 1.0, cv::Scalar{255, 0, 0}, 1, CV_AA);
+    cv::FONT_HERSHEY_COMPLEX, 2.0, cv::Scalar{255, 0, 0}, 2, CV_AA);
   // cv::putText(
   //   image, std::to_string(tl_roi.dist), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + 30),
   //   cv::FONT_HERSHEY_COMPLEX, 1.0, cv::Scalar{255, 0, 0}, 1, CV_AA);
@@ -268,7 +268,7 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
     //   }
     // }
     
-    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230117/data/";
+    std::string dir = "/home/mingyuli/Desktop/tasks/2023/traffic_lights/20230125/data/";
     double stamp = rclcpp::Time(input_image_msg->header.stamp).seconds();
     std::string image_path = dir + std::to_string(stamp) + ".jpg";
     cv::Mat image = cv_ptr->image;

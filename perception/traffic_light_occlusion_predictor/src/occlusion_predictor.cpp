@@ -2,6 +2,7 @@
 
 namespace
 {
+
 traffic_light::Ray point2ray(const pcl::PointXYZ& pt)
 {
   traffic_light::Ray ray;
@@ -12,6 +13,17 @@ traffic_light::Ray point2ray(const pcl::PointXYZ& pt)
   return ray;
 }
 
+cv::Point3d projectPixel2Point3d(
+  const cv::Point2d& pixel, 
+  const image_geometry::PinholeCameraModel& pinhole_camera_model,
+  double dist)
+{
+  cv::Point2d rectified_pixel = pinhole_camera_model.rectifyPoint(pixel);
+  cv::Point3d uv_3d = pinhole_camera_model.projectPixelTo3dRay(rectified_pixel);
+  uv_3d.x /= uv_3d.z;
+  uv_3d.y /= uv_3d.z;
+  return cv::Point3d(uv_3d.x * dist, uv_3d.y * dist, uv_3d.z * dist);
+}
 
 }
 
@@ -199,20 +211,25 @@ void CloudOcclusionPredictor::update(
    * get necessary tf information
   */
   try {
-    // transformation between lidar and map when the cloud was captured
-    map2cloud_ = tf_buffer.lookupTransform(
-      "map", history_clouds_.front().header.frame_id, rclcpp::Time(history_clouds_.front().header.stamp),
-      rclcpp::Duration::from_seconds(0.2));
-    // transformation between map and camera when the image was captured
-    camera2map_ = tf_buffer.lookupTransform(
-      camera_info.header.frame_id, "map", rclcpp::Time(camera_info.header.stamp),
-      rclcpp::Duration::from_seconds(0.2));
-    map2camera_ = tf_buffer.lookupTransform(
-      "map", camera_info.header.frame_id, rclcpp::Time(camera_info.header.stamp),
-      rclcpp::Duration::from_seconds(0.2));
-    map2base_ = tf_buffer.lookupTransform(
-      "map", "base_link", rclcpp::Time(history_clouds_.front().header.stamp),
-      rclcpp::Duration::from_nanoseconds(0.2));
+    if(enable_point_cloud_compensation){
+      // transformation between lidar and map when the cloud was captured
+      map2cloud_ = tf2::transformToEigen(
+        tf_buffer.lookupTransform(
+        "map", history_clouds_.front().header.frame_id, rclcpp::Time(history_clouds_.front().header.stamp),
+        rclcpp::Duration::from_seconds(0.2))).matrix();
+      // transformation between map and camera when the image was captured
+      camera2map_ = tf2::transformToEigen(
+        tf_buffer.lookupTransform(
+        camera_info.header.frame_id, "map", rclcpp::Time(camera_info.header.stamp),
+        rclcpp::Duration::from_seconds(0.2))).matrix();
+    }
+    else{
+      camera2cloud_ = tf2::transformToEigen(
+        tf_buffer.lookupTransform(
+          camera_info.header.frame_id, history_clouds_.front().header.frame_id, rclcpp::Time(camera_info.header.stamp),
+          rclcpp::Duration::from_seconds(0.2))).matrix();
+    }
+    
   } catch (tf2::TransformException & ex) {
     std::cout << "Error: cannot get transform from map frame to " << history_clouds_.front().header.frame_id << std::endl;
     return;
@@ -230,13 +247,13 @@ void CloudOcclusionPredictor::cloudPreprocess(
   if(history_clouds_.empty()){
     return;
   }
-  Eigen::Matrix4d camera2cloud = (tf2::transformToEigen(camera2map_) * tf2::transformToEigen(map2cloud_)).matrix();
+  Eigen::Matrix4d camera2cloud = enable_point_cloud_compensation? camera2map_ * map2cloud_ : camera2cloud_;
   // points in camera frame
   pcl::PointCloud<pcl::PointXYZ> cloud_camera;
   // filtered points within traffic light rois in camera frame
   pcl::PointCloud<pcl::PointXYZ> cloud_in_rois;
   tier4_autoware_utils::transformPointCloudFromROSMsg(history_clouds_.front(), cloud_camera, camera2cloud);
-  filterCloud(cloud_camera, tl_rough_rois, camera_info, cloud_in_rois);
+  filterCloud(cloud_camera, tl_rough_rois, camera_info, enable_point_cloud_compensation, cloud_in_rois);
   
   if(enable_point_cloud_compensation){
     compensateObjectMovements(cloud_in_rois, camera_info);
@@ -246,22 +263,23 @@ void CloudOcclusionPredictor::cloudPreprocess(
     Ray ray = ::point2ray(pt);
     lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
   }
-  debug_cloud_ = cloud_in_rois;
 }
 
 void CloudOcclusionPredictor::filterCloud(
   const pcl::PointCloud<pcl::PointXYZ>& cloud_in,
   const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi>& tl_rough_rois,
   const sensor_msgs::msg::CameraInfo& camera_info,
+  bool enable_point_cloud_compensation,
   pcl::PointCloud<pcl::PointXYZ>& cloud_out)
 {
   cloud_out.clear();
   // the points very close to the camera should not be used in the occlusion estimation,
   // since they could be noise or from the other nearby sensors
   const float min_dist_to_cam = 1.0f;
-  image_geometry::PinholeCameraModel pinhole_camera_model;
-  pinhole_camera_model.fromCameraInfo(camera_info);
+  pinhole_camera_model_.fromCameraInfo(camera_info);
 
+  double min_x = std::numeric_limits<double>::max();
+  double max_x = std::numeric_limits<double>::lowest();
   double min_y = std::numeric_limits<double>::max();
   double max_y = std::numeric_limits<double>::lowest();
   // the x and y coordiante of the rough rois are un-rectified coordiantes.
@@ -269,12 +287,20 @@ void CloudOcclusionPredictor::filterCloud(
   for(const auto & roi : tl_rough_rois){
     cv::Point2d top_left_pt(roi.roi.x_offset, roi.roi.y_offset);
     cv::Point2d bottom_right_pt(roi.roi.x_offset + roi.roi.width, roi.roi.y_offset + roi.roi.height);
-    top_left_pt = pinhole_camera_model.rectifyPoint(top_left_pt);
-    bottom_right_pt = pinhole_camera_model.rectifyPoint(bottom_right_pt);
+    top_left_pt = pinhole_camera_model_.rectifyPoint(top_left_pt);
+    bottom_right_pt = pinhole_camera_model_.rectifyPoint(bottom_right_pt);
+    min_x = std::min(min_x, top_left_pt.x);
+    max_x = std::max(max_y, bottom_right_pt.x);
     min_y = std::min(min_y, top_left_pt.y);
     max_y = std::max(max_y, bottom_right_pt.y);
   }
-  
+  if(enable_point_cloud_compensation){
+    min_x = 0;
+    max_x = camera_info.width - 1;
+    min_y = 0;
+    max_y = camera_info.height - 1;
+  }
+
   for(size_t i = 0; i < cloud_in.size(); i++){
     if(cloud_in[i].z <= 0){
       continue;
@@ -283,9 +309,9 @@ void CloudOcclusionPredictor::filterCloud(
     if(dist_to_cam <= min_dist_to_cam){
       continue;
     }
-    cv::Point2d pixel = pinhole_camera_model.project3dToPixel(cv::Point3d(cloud_in[i].x, cloud_in[i].y, cloud_in[i].z));
-    if(pixel.x >= 0
-    && pixel.x < camera_info.width
+    cv::Point2d pixel = pinhole_camera_model_.project3dToPixel(cv::Point3d(cloud_in[i].x, cloud_in[i].y, cloud_in[i].z));
+    if(pixel.x >= min_x
+    && pixel.x <= max_x
     && pixel.y >= min_y
     && pixel.y <= max_y){
       cloud_out.push_back(cloud_in[i]);
@@ -298,7 +324,8 @@ void CloudOcclusionPredictor::compensateObjectMovements(
   const sensor_msgs::msg::CameraInfo& camera_info)
 {
   // transform the cloud from camera frame to map frame
-  pcl::transformPointCloud(cloud, cloud, tf2::transformToEigen(camera2map_).inverse().matrix());
+  Eigen::Matrix4d map2camera = camera2map_.inverse();
+  pcl::transformPointCloud(cloud, cloud, map2camera);
   auto cloud_stamp = history_clouds_.front().header.stamp;
   auto camera_stamp = camera_info.header.stamp;
   const auto& objects_cloud_stamp = objects_predictor_.predict(cloud_stamp);
@@ -324,7 +351,7 @@ void CloudOcclusionPredictor::compensateObjectMovements(
       }
     }
   }
-  pcl::transformPointCloud(cloud, cloud, tf2::transformToEigen(camera2map_).matrix());
+  pcl::transformPointCloud(cloud, cloud, camera2map_);
 }
 
 sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(const sensor_msgs::msg::CameraInfo& camera_info)
@@ -362,18 +389,49 @@ void CloudOcclusionPredictor::sampleTrafficLightRoi(
   }
 }
 
+void CloudOcclusionPredictor::sampleTrafficLightRoi(
+    const autoware_auto_perception_msgs::msg::TrafficLightRoi& roi,
+    uint32_t horizontal_sample_num, 
+    uint32_t vertical_sample_num,
+    pcl::PointCloud<pcl::PointXYZ>& cloud_out)
+{
+  cv::Point2d top_left_pixel(roi.roi.x_offset, roi.roi.y_offset);
+  cv::Point2d bottom_right_pixel(roi.roi.x_offset + roi.roi.width, roi.roi.y_offset + roi.roi.height);
+  cv::Point3d top_left = ::projectPixel2Point3d(top_left_pixel, pinhole_camera_model_, roi.dist);
+  cv::Point3d bottom_right = ::projectPixel2Point3d(bottom_right_pixel, pinhole_camera_model_, roi.dist);
+  cloud_out.clear();
+  float x1 = top_left.x;
+  float y1 = top_left.y;
+  float z1 = top_left.z;
+  float x2 = bottom_right.x;
+  float y2 = bottom_right.y;
+  float z2 = bottom_right.z;
+  for(uint32_t i1 = 0; i1 < horizontal_sample_num; i1++){
+    for(uint32_t i2 = 0; i2 < vertical_sample_num; i2++){
+      float x = x1 + (x2 - x1) * i1 / (horizontal_sample_num - 1);
+      float y = y1 + (y2 - y1) * i2 / (vertical_sample_num - 1);
+      float z = z1 + (z2 - z1) * i1 / (horizontal_sample_num - 1);
+      cloud_out.push_back(pcl::PointXYZ(x, y, z));
+    }
+  }
+}
+
 uint32_t CloudOcclusionPredictor::predict(
   const autoware_auto_perception_msgs::msg::TrafficLightRoi&roi, 
   double azimuth_occlusion_resolution,
   double elevation_occlusion_resolution)
 {
+  if(history_clouds_.empty()){
+    return 0;
+  }
   const uint32_t horizontal_sample_num = 20;
   const uint32_t vertical_sample_num = 20;
   static_assert(horizontal_sample_num > 1 && vertical_sample_num > 1);
   const float min_dist_from_occlusion_to_tl = 5.0f;
 
   pcl::PointCloud<pcl::PointXYZ> tl_sample_cloud;
-  sampleTrafficLightRoi(roi.top_left_3d, roi.bottom_right_3d, horizontal_sample_num, vertical_sample_num, tl_sample_cloud);
+  sampleTrafficLightRoi(roi, horizontal_sample_num, vertical_sample_num, tl_sample_cloud);
+  debug_cloud_ += tl_sample_cloud;
   uint32_t occluded_num = 0;
   for(const pcl::PointXYZ& tl_pt : tl_sample_cloud){
     Ray tl_ray = ::point2ray(tl_pt);

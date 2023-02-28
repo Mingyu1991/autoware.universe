@@ -134,9 +134,14 @@ void TrafficLightSSDFineDetectorNodelet::connectCb()
 void TrafficLightSSDFineDetectorNodelet::callback(
   const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg)
-{  
+{
   if (in_image_msg->width < 2 || in_image_msg->height < 2) {
     return;
+  }
+
+  std::map<autoware_auto_perception_msgs::msg::TrafficLightRoi::_id_type, float> id2dist;
+  for(const auto & roi : in_roi_msg->rois){
+    id2dist[roi.id] = roi.dist;
   }
 
   using std::chrono::high_resolution_clock;
@@ -211,6 +216,7 @@ void TrafficLightSSDFineDetectorNodelet::callback(
         autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
         cvRect2TlRoiMsg(
           cv::Rect(lt_roi, rb_roi), in_roi_msg->rois.at(i + batch_count * batch_size).id, tl_roi);
+        tl_roi.dist = id2dist[tl_roi.id];
         out_rois.rois.push_back(tl_roi);
       }
     }
@@ -283,7 +289,7 @@ bool TrafficLightSSDFineDetectorNodelet::cnnOutput2BoxDetection(
     // firstly list all traffic lights that might be within R
     std::vector<cv::Point> tl_centers;
     for(size_t j = 0; j < rough_roi_msg->rois.size(); j++){
-      if(i == int(j)) continue;
+      if(i == static_cast<int>(j)) continue;
       cv::Point center_j = getRoiCenter(rough_roi_msg->rois[j].roi);
       if(std::abs(center_i.x - center_j.x) <= rough_roi_msg->rois[i].roi.width
       && std::abs(center_i.y - center_j.y) <= rough_roi_msg->rois[i].roi.height){
