@@ -151,7 +151,6 @@ bool TrtCommon::buildEngineFromOnnx(
   const auto input_height = input_dims.d[2];
   const auto input_width = input_dims.d[3];
 
-  std::cout << "traffic light: input dims = " << input_dims << std::endl;
   std::cout << "traffic light: input_channel = " << input_channel << std::endl;
   std::cout << "traffic light: input_height = " << input_height << std::endl;
   std::cout << "traffic light: input_width = " << input_width << std::endl;
