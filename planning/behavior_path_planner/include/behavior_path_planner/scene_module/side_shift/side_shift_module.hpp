@@ -16,7 +16,7 @@
 #define BEHAVIOR_PATH_PLANNER__SCENE_MODULE__SIDE_SHIFT__SIDE_SHIFT_MODULE_HPP_
 
 #include "behavior_path_planner/scene_module/scene_module_interface.hpp"
-#include "behavior_path_planner/scene_module/utils/path_shifter.hpp"
+#include "behavior_path_planner/util/path_shifter/path_shifter.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -128,10 +128,10 @@ private:
   ShiftLine prev_shift_line_;
 
   // NOTE: this function is ported from avoidance.
-  PoseStamped getUnshiftedEgoPose(const ShiftedPath & prev_path) const;
-  inline PoseStamped getEgoPose() const { return *(planner_data_->self_pose); }
+  Pose getUnshiftedEgoPose(const ShiftedPath & prev_path) const;
+  inline Pose getEgoPose() const { return planner_data_->self_odometry->pose.pose; }
   PathWithLaneId calcCenterLinePath(
-    const std::shared_ptr<const PlannerData> & planner_data, const PoseStamped & pose) const;
+    const std::shared_ptr<const PlannerData> & planner_data, const Pose & pose) const;
 
   mutable rclcpp::Time last_requested_shift_change_time_{clock_->now()};
 };

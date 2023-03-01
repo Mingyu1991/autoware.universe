@@ -15,10 +15,9 @@
 #ifndef BEHAVIOR_PATH_PLANNER__SCENE_MODULE__AVOIDANCE__AVOIDANCE_MODULE_HPP_
 #define BEHAVIOR_PATH_PLANNER__SCENE_MODULE__AVOIDANCE__AVOIDANCE_MODULE_HPP_
 
-#include "behavior_path_planner/scene_module/avoidance/avoidance_module_data.hpp"
 #include "behavior_path_planner/scene_module/scene_module_interface.hpp"
 #include "behavior_path_planner/scene_module/scene_module_visitor.hpp"
-#include "behavior_path_planner/scene_module/utils/path_shifter.hpp"
+#include "behavior_path_planner/util/avoidance/avoidance_module_data.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -51,6 +50,10 @@ public:
   bool isExecutionRequested() const override;
   bool isExecutionReady() const override;
   BT::NodeStatus updateState() override;
+  BT::NodeStatus getNodeStatusWhileWaitingApproval() const override
+  {
+    return BT::NodeStatus::SUCCESS;
+  }
   BehaviorModuleOutput plan() override;
   CandidateOutput planCandidate() const override;
   BehaviorModuleOutput planWaitingApproval() override;
@@ -137,7 +140,7 @@ private:
 
   void updateRegisteredRTCStatus(const PathWithLaneId & path)
   {
-    const Point ego_position = planner_data_->self_pose->pose.position;
+    const Point ego_position = planner_data_->self_odometry->pose.pose.position;
 
     for (const auto & left_shift : left_shift_array_) {
       const double start_distance =
@@ -240,7 +243,7 @@ private:
   // ========= shift line generator ======
 
   AvoidLineArray calcRawShiftLinesFromObjects(
-    const AvoidancePlanningData & data, DebugData & debug) const;
+    AvoidancePlanningData & data, DebugData & debug) const;
 
   AvoidLineArray applyPreProcessToRawShiftLines(
     AvoidLineArray & current_raw_shift_points, DebugData & debug) const;
@@ -340,7 +343,7 @@ private:
 
   void postProcess(PathShifter & path_shifter) const
   {
-    const size_t nearest_idx = findEgoIndex(path_shifter.getReferencePath().points);
+    const size_t nearest_idx = planner_data_->findEgoIndex(path_shifter.getReferencePath().points);
     path_shifter.removeBehindShiftLineAndSetBaseOffset(nearest_idx);
   }
 
@@ -451,9 +454,9 @@ private:
 
   double getCurrentBaseShift() const { return path_shifter_.getBaseOffset(); }
 
-  Point getEgoPosition() const { return planner_data_->self_pose->pose.position; }
+  Point getEgoPosition() const { return planner_data_->self_odometry->pose.pose.position; }
 
-  Pose getEgoPose() const { return planner_data_->self_pose->pose; }
+  Pose getEgoPose() const { return planner_data_->self_odometry->pose.pose; }
 
   Pose getUnshiftedEgoPose(const ShiftedPath & prev_path) const;
 
