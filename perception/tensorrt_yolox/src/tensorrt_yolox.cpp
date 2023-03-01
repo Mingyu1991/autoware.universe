@@ -33,6 +33,7 @@ TrtYoloX::TrtYoloX(
   [[maybe_unused]] const std::string & cache_dir, const tensorrt_common::BatchConfig & batch_config,
   const size_t max_workspace_size)
 {
+  std::cout << "traffic light: before trt_common " << std::endl;
   trt_common_ = std::make_unique<tensorrt_common::TrtCommon>(
     model_path, precision, nullptr, batch_config, max_workspace_size);
   trt_common_->setup();
@@ -40,6 +41,7 @@ TrtYoloX::TrtYoloX(
   if (!trt_common_->isInitialized()) {
     return;
   }
+  std::cout << "traffic light: trt_common initialized" << std::endl;
 
   // Judge whether decoding output is required
   // Plain models require decoding, while models with EfficientNMS_TRT module don't.
@@ -53,11 +55,13 @@ TrtYoloX::TrtYoloX(
       num_class_ = num_class;
       score_threshold_ = score_threshold;
       nms_threshold_ = nms_threshold;
+      std::cout << "traffic light: NbBindings = 2 " << std::endl;
       break;
     case 5:
       // Specified model contains Efficient NMS_TRT.
       // Bindings are[input, detection_classes, detection_scores, detection_boxes, num_detections]
       needs_output_decode_ = false;
+      std::cout << "traffic light: NbBindings = 5 " << std::endl;
       break;
     default:
       std::stringstream s;
@@ -69,6 +73,7 @@ TrtYoloX::TrtYoloX(
   const auto input_dims = trt_common_->getBindingDimensions(0);
   const auto input_size =
     std::accumulate(input_dims.d + 1, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>());
+  std::cout << "traffic light: input_size = " << input_size << std::endl;
   if (needs_output_decode_) {
     const auto output_dims = trt_common_->getBindingDimensions(1);
     input_d_ = cuda_utils::make_unique<float[]>(batch_config[2] * input_size);

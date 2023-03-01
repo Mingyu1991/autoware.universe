@@ -37,8 +37,10 @@ TrtCommon::TrtCommon(
   batch_config_(batch_config),
   max_workspace_size_(max_workspace_size)
 {
+  std::cout << "traffic light: enter TrtCommon. plugin paths size = " << plugin_paths.size() << std::endl;
   for (const auto & plugin_path : plugin_paths) {
     int32_t flags{RTLD_LAZY};
+    std::cout << "traffic light: plugin path: " << plugin_path.c_str() << std::endl;
 #if ENABLE_ASAN
     // https://github.com/google/sanitizers/issues/89
     // asan doesn't handle module unloading correctly and there are no plans on doing
@@ -103,6 +105,7 @@ bool TrtCommon::buildEngineFromOnnx(
   const std::string & onnx_file_path, const std::string & output_engine_file_path)
 {
   auto builder = TrtUniquePtr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(logger_));
+  std::cout << "traffic light: finish builder" << std::endl;
   if (!builder) {
     logger_.log(nvinfer1::ILogger::Severity::kERROR, "Fail to create builder");
     return false;
@@ -113,6 +116,7 @@ bool TrtCommon::buildEngineFromOnnx(
 
   auto network =
     TrtUniquePtr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
+  std::cout << "traffic light: finish networkbuilder" << std::endl;
   if (!network) {
     logger_.log(nvinfer1::ILogger::Severity::kERROR, "Fail to create network");
     return false;
@@ -123,6 +127,7 @@ bool TrtCommon::buildEngineFromOnnx(
     logger_.log(nvinfer1::ILogger::Severity::kERROR, "Fail to create builder config");
     return false;
   }
+  std::cout << "traffic light: finish config" << std::endl;
 
   if (precision_ == "fp16" || precision_ == "int8") {
     config->setFlag(nvinfer1::BuilderFlag::kFP16);
@@ -138,12 +143,18 @@ bool TrtCommon::buildEngineFromOnnx(
         onnx_file_path.c_str(), static_cast<int>(nvinfer1::ILogger::Severity::kERROR))) {
     return false;
   }
+  std::cout << "traffic light: finish parser" << std::endl;
 
   const auto input = network->getInput(0);
   const auto input_dims = input->getDimensions();
   const auto input_channel = input_dims.d[1];
   const auto input_height = input_dims.d[2];
   const auto input_width = input_dims.d[3];
+
+  std::cout << "traffic light: input dims = " << input_dims << std::endl;
+  std::cout << "traffic light: input_channel = " << input_channel << std::endl;
+  std::cout << "traffic light: input_height = " << input_height << std::endl;
+  std::cout << "traffic light: input_width = " << input_width << std::endl;
 
   auto profile = builder->createOptimizationProfile();
   profile->setDimensions(

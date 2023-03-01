@@ -35,18 +35,22 @@ def generate_launch_description():
             DeclareLaunchArgument(name, default_value=default_value, description=description)
         )
 
-    ssd_fine_detector_share_dir = get_package_share_directory("traffic_light_ssd_fine_detector")
+    fine_detector_share_dir = get_package_share_directory("traffic_light_fine_detector")
     classifier_share_dir = get_package_share_directory("traffic_light_classifier")
     add_launch_arg("enable_image_decompressor", "True")
     add_launch_arg("enable_fine_detection", "True")
     add_launch_arg("input/image", "/sensing/camera/traffic_light/image_raw")
 
-    # traffic_light_ssd_fine_detector
+    # traffic_light_fine_detector
     add_launch_arg(
-        "onnx_file", os.path.join(ssd_fine_detector_share_dir, "data", "mb2-ssd-lite-tlr.onnx")
+        "detector_type", "yolox-s"
     )
     add_launch_arg(
-        "label_file", os.path.join(ssd_fine_detector_share_dir, "data", "voc_labels_tl.txt")
+        #"onnx_file", os.path.join(fine_detector_share_dir, "data", "mb2-ssd-lite-tlr.onnx")
+        "onnx_file", os.path.join(fine_detector_share_dir, "data", "yolox-s_tlr.onnx")
+    )
+    add_launch_arg(
+        "label_file", os.path.join(fine_detector_share_dir, "data", "voc_labels_tl.txt")
     )
     add_launch_arg("fine_detector_precision", "FP32")
     add_launch_arg("score_thresh", "0.7")
@@ -194,7 +198,8 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("enable_image_decompressor")),
     )
 
-    ssd_fine_detector_param = create_parameter_dict(
+    fine_detector_param = create_parameter_dict(
+        "detector_type",
         "onnx_file",
         "label_file",
         "score_thresh",
@@ -203,15 +208,15 @@ def generate_launch_description():
         "mean",
         "std",
     )
-    ssd_fine_detector_param["mode"] = LaunchConfiguration("fine_detector_precision")
+    fine_detector_param["mode"] = LaunchConfiguration("fine_detector_precision")
 
     fine_detector_loader = LoadComposableNodes(
         composable_node_descriptions=[
             ComposableNode(
-                package="traffic_light_ssd_fine_detector",
-                plugin="traffic_light::TrafficLightSSDFineDetectorNodelet",
-                name="traffic_light_ssd_fine_detector",
-                parameters=[ssd_fine_detector_param],
+                package="traffic_light_fine_detector",
+                plugin="traffic_light::TrafficLightFineDetectorNodelet",
+                name="traffic_light_fine_detector",
+                parameters=[fine_detector_param],
                 remappings=[
                     ("~/input/image", LaunchConfiguration("input/image")),
                     ("~/input/rois", "rough/rois"),
