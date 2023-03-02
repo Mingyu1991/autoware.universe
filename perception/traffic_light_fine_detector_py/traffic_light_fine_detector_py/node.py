@@ -95,7 +95,6 @@ class TrafficLightFineDetector(Node):
         
 
     def callback(self, image_msg: Image, rough_roi_msg: TrafficLightRoiArray):
-        print("get image")
         output = copy.deepcopy(rough_roi_msg)
         output.rois.clear()
         image = self.bridge.imgmsg_to_cv2(image_msg)
@@ -124,7 +123,6 @@ class TrafficLightFineDetector(Node):
                         output_roi.roi.width = int(best_bbox[2] - best_bbox[0])
                         output_roi.roi.height = int(best_bbox[3] - best_bbox[1])
                         detections.append(output_roi)
-            print("inference t = {}".format(time.time() - t1))
             if detections.__len__() > 0:
                 output.rois.append(self.merge_detections(roi, detections, image))    
             

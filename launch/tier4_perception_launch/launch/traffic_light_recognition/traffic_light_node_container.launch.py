@@ -87,31 +87,31 @@ def generate_launch_description():
         package="rclcpp_components",
         executable=LaunchConfiguration("container_executable"),
         composable_node_descriptions=[
-            ComposableNode(
-                package="traffic_light_classifier",
-                plugin="traffic_light::TrafficLightClassifierNodelet",
-                name="traffic_light_classifier",
-                parameters=[
-                    create_parameter_dict(
-                        "approximate_sync",
-                        "classifier_type",
-                        "model_file_path",
-                        "label_file_path",
-                        "precision",
-                        "input_c",
-                        "input_h",
-                        "input_w",
-                    )
-                ],
-                remappings=[
-                    ("~/input/image", LaunchConfiguration("input/image")),
-                    ("~/input/rois", "rois"),
-                    ("~/output/traffic_signals", "classified/traffic_signals"),
-                ],
-                extra_arguments=[
-                    {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
-                ],
-            ),
+            # ComposableNode(
+            #     package="traffic_light_classifier",
+            #     plugin="traffic_light::TrafficLightClassifierNodelet",
+            #     name="traffic_light_classifier",
+            #     parameters=[
+            #         create_parameter_dict(
+            #             "approximate_sync",
+            #             "classifier_type",
+            #             "model_file_path",
+            #             "label_file_path",
+            #             "precision",
+            #             "input_c",
+            #             "input_h",
+            #             "input_w",
+            #         )
+            #     ],
+            #     remappings=[
+            #         ("~/input/image", LaunchConfiguration("input/image")),
+            #         ("~/input/rois", "rois"),
+            #         ("~/output/traffic_signals", "classified/traffic_signals"),
+            #     ],
+            #     extra_arguments=[
+            #         {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
+            #     ],
+            # ),
             ComposableNode(
                 package="traffic_light_visualization",
                 plugin="traffic_light::TrafficLightRoiVisualizerNodelet",
