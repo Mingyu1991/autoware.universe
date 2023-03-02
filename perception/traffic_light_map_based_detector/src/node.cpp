@@ -262,6 +262,51 @@ bool MapBasedDetector::getTrafficLightRoi(
       return false;
     }
   }
+
+  // for expect width and height
+  int x1, y1;
+  int x2, y2;
+  {
+    tf2::Transform tf_map2tl(
+      tf2::Quaternion(0, 0, 0, 1),
+      tf2::Vector3(
+        tl_left_down_point.x(), tl_left_down_point.y(), tl_left_down_point.z() + tl_height));
+    tf2::Transform tf_camera2tl;
+    tf_camera2tl = tf_map2camera.inverse() * tf_map2tl;
+    // target position in camera coordinate
+    geometry_msgs::msg::Point point3d;
+    point3d.x = tf_camera2tl.getOrigin().x();
+    point3d.y = tf_camera2tl.getOrigin().y();
+    point3d.z = tf_camera2tl.getOrigin().z();
+    if (point3d.z <= 0.0) {
+      return false;
+    }
+    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+    roundInImageFrame(pinhole_camera_model, point2d);
+    x1 = point2d.x;
+    y1 = point2d.y;
+  }
+  {
+    tf2::Transform tf_map2tl(
+      tf2::Quaternion(0, 0, 0, 1),
+      tf2::Vector3(tl_right_down_point.x(), tl_right_down_point.y(), tl_right_down_point.z()));
+    tf2::Transform tf_camera2tl;
+    tf_camera2tl = tf_map2camera.inverse() * tf_map2tl;
+    // target position in camera coordinate
+    geometry_msgs::msg::Point point3d;
+    point3d.x = tf_camera2tl.getOrigin().x();
+    point3d.y = tf_camera2tl.getOrigin().y();
+    point3d.z = tf_camera2tl.getOrigin().z();
+    if (point3d.z <= 0.0) {
+      return false;
+    }
+    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+    roundInImageFrame(pinhole_camera_model, point2d);
+    x2 = point2d.x;
+    y2 = point2d.y;
+  }
+  tl_roi.expect_width = x2 - x1;
+  tl_roi.expect_height = y2 - y1;
   return true;
 }
 

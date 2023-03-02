@@ -250,7 +250,7 @@ def generate_launch_description():
             set_container_mt_executable,
             container,
             decompressor_loader,
-            fine_detector_loader,
+            #fine_detector_loader,
             estimator_loader,
             relay_loader,
         ]
