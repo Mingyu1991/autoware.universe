@@ -78,7 +78,7 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   cv::rectangle(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 3);
+    color, 2);
   cv::putText(
     image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
@@ -103,13 +103,13 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   cv::rectangle(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 3);
+    color, 2);
 
   int offset = 40;
   cv::putText(
     image, std::to_string(result.prob),
     cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 0)), cv::FONT_HERSHEY_COMPLEX,
-    1.1, color, 3);
+    1.1, color, 2);
 
   cv::putText(
     image, result.label, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 1)),

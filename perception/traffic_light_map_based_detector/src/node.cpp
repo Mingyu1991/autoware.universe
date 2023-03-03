@@ -135,6 +135,8 @@ void MapBasedDetector::cameraInfoCallback(
   /* Camera pose */
   geometry_msgs::msg::PoseStamped camera_pose_stamped;
   try {
+    double offset = 0.040;
+    rclcpp::Time stamp = rclcpp::Time(input_msg->header.stamp) + rclcpp::Duration::from_seconds(offset);
     geometry_msgs::msg::TransformStamped transform;
     transform = tf_buffer_.lookupTransform(
       "map", input_msg->header.frame_id, input_msg->header.stamp,
@@ -380,7 +382,7 @@ void MapBasedDetector::getVisibleTrafficLights(
     if (
       traffic_light.hasAttribute("subtype") == false ||
       traffic_light.attribute("subtype").value() == "solid") {
-      continue;
+      //continue;
     }
     const auto & tl_left_down_point = traffic_light.front();
     const auto & tl_right_down_point = traffic_light.back();
@@ -391,7 +393,7 @@ void MapBasedDetector::getVisibleTrafficLights(
     tl_central_point.x = (tl_right_down_point.x() + tl_left_down_point.x()) / 2.0;
     tl_central_point.y = (tl_right_down_point.y() + tl_left_down_point.y()) / 2.0;
     tl_central_point.z = (tl_right_down_point.z() + tl_left_down_point.z() + tl_height) / 2.0;
-    constexpr double max_distance_range = 200.0;
+    constexpr double max_distance_range = 250.0;
     if (!isInDistanceRange(tl_central_point, camera_pose.position, max_distance_range)) {
       continue;
     }

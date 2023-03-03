@@ -45,6 +45,7 @@ LABEL_TO_COLOR = dict(
 
 LABEL_TO_SHAPE = dict(
     left = TrafficLight.LEFT_ARROW,
+    right = TrafficLight.RIGHT_ARROW,
     straight = TrafficLight.UP_ARROW,
     leftdiagonal = TrafficLight.DOWN_LEFT_ARROW,
     rightdiagonal = TrafficLight.DOWN_RIGHT_ARROW,
@@ -78,8 +79,8 @@ class TrafficLightClassifier(Node):
         image = self.bridge.imgmsg_to_cv2(image_msg)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         t1 = time.time()
+        debug_img = copy.deepcopy(image)
         for roi in roi_msg.rois:
-            
             signal = TrafficSignal()
             signal.map_primitive_id = roi.id
             roi: TrafficLightRoi
@@ -87,8 +88,12 @@ class TrafficLightClassifier(Node):
             y1 = roi.roi.y_offset
             x2 = roi.roi.x_offset + roi.roi.width
             y2 = roi.roi.y_offset + roi.roi.height
+            if roi.roi.width <= 1 or roi.roi.height <= 1:
+                continue
             image_roi = image[y1:y2, x1:x2, :]
-            result_class = inference_model(self.model, image_roi)["pred_class"]
+            result = inference_model(self.model, image_roi)
+            result_class = result["pred_class"]
+            confidence = result["pred_score"]
             for label in result_class.split("-"):
                 light = TrafficLight()
                 if label == "unknown":
@@ -100,9 +105,18 @@ class TrafficLightClassifier(Node):
                 else:
                     light.color = TrafficLight.GREEN
                     light.shape = LABEL_TO_SHAPE[label]
+                light.confidence = confidence
                 signal.lights.append(light)
             output.signals.append(signal)
+            
+            debug_img = cv2.rectangle(debug_img, (x1, y1), (x2, y2), (255, 0, 0))
         self.publisher_.publish(output)
+        
+        save_dir = "/tmp/images"
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, f"{roi_msg.header.stamp.sec}_{roi_msg.header.stamp.nanosec}.jpg")
+        debug_img = cv2.resize(debug_img, (debug_img.shape[1] // 2, debug_img.shape[0] // 2))
+        cv2.imwrite(save_path, debug_img)
         print(f"inference time = {time.time() - t1}")
                     
 

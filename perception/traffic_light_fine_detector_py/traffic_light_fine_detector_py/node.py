@@ -99,14 +99,16 @@ class TrafficLightFineDetector(Node):
         output.rois.clear()
         image = self.bridge.imgmsg_to_cv2(image_msg)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
+        t1 = time.time()
         for roi in rough_roi_msg.rois:
-            t1 = time.time()
+            
             roi: TrafficLightRoi
             x1 = roi.roi.x_offset
             y1 = roi.roi.y_offset
             x2 = roi.roi.x_offset + roi.roi.width
             y2 = roi.roi.y_offset + roi.roi.height
+            if roi.roi.width <= 1 or roi.roi.height <= 1:
+                continue
             image_roi = image[y1:y2, x1:x2, :]
             detections = []
             for model in self.models:
@@ -127,6 +129,7 @@ class TrafficLightFineDetector(Node):
                 output.rois.append(self.merge_detections(roi, detections, image))    
             
         self.publisher_.publish(output)
+        print(f"inference_t = {time.time() - t1}")
 
 def main(args=None):
     rclpy.init(args=args)
