@@ -15,7 +15,7 @@
 import rclpy
 from rclpy.node import Node
 import message_filters
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import String
 from autoware_auto_perception_msgs.msg import TrafficLightRoiArray, TrafficLightRoi, TrafficSignal, TrafficSignalArray, TrafficLight
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
@@ -111,13 +111,12 @@ class TrafficLightClassifier(Node):
             
             debug_img = cv2.rectangle(debug_img, (x1, y1), (x2, y2), (255, 0, 0))
         self.publisher_.publish(output)
-        
-        save_dir = "/tmp/images"
-        os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"{roi_msg.header.stamp.sec}_{roi_msg.header.stamp.nanosec}.jpg")
-        debug_img = cv2.resize(debug_img, (debug_img.shape[1] // 2, debug_img.shape[0] // 2))
-        cv2.imwrite(save_path, debug_img)
-        print(f"inference time = {time.time() - t1}")
+        # save_dir = "/tmp/images"
+        # os.makedirs(save_dir, exist_ok=True)
+        # save_path = os.path.join(save_dir, f"{roi_msg.header.stamp.sec}_{roi_msg.header.stamp.nanosec}.jpg")
+        # debug_img = cv2.resize(debug_img, (debug_img.shape[1] // 2, debug_img.shape[0] // 2))
+        # cv2.imwrite(save_path, debug_img)
+        # print(f"inference time = {time.time() - t1}")
                     
 
 def main(args=None):

@@ -40,14 +40,14 @@ MODELS = [
         ckpt="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/yolox-l/yolox-l.pth",
         cfg="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/yolox-l/yolox_l_8x8_300e_voc_tlr.py"
     ),
-    dict(
-        ckpt="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-512/ssd-vgg-512.pth",
-        cfg="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-512/ssd_vgg16_512x512_tlr_voc.py"
-    ),
-    dict(
-        ckpt="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-300/ssd-vgg-300.pth",
-        cfg="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-300/ssd_vgg16_300x300_tlr_voc.py"
-    ),
+    # dict(
+    #     ckpt="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-512/ssd-vgg-512.pth",
+    #     cfg="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-512/ssd_vgg16_512x512_tlr_voc.py"
+    # ),
+    # dict(
+    #     ckpt="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-300/ssd-vgg-300.pth",
+    #     cfg="/home/mingyuli/workspace/pilot-auto.xx1/src/autoware/universe/perception/traffic_light_fine_detector_py/traffic_light_fine_detector_py/models/ssd-vgg-300/ssd_vgg16_300x300_tlr_voc.py"
+    # ),
 ]
 
 SCORE_THRES = 0.3
@@ -95,41 +95,46 @@ class TrafficLightFineDetector(Node):
         
 
     def callback(self, image_msg: Image, rough_roi_msg: TrafficLightRoiArray):
-        output = copy.deepcopy(rough_roi_msg)
-        output.rois.clear()
-        image = self.bridge.imgmsg_to_cv2(image_msg)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        t1 = time.time()
-        for roi in rough_roi_msg.rois:
-            
-            roi: TrafficLightRoi
-            x1 = roi.roi.x_offset
-            y1 = roi.roi.y_offset
-            x2 = roi.roi.x_offset + roi.roi.width
-            y2 = roi.roi.y_offset + roi.roi.height
-            if roi.roi.width <= 1 or roi.roi.height <= 1:
-                continue
-            image_roi = image[y1:y2, x1:x2, :]
-            detections = []
-            for model in self.models:
-                result = inference_detector(model, image_roi)
-                bboxes, scores = result[1][:, :4], result[1][:, 4]
-                if scores.shape[0] > 0:
-                    max_score_index = np.where(scores == max(scores))[0][0]
-                    if scores[max_score_index] >= SCORE_THRES:
-                        best_bbox = bboxes[max_score_index]
-                        output_roi = TrafficLightRoi()
-                        output_roi.id = roi.id
-                        output_roi.roi.x_offset = int(best_bbox[0] + roi.roi.x_offset)
-                        output_roi.roi.y_offset = int(best_bbox[1] + roi.roi.y_offset)
-                        output_roi.roi.width = int(best_bbox[2] - best_bbox[0])
-                        output_roi.roi.height = int(best_bbox[3] - best_bbox[1])
-                        detections.append(output_roi)
-            if detections.__len__() > 0:
-                output.rois.append(self.merge_detections(roi, detections, image))    
-            
-        self.publisher_.publish(output)
-        print(f"inference_t = {time.time() - t1}")
+        try:
+            output = copy.deepcopy(rough_roi_msg)
+            output.rois.clear()
+            image = self.bridge.imgmsg_to_cv2(image_msg)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            t1 = time.time()
+            for roi in rough_roi_msg.rois:
+                
+                roi: TrafficLightRoi
+                x1 = roi.roi.x_offset
+                y1 = roi.roi.y_offset
+                x2 = roi.roi.x_offset + roi.roi.width
+                y2 = roi.roi.y_offset + roi.roi.height
+                if roi.roi.width <= 1 or roi.roi.height <= 1:
+                    continue
+                image_roi = image[y1:y2, x1:x2, :]
+                detections = []
+                for model in self.models:
+                    result = inference_detector(model, image_roi)
+                    bboxes, scores = result[1][:, :4], result[1][:, 4]
+                    if scores.shape[0] > 0:
+                        max_score_index = np.where(scores == max(scores))[0][0]
+                        if scores[max_score_index] >= SCORE_THRES:
+                            best_bbox = bboxes[max_score_index]
+                            output_roi = TrafficLightRoi()
+                            output_roi.id = roi.id
+                            output_roi.roi.x_offset = int(best_bbox[0] + roi.roi.x_offset)
+                            output_roi.roi.y_offset = int(best_bbox[1] + roi.roi.y_offset)
+                            output_roi.roi.width = int(best_bbox[2] - best_bbox[0])
+                            output_roi.roi.height = int(best_bbox[3] - best_bbox[1])
+                            detections.append(output_roi)
+                if detections.__len__() > 0:
+                    output.rois.append(self.merge_detections(roi, detections, image))    
+            if output.rois.__len__() != 0:
+                print(f"stamp = {image_msg.header.stamp.sec}.{image_msg.header.stamp.nanosec}. inference_t = {time.time() - t1}", end='\r')
+            else:
+                print(f"stamp = {image_msg.header.stamp.sec}.{image_msg.header.stamp.nanosec}. no traffic light!", end='\r')
+            self.publisher_.publish(output)
+        except Exception as e:
+            print(f"error happened: {e}")
 
 def main(args=None):
     rclpy.init(args=args)

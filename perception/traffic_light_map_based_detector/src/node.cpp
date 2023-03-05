@@ -382,7 +382,7 @@ void MapBasedDetector::getVisibleTrafficLights(
     if (
       traffic_light.hasAttribute("subtype") == false ||
       traffic_light.attribute("subtype").value() == "solid") {
-      //continue;
+      continue;
     }
     const auto & tl_left_down_point = traffic_light.front();
     const auto & tl_right_down_point = traffic_light.back();
