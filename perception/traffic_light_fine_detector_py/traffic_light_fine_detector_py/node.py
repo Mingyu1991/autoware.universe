@@ -66,7 +66,7 @@ class TrafficLightFineDetector(Node):
         rough_roi_topic = "/perception/traffic_light_recognition/rough/rois"
         image_sub = message_filters.Subscriber(self, Image, image_topic, qos_profile=qos_profile)
         rough_roi_sub = message_filters.Subscriber(self, TrafficLightRoiArray, rough_roi_topic)
-        ts = message_filters.TimeSynchronizer([image_sub, rough_roi_sub], 10)
+        ts = message_filters.TimeSynchronizer([image_sub, rough_roi_sub], 100000)
         ts.registerCallback(self.callback)
         self.publisher_ = self.create_publisher(TrafficLightRoiArray, "/perception/traffic_light_recognition/rois", 10)
         self.bridge = CvBridge()
@@ -129,9 +129,9 @@ class TrafficLightFineDetector(Node):
                 if detections.__len__() > 0:
                     output.rois.append(self.merge_detections(roi, detections, image))    
             if output.rois.__len__() != 0:
-                print(f"stamp = {image_msg.header.stamp.sec}.{image_msg.header.stamp.nanosec}. inference_t = {time.time() - t1}", end='\r')
+                print(f"stamp = {image_msg.header.stamp.sec}.{image_msg.header.stamp.nanosec}. inference_t = {time.time() - t1}")
             else:
-                print(f"stamp = {image_msg.header.stamp.sec}.{image_msg.header.stamp.nanosec}. no traffic light!", end='\r')
+                print(f"stamp = {image_msg.header.stamp.sec}.{image_msg.header.stamp.nanosec}. no traffic light!")
             self.publisher_.publish(output)
         except Exception as e:
             print(f"error happened: {e}")
