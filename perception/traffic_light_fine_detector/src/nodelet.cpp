@@ -246,69 +246,6 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
   }
 }
 
-bool TrafficLightFineDetectorNodelet::cvMat2CnnInput(
-  const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<float> & data)
-{
-  for (int i = 0; i < num_rois; ++i) {
-    // cv::Mat rgb;
-    // cv::cvtColor(in_imgs.at(i), rgb, CV_BGR2RGB);
-    cv::Mat resized;
-    cv::resize(in_imgs.at(i), resized, cv::Size(width_, height_));
-
-    cv::Mat pixels;
-    resized.convertTo(pixels, CV_32FC3, 1.0 / 255, 0);
-    std::vector<float> img;
-    if (pixels.isContinuous()) {
-      img.assign(
-        reinterpret_cast<const float *>(pixels.datastart),
-        reinterpret_cast<const float *>(pixels.dataend));
-    } else {
-      return false;
-    }
-
-    for (int c = 0; c < channel_; ++c) {
-      for (int j = 0, hw = width_ * height_; j < hw; ++j) {
-        data[i * channel_ * width_ * height_ + c * hw + j] =
-          (img[channel_ * j + 2 - c] - mean_[c]) / std_[c];
-      }
-    }
-  }
-  return true;
-}
-
-bool TrafficLightFineDetectorNodelet::cnnOutput2BoxDetection(
-  const float * scores, const float * boxes, const int tlr_id, const std::vector<cv::Mat> & in_imgs,
-  const int num_rois, std::vector<Detection> & detections)
-{
-  if (tlr_id > class_num_ - 1) {
-    return false;
-  }
-  for (int i = 0; i < num_rois; ++i) {
-    std::vector<float> tlr_scores;
-    Detection det;
-    for (int j = 0; j < detection_per_class_; ++j) {
-      tlr_scores.push_back(scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_]);
-    }
-    std::vector<float>::iterator iter = std::max_element(tlr_scores.begin(), tlr_scores.end());
-    size_t index = std::distance(tlr_scores.begin(), iter);
-    size_t box_index = i * detection_per_class_ * 4 + index * 4;
-    cv::Point lt, rb;
-    lt.x = boxes[box_index] * in_imgs.at(i).cols;
-    lt.y = boxes[box_index + 1] * in_imgs.at(i).rows;
-    rb.x = boxes[box_index + 2] * in_imgs.at(i).cols;
-    rb.y = boxes[box_index + 3] * in_imgs.at(i).rows;
-    fitInFrame(lt, rb, cv::Size(in_imgs.at(i).cols, in_imgs.at(i).rows));
-    det.x = lt.x;
-    det.y = lt.y;
-    det.w = rb.x - lt.x;
-    det.h = rb.y - lt.y;
-
-    det.prob = tlr_scores[index];
-    detections.push_back(det);
-  }
-  return true;
-}
-
 bool TrafficLightFineDetectorNodelet::rosMsg2CvMat(
   const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image, std::string encode)
 {
@@ -343,17 +280,6 @@ bool TrafficLightFineDetectorNodelet::fitInFrame(
   }
 
   return true;
-}
-
-void TrafficLightFineDetectorNodelet::cvRect2TlRoiMsg(
-  const cv::Rect & rect, const int32_t id,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi)
-{
-  tl_roi.id = id;
-  tl_roi.roi.x_offset = rect.x;
-  tl_roi.roi.y_offset = rect.y;
-  tl_roi.roi.width = rect.width;
-  tl_roi.roi.height = rect.height;
 }
 
 bool TrafficLightFineDetectorNodelet::readLabelFile(const std::string & filepath)

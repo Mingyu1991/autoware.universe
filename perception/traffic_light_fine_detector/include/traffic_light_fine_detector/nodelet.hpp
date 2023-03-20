@@ -62,9 +62,6 @@ public:
 private:
   bool cvMat2CnnInput(
     const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<float> & data);
-  bool cnnOutput2BoxDetection(
-    const float * scores, const float * boxes, const int tlr_id,
-    const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<Detection> & detections);
   float evalMatchScore(
     std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> & id2roughRoi,
     std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
@@ -77,11 +74,7 @@ private:
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image,
     std::string encode = "rgb8");
   bool fitInFrame(cv::Point & lt, cv::Point & rb, const cv::Size & size);
-  void cvRect2TlRoiMsg(
-    const cv::Rect & rect, const int32_t id,
-    autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi);
   bool readLabelFile(const std::string & filepath);
-  bool getTlrIdFromLabel(const std::vector<std::string> & labels, int & tlr_id);
 
   // variables
   std::shared_ptr<image_transport::ImageTransport> image_transport_;
