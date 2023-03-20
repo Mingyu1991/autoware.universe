@@ -115,7 +115,6 @@ void TrafficLightFineDetectorNodelet::callback(
   const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr in_roi_msg)
 {
-  RCLCPP_INFO(get_logger(), "11111");
   if (in_image_msg->width < 2 || in_image_msg->height < 2) {
     return;
   }
@@ -127,25 +126,21 @@ void TrafficLightFineDetectorNodelet::callback(
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray out_rois;
   std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> id2roughRoi;
   std::map<int, tensorrt_yolox::ObjectArray> id2detections;
-  RCLCPP_INFO(get_logger(), "22222");
 
   rosMsg2CvMat(in_image_msg, original_image, "bgr8");
   for (const auto & rough_roi : in_roi_msg->rois) {
-    RCLCPP_INFO(get_logger(), "33333");
     id2roughRoi[rough_roi.id] = rough_roi;
     cv::Point lt(rough_roi.rough_roi.x_offset, rough_roi.rough_roi.y_offset);
     cv::Point rb(
       rough_roi.rough_roi.x_offset + rough_roi.rough_roi.width,
       rough_roi.rough_roi.y_offset + rough_roi.rough_roi.height);
     fitInFrame(lt, rb, cv::Size(original_image.size()));
-    RCLCPP_INFO(get_logger(), "44444");
     cv::Mat cropped_img = cv::Mat(original_image, cv::Rect(lt, rb));
     tensorrt_yolox::ObjectArrays inference_results;
     if (!trt_yolox_->doInference({cropped_img}, inference_results)) {
       RCLCPP_WARN(this->get_logger(), "Fail to inference");
       return;
     }
-    RCLCPP_INFO(get_logger(), "55555");
     for (tensorrt_yolox::Object & detection : inference_results[0]) {
       if (detection.score < 0.3) continue;
       cv::Point lt_roi(lt.x + detection.x_offset, lt.y + detection.y_offset);
@@ -158,10 +153,8 @@ void TrafficLightFineDetectorNodelet::callback(
       det.height = rb_roi.y - lt_roi.y;
       id2detections[rough_roi.id].push_back(det);
     }
-    RCLCPP_INFO(get_logger(), "66666");
   }
   detectionMatch(id2roughRoi, id2detections, out_rois);
-  RCLCPP_INFO(get_logger(), "77777");
   out_rois.header = in_roi_msg->header;
   output_roi_pub_->publish(out_rois);
   const auto exe_end_time = high_resolution_clock::now();
@@ -171,7 +164,6 @@ void TrafficLightFineDetectorNodelet::callback(
   exe_time_msg.data = exe_time;
   exe_time_msg.stamp = this->now();
   exe_time_pub_->publish(exe_time_msg);
-  RCLCPP_INFO(get_logger(), "88888");
 }
 
 float TrafficLightFineDetectorNodelet::evalMatchScore(
