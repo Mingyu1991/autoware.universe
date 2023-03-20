@@ -1,0 +1,273 @@
+// Copyright 2020 Tier IV, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "traffic_light_fine_detector/nodelet.hpp"
+
+#if (defined(_MSC_VER) or (defined(__GNUC__) and (7 <= __GNUC_MAJOR__)))
+#include <filesystem>
+namespace fs = ::std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = ::std::experimental::filesystem;
+#endif
+
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace traffic_light
+{
+inline std::vector<float> toFloatVector(const std::vector<double> double_vector)
+{
+  return std::vector<float>(double_vector.begin(), double_vector.end());
+}
+
+TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
+  const rclcpp::NodeOptions & options)
+: Node("traffic_light_fine_detector_node", options)
+{
+  const int num_class = 2;
+  width_ = 640;
+  height_ = 640;
+  using std::placeholders::_1;
+  using std::placeholders::_2;
+
+  std::string model_path = declare_parameter("fine_detection_onnx_file", "");
+  std::string label_path = declare_parameter("fine_detection_label_file", "");
+  std::string precision = declare_parameter("fine_detector_precision", "fp32");
+  // Objects with a score lower than this value will be ignored.
+  // This threshold will be ignored if specified model contains EfficientNMS_TRT module in it
+  float score_threshold = declare_parameter("fine_detection_score_thresh", 0.3);
+  // Detection results will be ignored if IoU over this value.
+  // This threshold will be ignored if specified model contains EfficientNMS_TRT module in it
+  float nms_threshold = declare_parameter("fine_detection_nms_thresh", 0.7);
+
+  if (readLabelFile(label_path)) {
+    RCLCPP_ERROR(this->get_logger(), "Could not find tlr id");
+  }
+  trt_yolox_ = std::make_unique<tensorrt_yolox::TrtYoloX>(
+    model_path, precision, num_class, score_threshold, nms_threshold);
+
+  using std::chrono_literals::operator""ms;
+  timer_ = rclcpp::create_timer(
+    this, get_clock(), 100ms, std::bind(&TrafficLightFineDetectorNodelet::connectCb, this));
+
+  std::lock_guard<std::mutex> lock(connect_mutex_);
+  output_roi_pub_ =
+    this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
+      "~/output/rois", 1);
+  exe_time_pub_ =
+    this->create_publisher<tier4_debug_msgs::msg::Float32Stamped>("~/debug/exe_time_ms", 1);
+  if (is_approximate_sync_) {
+    approximate_sync_.reset(new ApproximateSync(ApproximateSyncPolicy(10), image_sub_, roi_sub_));
+    approximate_sync_->registerCallback(
+      std::bind(&TrafficLightFineDetectorNodelet::callback, this, _1, _2));
+  } else {
+    sync_.reset(new Sync(SyncPolicy(10), image_sub_, roi_sub_));
+    sync_->registerCallback(std::bind(&TrafficLightFineDetectorNodelet::callback, this, _1, _2));
+  }
+}
+
+void TrafficLightFineDetectorNodelet::connectCb()
+{
+  std::lock_guard<std::mutex> lock(connect_mutex_);
+  if (output_roi_pub_->get_subscription_count() == 0) {
+    image_sub_.unsubscribe();
+    roi_sub_.unsubscribe();
+  } else if (!image_sub_.getSubscriber()) {
+    image_sub_.subscribe(this, "~/input/image", "raw", rmw_qos_profile_sensor_data);
+    roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
+  }
+}
+
+void TrafficLightFineDetectorNodelet::callback(
+  const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg)
+{
+  if (in_image_msg->width < 2 || in_image_msg->height < 2) {
+    return;
+  }
+
+  using std::chrono::high_resolution_clock;
+  using std::chrono::milliseconds;
+  const auto exe_start_time = high_resolution_clock::now();
+  cv::Mat original_image;
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray out_rois;
+
+  rosMsg2CvMat(in_image_msg, original_image, "bgr8");
+  for (const auto & rough_roi : in_roi_msg->rois) {
+    cv::Point lt(rough_roi.roi.x_offset, rough_roi.roi.y_offset);
+    cv::Point rb(
+      rough_roi.roi.x_offset + rough_roi.roi.width, rough_roi.roi.y_offset + rough_roi.roi.height);
+    fitInFrame(lt, rb, cv::Size(original_image.size()));
+    cv::Mat cropped_img = cv::Mat(original_image, cv::Rect(lt, rb));
+    tensorrt_yolox::ObjectArrays inference_results;
+    if (!trt_yolox_->doInference({cropped_img}, inference_results)) {
+      RCLCPP_WARN(this->get_logger(), "Fail to inference");
+      return;
+    }
+    for (const tensorrt_yolox::Object & detection : inference_results[0]) {
+      if (detection.score < 0.3) continue;
+      cv::Point lt_roi(lt.x + detection.x_offset, lt.y + detection.y_offset);
+      cv::Point rb_roi(lt_roi.x + detection.width, lt_roi.y + detection.height);
+      fitInFrame(lt_roi, rb_roi, cv::Size(original_image.size()));
+      autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
+      cvRect2TlRoiMsg(cv::Rect(lt_roi, rb_roi), rough_roi.id, tl_roi);
+      out_rois.rois.push_back(tl_roi);
+    }
+  }
+  out_rois.header = in_roi_msg->header;
+  output_roi_pub_->publish(out_rois);
+  const auto exe_end_time = high_resolution_clock::now();
+  const double exe_time =
+    std::chrono::duration_cast<milliseconds>(exe_end_time - exe_start_time).count();
+  tier4_debug_msgs::msg::Float32Stamped exe_time_msg;
+  exe_time_msg.data = exe_time;
+  exe_time_msg.stamp = this->now();
+  exe_time_pub_->publish(exe_time_msg);
+}
+
+bool TrafficLightFineDetectorNodelet::cvMat2CnnInput(
+  const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<float> & data)
+{
+  for (int i = 0; i < num_rois; ++i) {
+    // cv::Mat rgb;
+    // cv::cvtColor(in_imgs.at(i), rgb, CV_BGR2RGB);
+    cv::Mat resized;
+    cv::resize(in_imgs.at(i), resized, cv::Size(width_, height_));
+
+    cv::Mat pixels;
+    resized.convertTo(pixels, CV_32FC3, 1.0 / 255, 0);
+    std::vector<float> img;
+    if (pixels.isContinuous()) {
+      img.assign(
+        reinterpret_cast<const float *>(pixels.datastart),
+        reinterpret_cast<const float *>(pixels.dataend));
+    } else {
+      return false;
+    }
+
+    for (int c = 0; c < channel_; ++c) {
+      for (int j = 0, hw = width_ * height_; j < hw; ++j) {
+        data[i * channel_ * width_ * height_ + c * hw + j] =
+          (img[channel_ * j + 2 - c] - mean_[c]) / std_[c];
+      }
+    }
+  }
+  return true;
+}
+
+bool TrafficLightFineDetectorNodelet::cnnOutput2BoxDetection(
+  const float * scores, const float * boxes, const int tlr_id, const std::vector<cv::Mat> & in_imgs,
+  const int num_rois, std::vector<Detection> & detections)
+{
+  if (tlr_id > class_num_ - 1) {
+    return false;
+  }
+  for (int i = 0; i < num_rois; ++i) {
+    std::vector<float> tlr_scores;
+    Detection det;
+    for (int j = 0; j < detection_per_class_; ++j) {
+      tlr_scores.push_back(scores[i * detection_per_class_ * class_num_ + tlr_id + j * class_num_]);
+    }
+    std::vector<float>::iterator iter = std::max_element(tlr_scores.begin(), tlr_scores.end());
+    size_t index = std::distance(tlr_scores.begin(), iter);
+    size_t box_index = i * detection_per_class_ * 4 + index * 4;
+    cv::Point lt, rb;
+    lt.x = boxes[box_index] * in_imgs.at(i).cols;
+    lt.y = boxes[box_index + 1] * in_imgs.at(i).rows;
+    rb.x = boxes[box_index + 2] * in_imgs.at(i).cols;
+    rb.y = boxes[box_index + 3] * in_imgs.at(i).rows;
+    fitInFrame(lt, rb, cv::Size(in_imgs.at(i).cols, in_imgs.at(i).rows));
+    det.x = lt.x;
+    det.y = lt.y;
+    det.w = rb.x - lt.x;
+    det.h = rb.y - lt.y;
+
+    det.prob = tlr_scores[index];
+    detections.push_back(det);
+  }
+  return true;
+}
+
+bool TrafficLightFineDetectorNodelet::rosMsg2CvMat(
+  const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image, std::string encode)
+{
+  try {
+    cv_bridge::CvImagePtr cv_image = cv_bridge::toCvCopy(image_msg, encode);
+    image = cv_image->image;
+  } catch (cv_bridge::Exception & e) {
+    RCLCPP_ERROR(
+      this->get_logger(), "Failed to convert sensor_msgs::msg::Image to cv::Mat \n%s", e.what());
+    return false;
+  }
+
+  return true;
+}
+
+bool TrafficLightFineDetectorNodelet::fitInFrame(
+  cv::Point & lt, cv::Point & rb, const cv::Size & size)
+{
+  const int width = static_cast<int>(size.width);
+  const int height = static_cast<int>(size.height);
+  {
+    const int x_min = 0, x_max = width - 2;
+    const int y_min = 0, y_max = height - 2;
+    lt.x = std::min(std::max(lt.x, x_min), x_max);
+    lt.y = std::min(std::max(lt.y, y_min), y_max);
+  }
+  {
+    const int x_min = lt.x + 1, x_max = width - 1;
+    const int y_min = lt.y + 1, y_max = height - 1;
+    rb.x = std::min(std::max(rb.x, x_min), x_max);
+    rb.y = std::min(std::max(rb.y, y_min), y_max);
+  }
+
+  return true;
+}
+
+void TrafficLightFineDetectorNodelet::cvRect2TlRoiMsg(
+  const cv::Rect & rect, const int32_t id,
+  autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi)
+{
+  tl_roi.id = id;
+  tl_roi.roi.x_offset = rect.x;
+  tl_roi.roi.y_offset = rect.y;
+  tl_roi.roi.width = rect.width;
+  tl_roi.roi.height = rect.height;
+}
+
+bool TrafficLightFineDetectorNodelet::readLabelFile(const std::string & filepath)
+{
+  std::ifstream labelsFile(filepath);
+  if (!labelsFile.is_open()) {
+    RCLCPP_ERROR(this->get_logger(), "Could not open label file. [%s]", filepath.c_str());
+    return false;
+  }
+  std::string label;
+  int idx = 0;
+  while (getline(labelsFile, label)) {
+    if (label == "traffic_light") {
+      tlr_id_ = idx;
+    }
+    idx++;
+  }
+  return true;
+}
+
+}  // namespace traffic_light
+
+#include <rclcpp_components/register_node_macro.hpp>
+RCLCPP_COMPONENTS_REGISTER_NODE(traffic_light::TrafficLightFineDetectorNodelet)
