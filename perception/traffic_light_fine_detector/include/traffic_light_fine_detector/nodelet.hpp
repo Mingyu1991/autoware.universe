@@ -23,6 +23,7 @@
 #include <tensorrt_yolox/tensorrt_yolox.hpp>
 
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
+#include <autoware_auto_perception_msgs/msg/traffic_light_rough_roi_array.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <tier4_debug_msgs/msg/float32_stamped.hpp>
@@ -35,6 +36,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -54,7 +56,7 @@ public:
   void connectCb();
   void callback(
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr
+    const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr
       traffic_light_roi_msg);
 
 private:
@@ -63,6 +65,14 @@ private:
   bool cnnOutput2BoxDetection(
     const float * scores, const float * boxes, const int tlr_id,
     const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<Detection> & detections);
+  float evalMatchScore(
+    std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> & id2roughRoi,
+    std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
+    std::map<int, tensorrt_yolox::Object> & id2bestDetection);
+  void detectionMatch(
+    std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> & id2roughRoi,
+    std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
+    autoware_auto_perception_msgs::msg::TrafficLightRoiArray & out_rois);
   bool rosMsg2CvMat(
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image,
     std::string encode = "rgb8");
@@ -76,7 +86,8 @@ private:
   // variables
   std::shared_ptr<image_transport::ImageTransport> image_transport_;
   image_transport::SubscriberFilter image_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
+  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>
+    roi_sub_;
   std::mutex connect_mutex_;
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr
     output_roi_pub_;
@@ -84,13 +95,13 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
 
   typedef message_filters::sync_policies::ExactTime<
-    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
+    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>
     SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   std::shared_ptr<Sync> sync_;
 
   typedef message_filters::sync_policies::ApproximateTime<
-    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
+    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>
     ApproximateSyncPolicy;
   typedef message_filters::Synchronizer<ApproximateSyncPolicy> ApproximateSync;
   std::shared_ptr<ApproximateSync> approximate_sync_;

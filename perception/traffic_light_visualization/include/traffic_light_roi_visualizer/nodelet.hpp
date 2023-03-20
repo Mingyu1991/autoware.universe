@@ -20,6 +20,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
+#include <autoware_auto_perception_msgs/msg/traffic_light_rough_roi_array.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
@@ -59,7 +60,7 @@ public:
     const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
     const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
       input_tl_roi_msg,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
+    const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr &
       input_tl_rough_roi_msg,
     const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
       input_traffic_signals_msg);
@@ -85,11 +86,19 @@ private:
   };
 
   bool createRect(
+    cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoughRoi & tl_roi,
+    const cv::Scalar & color);
+
+  bool createRect(
     cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
     const cv::Scalar & color);
 
   bool createRect(
     cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
+    const ClassificationResult & result);
+
+  bool createRect(
+    cv::Mat & image, const autoware_auto_perception_msgs::msg::TrafficLightRoughRoi & tl_roi,
     const ClassificationResult & result);
 
   bool getClassificationResult(
@@ -103,7 +112,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   image_transport::SubscriberFilter image_sub_;
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
+  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>
     rough_roi_sub_;
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficSignalArray>
     traffic_signals_sub_;
@@ -117,7 +126,7 @@ private:
 
   typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
-    autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
+    autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray,
     autoware_auto_perception_msgs::msg::TrafficSignalArray>
     SyncPolicyWithRoughRoi;
   typedef message_filters::Synchronizer<SyncPolicyWithRoughRoi> SyncWithRoughRoi;

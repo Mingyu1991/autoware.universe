@@ -107,7 +107,7 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
     std::bind(&MapBasedDetector::routeCallback, this, _1));
 
   // publishers
-  roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
+  roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>(
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
 
@@ -129,7 +129,7 @@ void MapBasedDetector::cameraInfoCallback(
   image_geometry::PinholeCameraModel pinhole_camera_model;
   pinhole_camera_model.fromCameraInfo(*input_msg);
 
-  autoware_auto_perception_msgs::msg::TrafficLightRoiArray output_msg;
+  autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray output_msg;
   output_msg.header = input_msg->header;
 
   /* Camera pose */
@@ -172,7 +172,7 @@ void MapBasedDetector::cameraInfoCallback(
    * in image.
    */
   for (const auto & traffic_light : visible_traffic_lights) {
-    autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
+    autoware_auto_perception_msgs::msg::TrafficLightRoughRoi tl_roi;
     if (!getTrafficLightRoi(
           camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi)) {
       continue;
@@ -187,7 +187,7 @@ bool MapBasedDetector::getTrafficLightRoi(
   const geometry_msgs::msg::Pose & camera_pose,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
   const lanelet::ConstLineString3d traffic_light, const Config & config,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi)
+  autoware_auto_perception_msgs::msg::TrafficLightRoughRoi & tl_roi)
 {
   const double tl_height = traffic_light.attributeOr("height", 0.0);
   const auto & tl_left_down_point = traffic_light.front();
@@ -218,17 +218,33 @@ bool MapBasedDetector::getTrafficLightRoi(
       config.max_vibration_height * 0.5;
     const double max_vibration_z = config.max_vibration_depth * 0.5;
     // target position in camera coordinate
-    geometry_msgs::msg::Point point3d;
-    point3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
-    point3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
-    point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-    if (point3d.z <= 0.0) {
-      return false;
+    {
+      geometry_msgs::msg::Point point3d;
+      point3d.x = tf_camera2tl.getOrigin().x();
+      point3d.y = tf_camera2tl.getOrigin().y();
+      point3d.z = tf_camera2tl.getOrigin().z();
+      if (point3d.z <= 0.0) {
+        return false;
+      }
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+      roundInImageFrame(pinhole_camera_model, point2d);
+      tl_roi.roi.x_offset = point2d.x;
+      tl_roi.roi.y_offset = point2d.y;
     }
-    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
-    roundInImageFrame(pinhole_camera_model, point2d);
-    tl_roi.roi.x_offset = point2d.x;
-    tl_roi.roi.y_offset = point2d.y;
+    // enlarged target position in camera coordinate
+    {
+      geometry_msgs::msg::Point point3d;
+      point3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
+      point3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
+      point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+      if (point3d.z <= 0.0) {
+        return false;
+      }
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+      roundInImageFrame(pinhole_camera_model, point2d);
+      tl_roi.rough_roi.x_offset = point2d.x;
+      tl_roi.rough_roi.y_offset = point2d.y;
+    }
   }
 
   // for roi.width and roi.height
@@ -247,18 +263,35 @@ bool MapBasedDetector::getTrafficLightRoi(
       config.max_vibration_height * 0.5;
     const double max_vibration_z = config.max_vibration_depth * 0.5;
     // target position in camera coordinate
-    geometry_msgs::msg::Point point3d;
-    point3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
-    point3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
-    point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-    if (point3d.z <= 0.0) {
-      return false;
+    {
+      geometry_msgs::msg::Point point3d;
+      point3d.x = tf_camera2tl.getOrigin().x();
+      point3d.y = tf_camera2tl.getOrigin().y();
+      point3d.z = tf_camera2tl.getOrigin().z();
+      if (point3d.z <= 0.0) {
+        return false;
+      }
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+      roundInImageFrame(pinhole_camera_model, point2d);
+      tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
+      tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
     }
-    cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
-    roundInImageFrame(pinhole_camera_model, point2d);
-    tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
-    tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
-    if (tl_roi.roi.width < 1 || tl_roi.roi.height < 1) {
+    // enlarged target position in camera coordinate
+    {
+      geometry_msgs::msg::Point point3d;
+      point3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
+      point3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
+      point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+      if (point3d.z <= 0.0) {
+        return false;
+      }
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+      roundInImageFrame(pinhole_camera_model, point2d);
+      tl_roi.rough_roi.width = point2d.x - tl_roi.rough_roi.x_offset;
+      tl_roi.rough_roi.height = point2d.y - tl_roi.rough_roi.y_offset;
+    }
+
+    if (tl_roi.rough_roi.width < 1 || tl_roi.rough_roi.height < 1) {
       return false;
     }
   }
@@ -346,7 +379,7 @@ void MapBasedDetector::getVisibleTrafficLights(
     tl_central_point.x = (tl_right_down_point.x() + tl_left_down_point.x()) / 2.0;
     tl_central_point.y = (tl_right_down_point.y() + tl_left_down_point.y()) / 2.0;
     tl_central_point.z = (tl_right_down_point.z() + tl_left_down_point.z() + tl_height) / 2.0;
-    constexpr double max_distance_range = 200.0;
+    constexpr double max_distance_range = 300.0;
     if (!isInDistanceRange(tl_central_point, camera_pose.position, max_distance_range)) {
       continue;
     }
