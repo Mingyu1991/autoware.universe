@@ -39,9 +39,9 @@ CNNClassifier::CNNClassifier(rclcpp::Node * node_ptr) : node_ptr_(node_ptr)
   input_c_ = node_ptr_->declare_parameter("input_c", 3);
   input_h_ = node_ptr_->declare_parameter("input_h", 224);
   input_w_ = node_ptr_->declare_parameter("input_w", 224);
-  auto input_name = node_ptr_->declare_parameter("input_name", "input_0");
-  auto output_name = node_ptr_->declare_parameter("output_name", "output_0");
-  apply_softmax_ = node_ptr_->declare_parameter("apply_softmax", true);
+  auto input_name = node_ptr_->declare_parameter("input_name", "input");
+  auto output_name = node_ptr_->declare_parameter("output_name", "output");
+  apply_softmax_ = node_ptr_->declare_parameter("apply_softmax", false);
 
   readLabelfile(label_file_path, labels_);
 
@@ -127,11 +127,13 @@ void CNNClassifier::outputDebugImage(
 
 void CNNClassifier::preProcess(cv::Mat & image, std::vector<float> & input_tensor, bool normalize)
 {
-  /* normalize */
-  /* ((channel[0] / 255) - mean[0]) / std[0] */
-
-  // cv::cvtColor(image, image, cv::COLOR_BGR2RGB, 3);
-  cv::resize(image, image, cv::Size(input_w_, input_h_));
+  const float scale =
+    std::min(static_cast<float>(input_w_) / image.cols, static_cast<float>(input_h_) / image.rows);
+  const auto scale_size = cv::Size(image.cols * scale, image.rows * scale);
+  cv::resize(image, image, scale_size, 0, 0, cv::INTER_CUBIC);
+  const auto bottom = input_h_ - image.rows;
+  const auto right = input_w_ - image.cols;
+  copyMakeBorder(image, image, 0, bottom, 0, right, cv::BORDER_CONSTANT, {0, 0, 0});
 
   const size_t strides_cv[3] = {
     static_cast<size_t>(input_w_ * input_c_), static_cast<size_t>(input_c_), 1};
@@ -144,8 +146,7 @@ void CNNClassifier::preProcess(cv::Mat & image, std::vector<float> & input_tenso
         const size_t offset_cv = i * strides_cv[0] + j * strides_cv[1] + k * strides_cv[2];
         const size_t offset = k * strides[0] + i * strides[1] + j * strides[2];
         if (normalize) {
-          input_tensor[offset] =
-            ((static_cast<float>(image.data[offset_cv]) / 255) - mean_[k]) / std_[k];
+          input_tensor[offset] = (static_cast<float>(image.data[offset_cv]) - mean_[k]) / std_[k];
         } else {
           input_tensor[offset] = static_cast<float>(image.data[offset_cv]);
         }
