@@ -71,7 +71,7 @@ TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
   float score_threshold = declare_parameter("fine_detection_score_thresh", 0.3);
   // Detection results will be ignored if IoU over this value.
   // This threshold will be ignored if specified model contains EfficientNMS_TRT module in it
-  float nms_threshold = declare_parameter("fine_detection_nms_thresh", 0.7);
+  float nms_threshold = declare_parameter("fine_detection_nms_thresh", 0.65);
   is_approximate_sync_ = this->declare_parameter<bool>("approximate_sync", false);
 
   if (readLabelFile(label_path)) {

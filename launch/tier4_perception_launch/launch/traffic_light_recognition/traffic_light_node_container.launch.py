@@ -44,7 +44,7 @@ def generate_launch_description():
     # traffic_light_fine_detector
     add_launch_arg(
         "fine_detection_onnx_file",
-        os.path.join(fine_detector_share_dir, "data", "tlr_yolox-s-nms.onnx"),
+        os.path.join(fine_detector_share_dir, "data", "tlr_yolox-s_nms.onnx"),
     )
     add_launch_arg(
         "fine_detection_label_file",
