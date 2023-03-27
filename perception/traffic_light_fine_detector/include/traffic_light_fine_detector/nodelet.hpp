@@ -74,7 +74,7 @@ private:
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image,
     std::string encode = "rgb8");
   bool fitInFrame(cv::Point & lt, cv::Point & rb, const cv::Size & size);
-  bool readLabelFile(const std::string & filepath);
+  bool readLabelFile(const std::string & filepath, int & tlr_id, int & num_class);
 
   // variables
   std::shared_ptr<image_transport::ImageTransport> image_transport_;
@@ -101,16 +101,7 @@ private:
 
   bool is_approximate_sync_;
   double score_thresh_;
-
   int tlr_id_;
-  int channel_;
-  int width_;
-  int height_;
-  int class_num_;
-  int detection_per_class_;
-
-  std::vector<float> mean_;
-  std::vector<float> std_;
 
   std::unique_ptr<tensorrt_yolox::TrtYoloX> trt_yolox_;
 };  // TrafficLightFineDetectorNodelet

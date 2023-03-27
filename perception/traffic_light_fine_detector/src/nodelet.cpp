@@ -57,9 +57,7 @@ TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
   const rclcpp::NodeOptions & options)
 : Node("traffic_light_fine_detector_node", options)
 {
-  const int num_class = 2;
-  width_ = 640;
-  height_ = 640;
+  int num_class = 2;
   using std::placeholders::_1;
   using std::placeholders::_2;
 
@@ -68,17 +66,17 @@ TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
   std::string precision = declare_parameter("fine_detector_precision", "fp32");
   // Objects with a score lower than this value will be ignored.
   // This threshold will be ignored if specified model contains EfficientNMS_TRT module in it
-  float score_threshold = declare_parameter("fine_detection_score_thresh", 0.3);
+  score_thresh_ = declare_parameter("fine_detection_score_thresh", 0.3);
   // Detection results will be ignored if IoU over this value.
   // This threshold will be ignored if specified model contains EfficientNMS_TRT module in it
   float nms_threshold = declare_parameter("fine_detection_nms_thresh", 0.65);
   is_approximate_sync_ = this->declare_parameter<bool>("approximate_sync", false);
 
-  if (readLabelFile(label_path)) {
+  if (readLabelFile(label_path, tlr_id_, num_class)) {
     RCLCPP_ERROR(this->get_logger(), "Could not find tlr id");
   }
   trt_yolox_ = std::make_unique<tensorrt_yolox::TrtYoloX>(
-    model_path, precision, num_class, score_threshold, nms_threshold);
+    model_path, precision, num_class, score_thresh_, nms_threshold);
 
   using std::chrono_literals::operator""ms;
   timer_ = rclcpp::create_timer(
@@ -143,7 +141,9 @@ void TrafficLightFineDetectorNodelet::callback(
       return;
     }
     for (tensorrt_yolox::Object & detection : inference_results[0]) {
-      if (detection.score < 0.3) continue;
+      if (detection.score < 0.3 || detection.type != tlr_id_) {
+        continue;
+      }
       cv::Point lt_roi(lt.x + detection.x_offset, lt.y + detection.y_offset);
       cv::Point rb_roi(lt_roi.x + detection.width, lt_roi.y + detection.height);
       fitInFrame(lt_roi, rb_roi, cv::Size(original_image.size()));
@@ -275,8 +275,10 @@ bool TrafficLightFineDetectorNodelet::fitInFrame(
   return true;
 }
 
-bool TrafficLightFineDetectorNodelet::readLabelFile(const std::string & filepath)
+bool TrafficLightFineDetectorNodelet::readLabelFile(
+  const std::string & filepath, int & tlr_id, int & num_class)
 {
+  tlr_id = -1;
   std::ifstream labelsFile(filepath);
   if (!labelsFile.is_open()) {
     RCLCPP_ERROR(this->get_logger(), "Could not open label file. [%s]", filepath.c_str());
@@ -286,11 +288,12 @@ bool TrafficLightFineDetectorNodelet::readLabelFile(const std::string & filepath
   int idx = 0;
   while (getline(labelsFile, label)) {
     if (label == "traffic_light") {
-      tlr_id_ = idx;
+      tlr_id = idx;
     }
     idx++;
   }
-  return true;
+  num_class = idx;
+  return tlr_id != -1;
 }
 
 }  // namespace traffic_light

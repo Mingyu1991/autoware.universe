@@ -44,13 +44,13 @@ def generate_launch_description():
     # traffic_light_fine_detector
     add_launch_arg(
         "fine_detection_onnx_file",
-        os.path.join(fine_detector_share_dir, "data", "tlr_yolox-s_nms.onnx"),
+        os.path.join(fine_detector_share_dir, "data", "tlr_yolox_s_dynamic_batch.onnx"),
     )
     add_launch_arg(
         "fine_detection_label_file",
         os.path.join(fine_detector_share_dir, "data", "voc_labels_tl.txt"),
     )
-    add_launch_arg("fine_detector_precision", "fp32")
+    add_launch_arg("fine_detector_precision", "fp16")
     add_launch_arg("fine_detection_score_thresh", "0.3")
     add_launch_arg("fine_detection_nms_thresh", "0.65")
 
