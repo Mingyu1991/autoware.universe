@@ -141,7 +141,7 @@ void TrafficLightFineDetectorNodelet::callback(
       return;
     }
     for (tensorrt_yolox::Object & detection : inference_results[0]) {
-      if (detection.score < 0.3 || detection.type != tlr_id_) {
+      if (detection.score < score_thresh_ || detection.type != tlr_id_) {
         continue;
       }
       cv::Point lt_roi(lt.x + detection.x_offset, lt.y + detection.y_offset);

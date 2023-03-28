@@ -80,7 +80,7 @@ def generate_launch_description():
 
     container = ComposableNodeContainer(
         name="traffic_light_node_container",
-        namespace="/perception/traffic_light_recognition",
+        namespace="",
         package="rclcpp_components",
         executable=LaunchConfiguration("container_executable"),
         composable_node_descriptions=[
