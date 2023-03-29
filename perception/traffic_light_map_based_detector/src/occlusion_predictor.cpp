@@ -33,132 +33,6 @@ traffic_light::Ray point2ray(const pcl::PointXYZ & pt)
 namespace traffic_light
 {
 
-std::string uuid2str(
-  const autoware_auto_perception_msgs::msg::PredictedObject::_object_id_type & uuid)
-{
-  std::string res;
-  for (size_t i = 0; i < uuid.uuid.size(); i++) {
-    res += "-" + std::to_string(uuid.uuid[i]);
-  }
-  return res;
-}
-
-void SingleObjectPredictor::update(
-  const autoware_auto_perception_msgs::msg::PredictedObject & obj, double stamp)
-{
-  // the timestamps must be increasing for binary search
-  if (status_.empty() == false && stamp < status_.back().stamp) {
-    return;
-  }
-  status_.push_back(ObjectStatus{
-    stamp, obj.kinematics.initial_pose_with_covariance.pose,
-    obj.kinematics.initial_twist_with_covariance.twist, obj.shape});
-}
-
-bool SingleObjectPredictor::predict(double stamp, ObjectStatus & object) const
-{
-  if (status_.empty()) {
-    return false;
-  }
-  // binary search the first status that has larger timestamp than stamp
-  // low would be the result index
-  int low = 0, high = status_.size();
-  while (low < high) {
-    int mid = (low + high) / 2;
-    if (status_[mid].stamp >= stamp) {
-      high = mid;
-    } else {
-      low = mid + 1;
-    }
-  }
-  object.stamp = stamp;
-  object.shape = status_.back().shape;
-  // there's no status with larger timestamp
-  // predict with last status
-  if (low == static_cast<int>(status_.size())) {
-    const ObjectStatus & s2 = status_.back();
-    assert(stamp > s2.stamp);
-    double dt = stamp - s2.stamp;
-    double dx = s2.twist.linear.x * dt;
-    double dy = s2.twist.linear.y * dt;
-    double dz = s2.twist.linear.z * dt;
-    object.pose = tier4_autoware_utils::calcOffsetPose(s2.pose, dx, dy, dz);
-  } else if (low == 0) {
-    // all status have larger timestamp
-    // predict with first status
-    const ObjectStatus & s1 = status_.front();
-    assert(stamp <= s1.stamp);
-    double dt = s1.stamp - stamp;
-    double dx = -s1.twist.linear.x * dt;
-    double dy = -s1.twist.linear.y * dt;
-    double dz = -s1.twist.linear.z * dt;
-    object.pose = tier4_autoware_utils::calcOffsetPose(s1.pose, dx, dy, dz);
-  } else {
-    // there's at least one with smaller timestamp and one with larger timestamp
-    // do the interpolation of status[low - 1] and status[low]
-    const ObjectStatus & s1 = status_[low - 1];
-    const ObjectStatus & s2 = status_[low];
-    assert(stamp >= s1.stamp && stamp < s2.stamp);
-    double ratio = (stamp - s1.stamp) / (s2.stamp - s1.stamp);
-    object.pose = tier4_autoware_utils::calcInterpolatedPose(s1.pose, s2.pose, ratio);
-  }
-  return true;
-}
-
-void ObjectsPredictor::update(
-  const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)
-{
-  const float length_offset = 1.0;
-  const float width_offset = 0.5;
-  const float height_offset = 2.0;
-  assert(msg->header.frame_id == "map");
-  double stamp = rclcpp::Time(msg->header.stamp).seconds();
-  std::set<std::string> updated_ids;
-  for (const auto & input_obj : msg->objects) {
-    std::string id_str = uuid2str(input_obj.object_id);
-    if (tracked_objects_.count(id_str) == 0) {
-      tracked_objects_.emplace(id_str, SingleObjectPredictor());
-    }
-    autoware_auto_perception_msgs::msg::PredictedObject object = input_obj;
-    object.shape.dimensions.x += length_offset;
-    object.shape.dimensions.y += width_offset;
-    object.shape.dimensions.z += height_offset;
-    object.kinematics.initial_pose_with_covariance.pose.position.z += height_offset * 0.5;
-    tracked_objects_.find(id_str)->second.update(object, stamp);
-    updated_ids.insert(id_str);
-  }
-  // remove un-detected objects
-  for (auto it = tracked_objects_.begin(); it != tracked_objects_.end();) {
-    if (updated_ids.count(it->first) == 0) {
-      it = tracked_objects_.erase(it);
-    } else {
-      it++;
-    }
-  }
-}
-
-autoware_auto_perception_msgs::msg::PredictedObjects ObjectsPredictor::predict(
-  const std_msgs::msg::Header::_stamp_type & input_stamp)
-{
-  autoware_auto_perception_msgs::msg::PredictedObjects res;
-  res.header.frame_id = "map";
-  res.header.stamp = input_stamp;
-  double stamp = rclcpp::Time(input_stamp).seconds();
-  int idx = 1;
-  ObjectStatus predicted_obj;
-  for (const auto & p : tracked_objects_) {
-    if (p.second.predict(stamp, predicted_obj)) {
-      autoware_auto_perception_msgs::msg::PredictedObject obj;
-      obj.existence_probability = 1.0;
-      obj.kinematics.initial_pose_with_covariance.pose = predicted_obj.pose;
-      obj.shape = predicted_obj.shape;
-      obj.object_id.uuid.fill(idx++);
-      res.objects.push_back(obj);
-    }
-  }
-  return res;
-}
-
 void CloudOcclusionPredictor::receivePointCloud(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
@@ -172,16 +46,9 @@ void CloudOcclusionPredictor::receivePointCloud(
   // sometimes the top lidar doesn't give any point. we need to filter out these clouds
 }
 
-void CloudOcclusionPredictor::receivePerceptionObjects(
-  const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)
-{
-  objects_predictor_.update(msg);
-}
-
 void CloudOcclusionPredictor::update(
   const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer,
-  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois,
-  bool enable_point_cloud_compensation)
+  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois)
 {
   if (history_clouds_.empty()) {
     return;
@@ -213,59 +80,36 @@ void CloudOcclusionPredictor::update(
    * get necessary tf information
    */
   try {
-    if (enable_point_cloud_compensation) {
-      // transformation between lidar and map when the cloud was captured
-      map2cloud_ = tf2::transformToEigen(tf_buffer.lookupTransform(
-                                           "map", history_clouds_.front().header.frame_id,
-                                           rclcpp::Time(history_clouds_.front().header.stamp),
-                                           rclcpp::Duration::from_seconds(0.2)))
-                     .matrix();
-      // transformation between map and camera when the image was captured
-      camera2map_ = tf2::transformToEigen(tf_buffer.lookupTransform(
-                                            camera_info.header.frame_id, "map",
-                                            rclcpp::Time(camera_info.header.stamp),
-                                            rclcpp::Duration::from_seconds(0.2)))
-                      .matrix();
-    } else {
-      camera2cloud_ =
-        tf2::transformToEigen(
-          tf_buffer.lookupTransform(
-            camera_info.header.frame_id, history_clouds_.front().header.frame_id,
-            rclcpp::Time(camera_info.header.stamp), rclcpp::Duration::from_seconds(0.2)))
-          .matrix();
-    }
+    camera2cloud_ =
+      tf2::transformToEigen(tf_buffer.lookupTransform(
+                              camera_info.header.frame_id, history_clouds_.front().header.frame_id,
+                              rclcpp::Time(camera_info.header.stamp),
+                              rclcpp::Duration::from_seconds(0.2)))
+        .matrix();
   } catch (tf2::TransformException & ex) {
     std::cout << "Error: cannot get transform from map frame to "
               << history_clouds_.front().header.frame_id << std::endl;
     return;
   }
 
-  cloudPreprocess(camera_info, tl_rough_rois, enable_point_cloud_compensation);
+  cloudPreprocess(camera_info, tl_rough_rois);
 }
 
 void CloudOcclusionPredictor::cloudPreprocess(
   const sensor_msgs::msg::CameraInfo & camera_info,
-  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois,
-  bool enable_point_cloud_compensation)
+  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois)
 {
   lidar_rays_.clear();
   if (history_clouds_.empty()) {
     return;
   }
-  Eigen::Matrix4d camera2cloud =
-    enable_point_cloud_compensation ? camera2map_ * map2cloud_ : camera2cloud_;
   // points in camera frame
   pcl::PointCloud<pcl::PointXYZ> cloud_camera;
   // filtered points within traffic light rois in camera frame
   pcl::PointCloud<pcl::PointXYZ> cloud_in_rois;
   tier4_autoware_utils::transformPointCloudFromROSMsg(
-    history_clouds_.front(), cloud_camera, camera2cloud);
-  filterCloud(
-    cloud_camera, tl_rough_rois, camera_info, enable_point_cloud_compensation, cloud_in_rois);
-
-  if (enable_point_cloud_compensation) {
-    compensateObjectMovements(cloud_in_rois, camera_info);
-  }
+    history_clouds_.front(), cloud_camera, camera2cloud_);
+  filterCloud(cloud_camera, tl_rough_rois, camera_info, cloud_in_rois);
 
   for (const pcl::PointXYZ & pt : cloud_in_rois) {
     Ray ray = ::point2ray(pt);
@@ -276,8 +120,7 @@ void CloudOcclusionPredictor::cloudPreprocess(
 void CloudOcclusionPredictor::filterCloud(
   const pcl::PointCloud<pcl::PointXYZ> & cloud_in,
   const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois,
-  const sensor_msgs::msg::CameraInfo & camera_info, bool enable_point_cloud_compensation,
-  pcl::PointCloud<pcl::PointXYZ> & cloud_out)
+  const sensor_msgs::msg::CameraInfo & camera_info, pcl::PointCloud<pcl::PointXYZ> & cloud_out)
 {
   cloud_out.clear();
   // the points very close to the camera should not be used in the occlusion estimation,
@@ -302,12 +145,6 @@ void CloudOcclusionPredictor::filterCloud(
     min_y = std::min(min_y, top_left_pt.y);
     max_y = std::max(max_y, bottom_right_pt.y);
   }
-  if (enable_point_cloud_compensation) {
-    min_x = 0;
-    max_x = camera_info.width - 1;
-    min_y = 0;
-    max_y = camera_info.height - 1;
-  }
 
   for (size_t i = 0; i < cloud_in.size(); i++) {
     if (cloud_in[i].z <= 0) {
@@ -325,42 +162,6 @@ void CloudOcclusionPredictor::filterCloud(
       cloud_out.push_back(cloud_in[i]);
     }
   }
-}
-
-void CloudOcclusionPredictor::compensateObjectMovements(
-  pcl::PointCloud<pcl::PointXYZ> & cloud, const sensor_msgs::msg::CameraInfo & camera_info)
-{
-  // transform the cloud from camera frame to map frame
-  Eigen::Matrix4d map2camera = camera2map_.inverse();
-  pcl::transformPointCloud(cloud, cloud, map2camera);
-  auto cloud_stamp = history_clouds_.front().header.stamp;
-  auto camera_stamp = camera_info.header.stamp;
-  const auto & objects_cloud_stamp = objects_predictor_.predict(cloud_stamp);
-  const auto & objects_camera_stamp = objects_predictor_.predict(rclcpp::Time(camera_stamp));
-
-  for (const auto & object_cloud_stamp : objects_cloud_stamp.objects) {
-    const auto & old_position =
-      object_cloud_stamp.kinematics.initial_pose_with_covariance.pose.position;
-    for (const auto & object_camera_stamp : objects_camera_stamp.objects) {
-      if (object_cloud_stamp.object_id == object_camera_stamp.object_id) {
-        const auto & new_position =
-          object_camera_stamp.kinematics.initial_pose_with_covariance.pose.position;
-        double dx = new_position.x - old_position.x;
-        double dy = new_position.y - old_position.y;
-        double dz = new_position.z - old_position.z;
-        autoware::common::geometry::BoundingBox3D bbox(object_cloud_stamp);
-        for (auto & pt : cloud) {
-          if (bbox.contains(tf2::Vector3(pt.x, pt.y, pt.z))) {
-            pt.x += dx;
-            pt.y += dy;
-            pt.z += dz;
-          }
-        }
-        break;
-      }
-    }
-  }
-  pcl::transformPointCloud(cloud, cloud, camera2map_);
 }
 
 sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(
