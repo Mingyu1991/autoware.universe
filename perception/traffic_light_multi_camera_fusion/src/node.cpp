@@ -32,6 +32,7 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
   using std::placeholders::_1;
   using std::placeholders::_2;
 
+  last_msg_stamp_ = 0.0;
   is_approxiate_sync_ = declare_parameter("approximate_sync", false);
   std::vector<std::string> camera_namespaces =
     this->declare_parameter("camera_namespaces", std::vector<std::string>{});
@@ -60,12 +61,16 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
 void MultiCameraFusion::trafficSignalRoiCallback(
   const RoiType::ConstSharedPtr roi_msg, const SignalType::ConstSharedPtr signal_msg)
 {
-  RCLCPP_INFO_STREAM(
-    get_logger(), "roi header = " << roi_msg->header.frame_id
-                                  << ", signal header = " << signal_msg->header.frame_id);
-  double stampDiff = rclcpp::Time(roi_msg->header.stamp).seconds() -
-                     rclcpp::Time(signal_msg->header.stamp).seconds();
-  RCLCPP_INFO_STREAM(get_logger(), "stamp diff = " << stampDiff);
+  (void)roi_msg;
+  (void)signal_msg;
+  // ignore outdated message
+  double input_msg_stamp = rclcpp::Time(roi_msg->header.stamp).seconds();
+  if (input_msg_stamp < last_msg_stamp_) {
+    RCLCPP_WARN_STREAM(
+      get_logger(), "ignore old message. stamp = " << std::setprecision(19) << input_msg_stamp);
+    return;
+  }
+  last_msg_stamp_ = input_msg_stamp;
 }
 
 }  // namespace traffic_light

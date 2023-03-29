@@ -77,6 +77,7 @@ private:
   std::vector<std::unique_ptr<ExactSync>> exact_sync_subs_;
   std::vector<std::unique_ptr<ApproSync>> appro_sync_subs_;
   bool is_approxiate_sync_;
+  double last_msg_stamp_;
 };
 }  // namespace traffic_light
 #endif  // TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_
