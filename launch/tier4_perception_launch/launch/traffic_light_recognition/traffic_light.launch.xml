@@ -10,8 +10,8 @@
   <arg name="use_crosswalk_traffic_light_estimator" default="true" description="output pedestrian's traffic light signals"/>
   <let name="namespace1" value="camera6"/>
   <let name="namespace2" value="camera7"/>
+  <let name="all_camera_namespaces" value="[$(var namespace1), $(var namespace2)]"/>
   <!-- camera 6 TLR pipeline -->
-  <!--
   <group>
     <push-ros-namespace namespace="$(var namespace1)"/>
     <let name="input/image" value="/sensing/camera/$(var namespace1)/image_raw"/>
@@ -36,9 +36,7 @@
       <arg name="model_file_path" value="$(var classifier_model_path)"/>
     </include>
   </group>
-  -->
   <!-- camera 7 TLR pipeline -->
-  <!--
   <group>
     <push-ros-namespace namespace="$(var namespace2)"/>
     <let name="input/image" value="/sensing/camera/$(var namespace2)/image_raw"/>
@@ -63,12 +61,11 @@
       <arg name="model_file_path" value="$(var classifier_model_path)"/>
     </include>
   </group>
-  -->
   <!-- traffic_light_multi_camera_fusion -->
   <group>
     <node pkg="traffic_light_multi_camera_fusion" exec="traffic_light_multi_camera_fusion_node" name="traffic_light_multi_camera_fusion" output="screen">
       <remap from="~/output/traffic_signals" to="$(var output_traffic_signal)"/>
-      <param name="input/camera_namespaces" value="[$(var namespace1), $(var namespace2)]"/>
+      <param name="camera_namespaces" value="$(var all_camera_namespaces)"/>
     </node>
   </group>
   <!-- visualizer -->
