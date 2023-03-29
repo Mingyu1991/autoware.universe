@@ -13,6 +13,7 @@
 
   <depend>autoware_auto_common</depend>
   <depend>autoware_auto_geometry_msgs</depend>
+  <depend>autoware_auto_perception_msgs</depend>
   <depend>autoware_auto_planning_msgs</depend>
   <depend>autoware_auto_tf2</depend>
   <depend>autoware_auto_vehicle_msgs</depend>
