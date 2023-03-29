@@ -35,24 +35,14 @@
 #include <lanelet2_extension/utility/message_conversion.hpp>
 #include <lanelet2_extension/utility/utilities.hpp>
 #include <lanelet2_extension/visualization/visualization.hpp>
-#include <rclcpp/rclcpp.hpp>
 #include <tier4_autoware_utils/tier4_autoware_utils.hpp>
 
-#include <autoware_auto_perception_msgs/msg/traffic_light_roi.hpp>
-
 #include <lanelet2_core/Exceptions.h>
-#include <lanelet2_core/LaneletMap.h>
 #include <lanelet2_core/geometry/Point.h>
 #include <lanelet2_projection/UTM.h>
 #include <lanelet2_routing/RoutingGraphContainer.h>
-#include <lanelet2_traffic_rules/TrafficRulesFactory.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Transform.h>
-
-#include <algorithm>
-#include <memory>
-#include <string>
-#include <vector>
 
 #define EIGEN_MPL2_ONLY
 #include <Eigen/Core>
@@ -107,7 +97,7 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
     std::bind(&MapBasedDetector::routeCallback, this, _1));
 
   // publishers
-  roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray>(
+  roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
 
@@ -129,7 +119,7 @@ void MapBasedDetector::cameraInfoCallback(
   image_geometry::PinholeCameraModel pinhole_camera_model;
   pinhole_camera_model.fromCameraInfo(*input_msg);
 
-  autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray output_msg;
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray output_msg;
   output_msg.header = input_msg->header;
 
   /* Camera pose */
@@ -172,7 +162,7 @@ void MapBasedDetector::cameraInfoCallback(
    * in image.
    */
   for (const auto & traffic_light : visible_traffic_lights) {
-    autoware_auto_perception_msgs::msg::TrafficLightRoughRoi tl_roi;
+    autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
     if (!getTrafficLightRoi(
           camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi)) {
       continue;
@@ -187,7 +177,7 @@ bool MapBasedDetector::getTrafficLightRoi(
   const geometry_msgs::msg::Pose & camera_pose,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
   const lanelet::ConstLineString3d traffic_light, const Config & config,
-  autoware_auto_perception_msgs::msg::TrafficLightRoughRoi & tl_roi)
+  autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi)
 {
   const double tl_height = traffic_light.attributeOr("height", 0.0);
   const auto & tl_left_down_point = traffic_light.front();
@@ -217,7 +207,7 @@ bool MapBasedDetector::getTrafficLightRoi(
       std::sin(config.max_vibration_pitch * 0.5) * tf_camera2tl.getOrigin().z() +
       config.max_vibration_height * 0.5;
     const double max_vibration_z = config.max_vibration_depth * 0.5;
-    // target position in camera coordinate
+    // expect target position in camera coordinate
     {
       geometry_msgs::msg::Point point3d;
       point3d.x = tf_camera2tl.getOrigin().x();
@@ -228,8 +218,8 @@ bool MapBasedDetector::getTrafficLightRoi(
       }
       cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.roi.x_offset = point2d.x;
-      tl_roi.roi.y_offset = point2d.y;
+      tl_roi.expect_roi.x_offset = point2d.x;
+      tl_roi.expect_roi.y_offset = point2d.y;
     }
     // enlarged target position in camera coordinate
     {
@@ -242,8 +232,8 @@ bool MapBasedDetector::getTrafficLightRoi(
       }
       cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.rough_roi.x_offset = point2d.x;
-      tl_roi.rough_roi.y_offset = point2d.y;
+      tl_roi.roi.x_offset = point2d.x;
+      tl_roi.roi.y_offset = point2d.y;
     }
   }
 
@@ -273,8 +263,8 @@ bool MapBasedDetector::getTrafficLightRoi(
       }
       cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
-      tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
+      tl_roi.expect_roi.width = point2d.x - tl_roi.expect_roi.x_offset;
+      tl_roi.expect_roi.height = point2d.y - tl_roi.expect_roi.y_offset;
     }
     // enlarged target position in camera coordinate
     {
@@ -287,11 +277,11 @@ bool MapBasedDetector::getTrafficLightRoi(
       }
       cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.rough_roi.width = point2d.x - tl_roi.rough_roi.x_offset;
-      tl_roi.rough_roi.height = point2d.y - tl_roi.rough_roi.y_offset;
+      tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
+      tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
     }
 
-    if (tl_roi.rough_roi.width < 1 || tl_roi.rough_roi.height < 1) {
+    if (tl_roi.roi.width < 1 || tl_roi.roi.height < 1) {
       return false;
     }
   }

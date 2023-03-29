@@ -112,7 +112,7 @@ void TrafficLightFineDetectorNodelet::connectCb()
 
 void TrafficLightFineDetectorNodelet::callback(
   const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
-  const autoware_auto_perception_msgs::msg::TrafficLightRoughRoiArray::ConstSharedPtr in_roi_msg)
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg)
 {
   if (in_image_msg->width < 2 || in_image_msg->height < 2) {
     return;
@@ -123,16 +123,15 @@ void TrafficLightFineDetectorNodelet::callback(
   const auto exe_start_time = high_resolution_clock::now();
   cv::Mat original_image;
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray out_rois;
-  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> id2roughRoi;
+  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> id2roughRoi;
   std::map<int, tensorrt_yolox::ObjectArray> id2detections;
 
   rosMsg2CvMat(in_image_msg, original_image, "bgr8");
   for (const auto & rough_roi : in_roi_msg->rois) {
     id2roughRoi[rough_roi.id] = rough_roi;
-    cv::Point lt(rough_roi.rough_roi.x_offset, rough_roi.rough_roi.y_offset);
+    cv::Point lt(rough_roi.roi.x_offset, rough_roi.roi.y_offset);
     cv::Point rb(
-      rough_roi.rough_roi.x_offset + rough_roi.rough_roi.width,
-      rough_roi.rough_roi.y_offset + rough_roi.rough_roi.height);
+      rough_roi.roi.x_offset + rough_roi.roi.width, rough_roi.roi.y_offset + rough_roi.roi.height);
     fitInFrame(lt, rb, cv::Size(original_image.size()));
     cv::Mat cropped_img = cv::Mat(original_image, cv::Rect(lt, rb));
     tensorrt_yolox::ObjectArrays inference_results;
@@ -168,7 +167,7 @@ void TrafficLightFineDetectorNodelet::callback(
 }
 
 float TrafficLightFineDetectorNodelet::evalMatchScore(
-  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> & id2roughRoi,
+  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> & id2roughRoi,
   std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
   std::map<int, tensorrt_yolox::Object> & id2bestDetection)
 {
@@ -177,7 +176,7 @@ float TrafficLightFineDetectorNodelet::evalMatchScore(
   for (const auto & rough_roi_p : id2roughRoi) {
     int tlr_id = rough_roi_p.first;
     float max_score = 0.0f;
-    const sensor_msgs::msg::RegionOfInterest & expected_roi = rough_roi_p.second.roi;
+    const sensor_msgs::msg::RegionOfInterest & expected_roi = rough_roi_p.second.expect_roi;
     for (const tensorrt_yolox::Object & detection : id2detections[tlr_id]) {
       float score = ::calWeightedIou(expected_roi, detection);
       if (score > max_score) {
@@ -191,7 +190,7 @@ float TrafficLightFineDetectorNodelet::evalMatchScore(
 }
 
 void TrafficLightFineDetectorNodelet::detectionMatch(
-  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> & id2roughRoi,
+  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> & id2roughRoi,
   std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray & out_rois)
 {
@@ -200,7 +199,7 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
   for (const auto & rough_roi_pair : id2roughRoi) {
     int tlr_id = rough_roi_pair.first;
     // the expected roi calculated from tf information
-    const sensor_msgs::msg::RegionOfInterest & expect_roi = rough_roi_pair.second.roi;
+    const sensor_msgs::msg::RegionOfInterest & expect_roi = rough_roi_pair.second.expect_roi;
     int expect_cx = expect_roi.x_offset + expect_roi.width / 2;
     int expect_cy = expect_roi.y_offset + expect_roi.height / 2;
     for (const tensorrt_yolox::Object & det : id2detections[tlr_id]) {
@@ -211,11 +210,11 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
       int dx = det_cx - expect_cx;
       int dy = det_cy - expect_cy;
       // transfer all the rough rois by the offset
-      std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoughRoi> id2roughRoi_copy =
+      std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> id2roughRoi_copy =
         id2roughRoi;
       for (auto & p : id2roughRoi_copy) {
-        p.second.roi.x_offset += dx;
-        p.second.roi.y_offset += dy;
+        p.second.expect_roi.x_offset += dx;
+        p.second.expect_roi.y_offset += dy;
       }
       // calculate the "match score" between expected rois and id2detections_copy
       std::map<int, tensorrt_yolox::Object> id2bestDetection;
@@ -235,6 +234,7 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
     tlr.roi.y_offset = p.second.y_offset;
     tlr.roi.width = p.second.width;
     tlr.roi.height = p.second.height;
+    tlr.expect_roi = id2roughRoi[tlr.id].expect_roi;
     out_rois.rois.push_back(tlr);
   }
 }
