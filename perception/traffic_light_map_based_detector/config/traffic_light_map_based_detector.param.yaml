@@ -2,17 +2,17 @@
   ros__parameters:
     max_vibration_pitch: 0.01745329251   # -0.5 ~ 0.5 deg
     max_vibration_yaw: 0.01745329251     # -0.5 ~ 0.5 deg
-    max_vibration_height: 0.5            # -0.05 ~ 0.05 m
-    max_vibration_width: 0.5             # -0.05 ~ 0.05 m
-    max_vibration_depth: 0.5             # -0.05 ~ 0.05 m
+    max_vibration_height: 0.5            # -0.25 ~ 0.25 m
+    max_vibration_width: 0.5             # -0.25 ~ 0.25 m
+    max_vibration_depth: 0.5             # -0.25 ~ 0.25 m
 
     # parameters for occlusion_predictor
-    use_occlusion_predictor: false
+    use_occlusion_predictor: true
     # lidar azimuth resolution
     azimuth_occlusion_resolution: 0.15 # degree
     # lidar elevation resolution
     elevation_occlusion_resolution: 0.08  # degree
     # minimum lidar point number to be valid
     min_cloud_size: 100000
-    # whether use predicted objects to compensate point cloud xyz for timestamp difference between point cloud and image
-    enable_point_cloud_compensation: false
+    # only use lidar points whose distance to camera is less than this value
+    max_valid_pt_distance: 50.0

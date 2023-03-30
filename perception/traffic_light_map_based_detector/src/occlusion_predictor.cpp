@@ -24,7 +24,6 @@ traffic_light::Ray point2ray(const pcl::PointXYZ & pt)
   ray.dist = std::sqrt(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z);
   ray.elevation = RAD2DEG(std::atan2(pt.y, std::hypot(pt.x, pt.z)));
   ray.azimuth = RAD2DEG(std::atan2(pt.x, pt.z));
-  ray.pt = pt;
   return ray;
 }
 
@@ -32,6 +31,15 @@ traffic_light::Ray point2ray(const pcl::PointXYZ & pt)
 
 namespace traffic_light
 {
+
+CloudOcclusionPredictor::CloudOcclusionPredictor(
+  float max_valid_pt_distance, float azimuth_occlusion_resolution,
+  float elevation_occlusion_resolution)
+: max_valid_pt_distance_(max_valid_pt_distance),
+  azimuth_occlusion_resolution_(azimuth_occlusion_resolution),
+  elevation_occlusion_resolution_(elevation_occlusion_resolution)
+{
+}
 
 void CloudOcclusionPredictor::receivePointCloud(
   const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
@@ -47,8 +55,7 @@ void CloudOcclusionPredictor::receivePointCloud(
 }
 
 void CloudOcclusionPredictor::update(
-  const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer,
-  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois)
+  const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer)
 {
   if (history_clouds_.empty()) {
     return;
@@ -92,75 +99,30 @@ void CloudOcclusionPredictor::update(
     return;
   }
 
-  cloudPreprocess(camera_info, tl_rough_rois);
-}
-
-void CloudOcclusionPredictor::cloudPreprocess(
-  const sensor_msgs::msg::CameraInfo & camera_info,
-  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois)
-{
   lidar_rays_.clear();
-  if (history_clouds_.empty()) {
-    return;
-  }
   // points in camera frame
   pcl::PointCloud<pcl::PointXYZ> cloud_camera;
-  // filtered points within traffic light rois in camera frame
-  pcl::PointCloud<pcl::PointXYZ> cloud_in_rois;
   tier4_autoware_utils::transformPointCloudFromROSMsg(
     history_clouds_.front(), cloud_camera, camera2cloud_);
-  filterCloud(cloud_camera, tl_rough_rois, camera_info, cloud_in_rois);
+  const float min_dist_to_cam = 1.0f;
 
-  for (const pcl::PointXYZ & pt : cloud_in_rois) {
+  for (auto it = cloud_camera.begin(); it != cloud_camera.end();) {
+    // unnecessary to handle points behind the camera
+    if (it->z <= 0) {
+      continue;
+    }
+
+    float dist_to_cam = it->getVector3fMap().norm();
+    if (dist_to_cam <= min_dist_to_cam || dist_to_cam >= max_valid_pt_distance_) {
+      it = cloud_camera.erase(it);
+    } else {
+      it++;
+    }
+  }
+
+  for (const pcl::PointXYZ & pt : cloud_camera) {
     Ray ray = ::point2ray(pt);
     lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
-  }
-}
-
-void CloudOcclusionPredictor::filterCloud(
-  const pcl::PointCloud<pcl::PointXYZ> & cloud_in,
-  const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois,
-  const sensor_msgs::msg::CameraInfo & camera_info, pcl::PointCloud<pcl::PointXYZ> & cloud_out)
-{
-  cloud_out.clear();
-  // the points very close to the camera should not be used in the occlusion estimation,
-  // since they could be noise or from the other nearby sensors
-  const float min_dist_to_cam = 1.0f;
-  pinhole_camera_model_.fromCameraInfo(camera_info);
-
-  double min_x = std::numeric_limits<double>::max();
-  double max_x = std::numeric_limits<double>::lowest();
-  double min_y = std::numeric_limits<double>::max();
-  double max_y = std::numeric_limits<double>::lowest();
-  // the x and y coordiante of the rough rois are un-rectified coordiantes.
-  // we need to convert them to rectified coordiantes.
-  for (const auto & roi : tl_rough_rois) {
-    cv::Point2d top_left_pt(roi.roi.x_offset, roi.roi.y_offset);
-    cv::Point2d bottom_right_pt(
-      roi.roi.x_offset + roi.roi.width, roi.roi.y_offset + roi.roi.height);
-    top_left_pt = pinhole_camera_model_.rectifyPoint(top_left_pt);
-    bottom_right_pt = pinhole_camera_model_.rectifyPoint(bottom_right_pt);
-    min_x = std::min(min_x, top_left_pt.x);
-    max_x = std::max(max_y, bottom_right_pt.x);
-    min_y = std::min(min_y, top_left_pt.y);
-    max_y = std::max(max_y, bottom_right_pt.y);
-  }
-
-  for (size_t i = 0; i < cloud_in.size(); i++) {
-    if (cloud_in[i].z <= 0) {
-      continue;
-    }
-    float dist_to_cam = std::sqrt(
-      cloud_in[i].x * cloud_in[i].x + cloud_in[i].y * cloud_in[i].y +
-      cloud_in[i].z * cloud_in[i].z);
-    if (dist_to_cam <= min_dist_to_cam) {
-      continue;
-    }
-    cv::Point2d pixel = pinhole_camera_model_.project3dToPixel(
-      cv::Point3d(cloud_in[i].x, cloud_in[i].y, cloud_in[i].z));
-    if (pixel.x >= min_x && pixel.x <= max_x && pixel.y >= min_y && pixel.y <= max_y) {
-      cloud_out.push_back(cloud_in[i]);
-    }
   }
 }
 
@@ -198,8 +160,7 @@ void CloudOcclusionPredictor::sampleTrafficLightRoi(
 
 uint32_t CloudOcclusionPredictor::predict(
   const geometry_msgs::msg::Point & roi_top_left,
-  const geometry_msgs::msg::Point & roi_bottom_right, double azimuth_occlusion_resolution,
-  double elevation_occlusion_resolution)
+  const geometry_msgs::msg::Point & roi_bottom_right)
 {
   if (history_clouds_.empty()) {
     return 0;
@@ -218,10 +179,10 @@ uint32_t CloudOcclusionPredictor::predict(
     Ray tl_ray = ::point2ray(tl_pt);
     bool occluded = false;
     // the azimuth and elevation range to search for points that may occlude tl_pt
-    int min_azimuth = static_cast<int>(tl_ray.azimuth - azimuth_occlusion_resolution);
-    int max_azimuth = static_cast<int>(tl_ray.azimuth + azimuth_occlusion_resolution);
-    int min_elevation = static_cast<int>(tl_ray.elevation - elevation_occlusion_resolution);
-    int max_elevation = static_cast<int>(tl_ray.elevation + elevation_occlusion_resolution);
+    int min_azimuth = static_cast<int>(tl_ray.azimuth - azimuth_occlusion_resolution_);
+    int max_azimuth = static_cast<int>(tl_ray.azimuth + azimuth_occlusion_resolution_);
+    int min_elevation = static_cast<int>(tl_ray.elevation - elevation_occlusion_resolution_);
+    int max_elevation = static_cast<int>(tl_ray.elevation + elevation_occlusion_resolution_);
     /**
      * search among lidar rays whose azimuth and elevation angle are close to the tl_ray.
      * for a lidar ray r1 whose azimuth and elevation are very close to tl_pt,
@@ -232,8 +193,8 @@ uint32_t CloudOcclusionPredictor::predict(
       for (int elevation = min_elevation; (elevation <= max_elevation) && !occluded; elevation++) {
         for (const Ray & lidar_ray : lidar_rays_[azimuth][elevation]) {
           if (
-            std::abs(lidar_ray.azimuth - tl_ray.azimuth) <= azimuth_occlusion_resolution &&
-            std::abs(lidar_ray.elevation - tl_ray.elevation) <= elevation_occlusion_resolution &&
+            std::abs(lidar_ray.azimuth - tl_ray.azimuth) <= azimuth_occlusion_resolution_ &&
+            std::abs(lidar_ray.elevation - tl_ray.elevation) <= elevation_occlusion_resolution_ &&
             lidar_ray.dist < tl_ray.dist - min_dist_from_occlusion_to_tl) {
             occluded = true;
             break;

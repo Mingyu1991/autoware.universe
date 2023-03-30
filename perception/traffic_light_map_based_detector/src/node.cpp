@@ -85,6 +85,20 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
 {
   using std::placeholders::_1;
 
+  // parameter declaration needs default values: are 0.0 goof defaults for this?
+  config_.max_vibration_pitch = declare_parameter<double>("max_vibration_pitch", 0.0);
+  config_.max_vibration_yaw = declare_parameter<double>("max_vibration_yaw", 0.0);
+  config_.max_vibration_height = declare_parameter<double>("max_vibration_height", 0.0);
+  config_.max_vibration_width = declare_parameter<double>("max_vibration_width", 0.0);
+  config_.max_vibration_depth = declare_parameter<double>("max_vibration_depth", 0.0);
+  config_.use_occlusion_predictor = declare_parameter<bool>("use_occlusion_predictor", false);
+  config_.azimuth_occlusion_resolution =
+    declare_parameter<float>("azimuth_occlusion_resolution", 0.15);
+  config_.elevation_occlusion_resolution =
+    declare_parameter<float>("elevation_occlusion_resolution", 0.08);
+  config_.min_cloud_size = declare_parameter<int>("min_cloud_size", 100000);
+  config_.max_valid_pt_distance = declare_parameter<float>("max_valid_pt_distance", 50.0);
+
   // subscribers
   map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
     "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
@@ -100,13 +114,14 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
-
-  // parameter declaration needs default values: are 0.0 goof defaults for this?
-  config_.max_vibration_pitch = declare_parameter<double>("max_vibration_pitch", 0.0);
-  config_.max_vibration_yaw = declare_parameter<double>("max_vibration_yaw", 0.0);
-  config_.max_vibration_height = declare_parameter<double>("max_vibration_height", 0.0);
-  config_.max_vibration_width = declare_parameter<double>("max_vibration_width", 0.0);
-  config_.max_vibration_depth = declare_parameter<double>("max_vibration_depth", 0.0);
+  if (config_.use_occlusion_predictor) {
+    cloud_occlusion_predictor_ = std::make_shared<CloudOcclusionPredictor>(
+      config_.max_valid_pt_distance, config_.azimuth_occlusion_resolution,
+      config_.elevation_occlusion_resolution);
+    point_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+      "~/input/cloud", rclcpp::SensorDataQoS(),
+      std::bind(&MapBasedDetector::pointCloudCallback, this, _1));
+  }
 }
 
 void MapBasedDetector::cameraInfoCallback(
@@ -161,6 +176,9 @@ void MapBasedDetector::cameraInfoCallback(
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.
    */
+  if (cloud_occlusion_predictor_) {
+    cloud_occlusion_predictor_->update(*input_msg, tf_buffer_);
+  }
   for (const auto & traffic_light : visible_traffic_lights) {
     autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
     if (!getTrafficLightRoi(
@@ -173,6 +191,15 @@ void MapBasedDetector::cameraInfoCallback(
   publishVisibleTrafficLights(camera_pose_stamped, visible_traffic_lights, viz_pub_);
 }
 
+void MapBasedDetector::pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
+{
+  // sometimes the top lidar doesn't publish any point and necessary to filter it out
+  int cloud_size = msg->width * msg->height;
+  if (cloud_size >= config_.min_cloud_size) {
+    cloud_occlusion_predictor_->receivePointCloud(msg);
+  }
+}
+
 bool MapBasedDetector::getTrafficLightRoi(
   const geometry_msgs::msg::Pose & camera_pose,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
@@ -182,6 +209,7 @@ bool MapBasedDetector::getTrafficLightRoi(
   const double tl_height = traffic_light.attributeOr("height", 0.0);
   const auto & tl_left_down_point = traffic_light.front();
   const auto & tl_right_down_point = traffic_light.back();
+  geometry_msgs::msg::Point rough_roi_top_left, rough_roi_bottom_right;
 
   tf2::Transform tf_map2camera(
     tf2::Quaternion(
@@ -223,14 +251,13 @@ bool MapBasedDetector::getTrafficLightRoi(
     }
     // enlarged target position in camera coordinate
     {
-      geometry_msgs::msg::Point point3d;
-      point3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
-      point3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
-      point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-      if (point3d.z <= 0.0) {
+      rough_roi_top_left.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
+      rough_roi_top_left.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
+      rough_roi_top_left.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+      if (rough_roi_top_left.z <= 0.0) {
         return false;
       }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, rough_roi_top_left);
       roundInImageFrame(pinhole_camera_model, point2d);
       tl_roi.roi.x_offset = point2d.x;
       tl_roi.roi.y_offset = point2d.y;
@@ -268,14 +295,14 @@ bool MapBasedDetector::getTrafficLightRoi(
     }
     // enlarged target position in camera coordinate
     {
-      geometry_msgs::msg::Point point3d;
-      point3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
-      point3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
-      point3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-      if (point3d.z <= 0.0) {
+      rough_roi_bottom_right.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
+      rough_roi_bottom_right.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
+      rough_roi_bottom_right.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+      if (rough_roi_bottom_right.z <= 0.0) {
         return false;
       }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
+      cv::Point2d point2d =
+        calcRawImagePointFromPoint3D(pinhole_camera_model, rough_roi_bottom_right);
       roundInImageFrame(pinhole_camera_model, point2d);
       tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
       tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
@@ -284,6 +311,12 @@ bool MapBasedDetector::getTrafficLightRoi(
     if (tl_roi.roi.width < 1 || tl_roi.roi.height < 1) {
       return false;
     }
+  }
+  if (cloud_occlusion_predictor_) {
+    int occlusion_rate =
+      cloud_occlusion_predictor_->predict(rough_roi_top_left, rough_roi_bottom_right);
+    RCLCPP_INFO_STREAM(
+      get_logger(), "id = " << traffic_light.id() << ", occlusion rate = " << occlusion_rate);
   }
   return true;
 }

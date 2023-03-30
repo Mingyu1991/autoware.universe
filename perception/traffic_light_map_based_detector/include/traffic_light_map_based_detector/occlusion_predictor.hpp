@@ -51,39 +51,28 @@ struct Ray
   float azimuth;
   float elevation;
   float dist;
-  // only for debug
-  pcl::PointXYZ pt;
 };
 
 class CloudOcclusionPredictor
 {
 public:
+  CloudOcclusionPredictor(
+    float max_valid_pt_distance, float azimuth_occlusion_resolution,
+    float elevation_occlusion_resolution);
+
   void receivePointCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
 
-  void update(
-    const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer,
-    const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois);
+  void update(const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer);
 
   uint32_t predict(
     const geometry_msgs::msg::Point & roi_top_left,
-    const geometry_msgs::msg::Point & roi_bottom_right, double azimuth_occlusion_resolution,
-    double elevation_occlusion_resolution);
+    const geometry_msgs::msg::Point & roi_bottom_right);
 
   float getCloudDelay();
 
   sensor_msgs::msg::PointCloud2 debug(const sensor_msgs::msg::CameraInfo & camera_info);
-  sensor_msgs::msg::PointCloud2 cloud_camera_stamp_;
 
 private:
-  void cloudPreprocess(
-    const sensor_msgs::msg::CameraInfo & camera_info,
-    const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois);
-
-  void filterCloud(
-    const pcl::PointCloud<pcl::PointXYZ> & cloud_in,
-    const std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> & tl_rough_rois,
-    const sensor_msgs::msg::CameraInfo & camera_info, pcl::PointCloud<pcl::PointXYZ> & cloud_out);
-
   void sampleTrafficLightRoi(
     const geometry_msgs::msg::Point & top_left, const geometry_msgs::msg::Point & bottom_right,
     uint32_t horizontal_sample_num, uint32_t vertical_sample_num,
@@ -95,6 +84,9 @@ private:
   image_geometry::PinholeCameraModel pinhole_camera_model_;
   std::map<int, std::map<int, std::vector<Ray> > > lidar_rays_;
   double cloud_delay_;
+  float max_valid_pt_distance_;
+  float azimuth_occlusion_resolution_;
+  float elevation_occlusion_resolution_;
 };
 
 }  // namespace traffic_light

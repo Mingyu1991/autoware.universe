@@ -36,12 +36,14 @@
 #include <lanelet2_extension/regulatory_elements/autoware_traffic_light.hpp>
 #include <lanelet2_extension/utility/query.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <traffic_light_map_based_detector/occlusion_predictor.hpp>
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
 #include <autoware_planning_msgs/msg/lanelet_route.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include <image_geometry/pinhole_camera_model.h>
@@ -72,6 +74,11 @@ private:
     double max_vibration_height;
     double max_vibration_width;
     double max_vibration_depth;
+    bool use_occlusion_predictor;
+    float azimuth_occlusion_resolution;
+    float elevation_occlusion_resolution;
+    int min_cloud_size;
+    float max_valid_pt_distance;
   };
 
   struct IdLessThan
@@ -87,6 +94,8 @@ private:
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
   rclcpp::Subscription<autoware_planning_msgs::msg::LaneletRoute>::SharedPtr route_sub_;
+  // used for occlusion prediction
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
 
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
@@ -103,9 +112,15 @@ private:
   lanelet::traffic_rules::TrafficRulesPtr traffic_rules_ptr_;
   lanelet::routing::RoutingGraphPtr routing_graph_ptr_;
   Config config_;
+  /**
+   * @brief main class for calculating the occlusion probability
+   *
+   */
+  std::shared_ptr<CloudOcclusionPredictor> cloud_occlusion_predictor_;
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg);
+  void pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
   void routeCallback(const autoware_planning_msgs::msg::LaneletRoute::ConstSharedPtr input_msg);
   void getVisibleTrafficLights(
     const TrafficLightSet & all_traffic_lights, const geometry_msgs::msg::Pose & camera_pose,
