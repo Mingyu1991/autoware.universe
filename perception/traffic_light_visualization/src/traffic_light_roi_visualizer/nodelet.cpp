@@ -79,9 +79,10 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
     color, 1);
-  // cv::putText(
-  //   image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
-  //   cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
+  cv::putText(
+    image, std::to_string(tl_roi.visible_ratio),
+    cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + tl_roi.roi.height + 30),
+    cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   return true;
 }
 
@@ -186,7 +187,7 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
     cv_ptr = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
     for (auto tl_rough_roi : input_tl_rough_roi_msg->rois) {
       // visualize rough roi
-      // createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
+      createRect(cv_ptr->image, tl_rough_roi, cv::Scalar(0, 255, 0));
 
       ClassificationResult result;
       bool has_correspond_traffic_signal =
@@ -212,32 +213,18 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   }
   image_pub_.publish(cv_ptr->toImageMsg());
 
-  // if(input_tl_roi_msg->rois.size()){
-  //   int bound = 100;
-  //   int width = 1080;
-  //   uint32_t x1 = cv_ptr->image.cols, x2 = 0;
-  //   uint32_t y1 = cv_ptr->image.rows, y2 = 0;
-  //   for(const auto & rough_roi : input_tl_roi_msg->rois){
-  //     x1 = std::min(x1, rough_roi.roi.x_offset);
-  //     x2 = std::max(x2, rough_roi.roi.x_offset + rough_roi.roi.width);
-  //     y1 = std::min(y1, rough_roi.roi.y_offset);
-  //     y2 = std::max(y2, rough_roi.roi.y_offset + rough_roi.roi.height);
-  //   }
-  //   x1 = std::max(int(x1) - bound, 0);
-  //   x2 = std::min(int(x2) + bound, int(cv_ptr->image.cols) - 1);
-  //   y1 = std::max(int(y1) - bound, 0);
-  //   y2 = std::min(int(y2) + bound, int(cv_ptr->image.rows) - 1);
-  //   //std::cout << "x = (" << x1 << ", " << x2 << " ), y = ( " << y1 << ", " << y2 << ") "  <<
-  //   std::endl; cv::Rect rect(cv::Point(x1, y1), cv::Point(x2, y2)); cv::Mat
-  //   debug_img(cv_ptr->image, rect); cv::cvtColor(debug_img, debug_img, cv::COLOR_RGB2BGR);
+  if (input_tl_roi_msg->rois.size()) {
+    cv::Mat image = cv_ptr->image;
+    cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+    // int width = 1080;
+    // int height = width * image.rows / image.cols;
+    // cv::resize(image, image, cv::Size(width, height));
 
-  //   int height = width * debug_img.rows / debug_img.cols;
-  //   cv::resize(debug_img, debug_img, cv::Size(width, height));
-
-  //   std::string save_path = "/home/mingyuli/tmp/tl_output/vis_output/" +
-  //   std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds()) + ".jpg";
-  //   cv::imwrite(save_path, debug_img);
-  // }
+    std::string save_path = "/home/mingyuli/tmp/tl_output/vis_output/" +
+                            std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds()) +
+                            ".jpg";
+    cv::imwrite(save_path, image);
+  }
 }
 
 }  // namespace traffic_light

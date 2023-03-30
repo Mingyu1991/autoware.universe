@@ -114,6 +114,8 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
     "~/output/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
+  point_cloud_pub_ =
+    this->create_publisher<sensor_msgs::msg::PointCloud2>("~/map_based_detector/debug_cloud", 1);
   if (config_.use_occlusion_predictor) {
     cloud_occlusion_predictor_ = std::make_shared<CloudOcclusionPredictor>(
       config_.max_valid_pt_distance, config_.azimuth_occlusion_resolution,
@@ -176,17 +178,34 @@ void MapBasedDetector::cameraInfoCallback(
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.
    */
-  if (cloud_occlusion_predictor_) {
-    cloud_occlusion_predictor_->update(*input_msg, tf_buffer_);
-  }
+
+  std::vector<geometry_msgs::msg::Point> roi_tls, roi_brs;
+  std::vector<int> visible_ratios;
   for (const auto & traffic_light : visible_traffic_lights) {
     autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
+    geometry_msgs::msg::Point roi_tl, roi_br;
+    int visible_ratio;
     if (!getTrafficLightRoi(
-          camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi)) {
+          camera_pose_stamped.pose, pinhole_camera_model, traffic_light, config_, tl_roi, roi_tl,
+          roi_br, visible_ratio)) {
       continue;
     }
     output_msg.rois.push_back(tl_roi);
+    roi_tls.push_back(roi_tl);
+    roi_brs.push_back(roi_br);
+    visible_ratios.push_back(visible_ratio);
   }
+  if (cloud_occlusion_predictor_) {
+    std::vector<int> occlusion_ratios;
+    cloud_occlusion_predictor_->predict(*input_msg, tf_buffer_, roi_tls, roi_brs, occlusion_ratios);
+    point_cloud_pub_->publish(cloud_occlusion_predictor_->debug(*input_msg));
+    assert(occlusion_ratios.size() == visible_ratios.size());
+    for (size_t i = 0; i < visible_ratios.size(); i++) {
+      visible_ratios[i] = std::min(visible_ratios[i], 100 - occlusion_ratios[i]);
+      output_msg.rois[i].visible_ratio = visible_ratios[i];
+    }
+  }
+
   roi_pub_->publish(output_msg);
   publishVisibleTrafficLights(camera_pose_stamped, visible_traffic_lights, viz_pub_);
 }
@@ -204,12 +223,15 @@ bool MapBasedDetector::getTrafficLightRoi(
   const geometry_msgs::msg::Pose & camera_pose,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
   const lanelet::ConstLineString3d traffic_light, const Config & config,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi)
+  autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
+  geometry_msgs::msg::Point & roi_tl_3d, geometry_msgs::msg::Point & roi_br_3d, int & visible_ratio)
 {
   const double tl_height = traffic_light.attributeOr("height", 0.0);
   const auto & tl_left_down_point = traffic_light.front();
   const auto & tl_right_down_point = traffic_light.back();
-  geometry_msgs::msg::Point rough_roi_top_left, rough_roi_bottom_right;
+  // rough roi top left and bottom right points projected on the image without being clipped by
+  // image size
+  cv::Point2d raw_tl_2d, raw_br_2d;
 
   tf2::Transform tf_map2camera(
     tf2::Quaternion(
@@ -251,13 +273,14 @@ bool MapBasedDetector::getTrafficLightRoi(
     }
     // enlarged target position in camera coordinate
     {
-      rough_roi_top_left.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
-      rough_roi_top_left.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
-      rough_roi_top_left.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-      if (rough_roi_top_left.z <= 0.0) {
+      roi_tl_3d.x = tf_camera2tl.getOrigin().x() - max_vibration_x;
+      roi_tl_3d.y = tf_camera2tl.getOrigin().y() - max_vibration_y;
+      roi_tl_3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+      if (roi_tl_3d.z <= 0.0) {
         return false;
       }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, rough_roi_top_left);
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_tl_3d);
+      raw_tl_2d = point2d;
       roundInImageFrame(pinhole_camera_model, point2d);
       tl_roi.roi.x_offset = point2d.x;
       tl_roi.roi.y_offset = point2d.y;
@@ -295,14 +318,14 @@ bool MapBasedDetector::getTrafficLightRoi(
     }
     // enlarged target position in camera coordinate
     {
-      rough_roi_bottom_right.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
-      rough_roi_bottom_right.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
-      rough_roi_bottom_right.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
-      if (rough_roi_bottom_right.z <= 0.0) {
+      roi_br_3d.x = tf_camera2tl.getOrigin().x() + max_vibration_x;
+      roi_br_3d.y = tf_camera2tl.getOrigin().y() + max_vibration_y;
+      roi_br_3d.z = tf_camera2tl.getOrigin().z() - max_vibration_z;
+      if (roi_br_3d.z <= 0.0) {
         return false;
       }
-      cv::Point2d point2d =
-        calcRawImagePointFromPoint3D(pinhole_camera_model, rough_roi_bottom_right);
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_br_3d);
+      raw_br_2d = point2d;
       roundInImageFrame(pinhole_camera_model, point2d);
       tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
       tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
@@ -312,12 +335,13 @@ bool MapBasedDetector::getTrafficLightRoi(
       return false;
     }
   }
-  if (cloud_occlusion_predictor_) {
-    int occlusion_rate =
-      cloud_occlusion_predictor_->predict(rough_roi_top_left, rough_roi_bottom_right);
-    RCLCPP_INFO_STREAM(
-      get_logger(), "id = " << traffic_light.id() << ", occlusion rate = " << occlusion_rate);
-  }
+  // calculate visible rate from truncate rate
+  int expect_roi_area = static_cast<int>((raw_br_2d.y - raw_tl_2d.y) * (raw_br_2d.x - raw_tl_2d.x));
+  int roi_area = tl_roi.roi.width * tl_roi.roi.height;
+  // expect_roi_area might be smaller than roi_area because of the error caused by conversion from
+  // float to int
+  expect_roi_area = std::max(expect_roi_area, roi_area);
+  visible_ratio = 100 * roi_area / expect_roi_area;
   return true;
 }
 

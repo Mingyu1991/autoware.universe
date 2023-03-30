@@ -54,10 +54,16 @@ void CloudOcclusionPredictor::receivePointCloud(
   // sometimes the top lidar doesn't give any point. we need to filter out these clouds
 }
 
-void CloudOcclusionPredictor::update(
-  const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer)
+void CloudOcclusionPredictor::predict(
+  const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer,
+  const std::vector<geometry_msgs::msg::Point> & roi_tls,
+  const std::vector<geometry_msgs::msg::Point> & roi_brs, std::vector<int> & occlusion_ratios)
 {
-  if (history_clouds_.empty()) {
+  occlusion_ratios.resize(roi_tls.size());
+  // if the timestamp difference between cloud and image is too large, discard it.
+  const double max_cloud_image_diff_t = 0.5;
+
+  if (history_clouds_.empty() || roi_tls.empty()) {
     return;
   }
   /**
@@ -75,6 +81,10 @@ void CloudOcclusionPredictor::update(
   }
   cloud_delay_ = rclcpp::Time(camera_info.header.stamp).seconds() -
                  rclcpp::Time(closest_it->header.stamp).seconds();
+  if (std::abs(cloud_delay_) >= max_cloud_image_diff_t) {
+    return;
+  }
+  assert(roi_tls.size() == roi_brs.size());
   /**
    * erase clouds earlier than closest_it since their timestamps couldn't be closer to following
    * rough_rois than closest_it
@@ -94,7 +104,7 @@ void CloudOcclusionPredictor::update(
                               rclcpp::Duration::from_seconds(0.2)))
         .matrix();
   } catch (tf2::TransformException & ex) {
-    std::cout << "Error: cannot get transform from map frame to "
+    std::cout << "Error: cannot get transform from << " << camera_info.header.frame_id << " to "
               << history_clouds_.front().header.frame_id << std::endl;
     return;
   }
@@ -102,27 +112,61 @@ void CloudOcclusionPredictor::update(
   lidar_rays_.clear();
   // points in camera frame
   pcl::PointCloud<pcl::PointXYZ> cloud_camera;
+  // points within roi
+  pcl::PointCloud<pcl::PointXYZ> cloud_roi;
   tier4_autoware_utils::transformPointCloudFromROSMsg(
     history_clouds_.front(), cloud_camera, camera2cloud_);
-  const float min_dist_to_cam = 1.0f;
 
-  for (auto it = cloud_camera.begin(); it != cloud_camera.end();) {
-    // unnecessary to handle points behind the camera
-    if (it->z <= 0) {
-      continue;
-    }
+  filterCloud(cloud_camera, roi_tls, roi_brs, cloud_roi);
+  debug_cloud_ = cloud_roi;
 
-    float dist_to_cam = it->getVector3fMap().norm();
-    if (dist_to_cam <= min_dist_to_cam || dist_to_cam >= max_valid_pt_distance_) {
-      it = cloud_camera.erase(it);
-    } else {
-      it++;
-    }
-  }
-
-  for (const pcl::PointXYZ & pt : cloud_camera) {
+  for (const pcl::PointXYZ & pt : cloud_roi) {
     Ray ray = ::point2ray(pt);
     lidar_rays_[static_cast<int>(ray.azimuth)][static_cast<int>(ray.elevation)].push_back(ray);
+  }
+  for (size_t i = 0; i < roi_tls.size(); i++) {
+    occlusion_ratios[i] = predict(roi_tls[i], roi_brs[i]);
+  }
+}
+
+void CloudOcclusionPredictor::filterCloud(
+  const pcl::PointCloud<pcl::PointXYZ> & cloud_in,
+  const std::vector<geometry_msgs::msg::Point> & roi_tls,
+  const std::vector<geometry_msgs::msg::Point> & roi_brs,
+  pcl::PointCloud<pcl::PointXYZ> & cloud_out)
+{
+  float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;
+  for (const auto & pt : roi_tls) {
+    min_x = std::min(min_x, static_cast<float>(pt.x));
+    max_x = std::max(max_x, static_cast<float>(pt.x));
+    min_y = std::min(min_y, static_cast<float>(pt.y));
+    max_y = std::max(max_y, static_cast<float>(pt.y));
+    min_z = std::min(min_z, static_cast<float>(pt.z));
+    max_z = std::max(max_z, static_cast<float>(pt.z));
+  }
+  for (const auto & pt : roi_brs) {
+    min_x = std::min(min_x, static_cast<float>(pt.x));
+    max_x = std::max(max_x, static_cast<float>(pt.x));
+    min_y = std::min(min_y, static_cast<float>(pt.y));
+    max_y = std::max(max_y, static_cast<float>(pt.y));
+    min_z = std::min(min_z, static_cast<float>(pt.z));
+    max_z = std::max(max_z, static_cast<float>(pt.z));
+  }
+  const float min_dist_to_cam = 1.0f;
+  cloud_out.clear();
+  for (const auto & pt : cloud_in) {
+    if (
+      pt.x < min_x || pt.x > max_x || pt.y < min_y || pt.y > max_y || pt.z < min_z ||
+      pt.z > max_z) {
+      continue;
+    }
+    float dist = pt.getVector3fMap().squaredNorm();
+    if (
+      dist <= min_dist_to_cam * min_dist_to_cam ||
+      dist >= max_valid_pt_distance_ * max_valid_pt_distance_) {
+      continue;
+    }
+    cloud_out.push_back(pt);
   }
 }
 
@@ -173,7 +217,6 @@ uint32_t CloudOcclusionPredictor::predict(
   pcl::PointCloud<pcl::PointXYZ> tl_sample_cloud;
   sampleTrafficLightRoi(
     roi_top_left, roi_bottom_right, horizontal_sample_num, vertical_sample_num, tl_sample_cloud);
-  debug_cloud_ += tl_sample_cloud;
   uint32_t occluded_num = 0;
   for (const pcl::PointXYZ & tl_pt : tl_sample_cloud) {
     Ray tl_ray = ::point2ray(tl_pt);

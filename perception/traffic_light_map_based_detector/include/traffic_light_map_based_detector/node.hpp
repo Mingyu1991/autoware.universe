@@ -99,6 +99,8 @@ private:
 
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
+  // for debug only
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_pub_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
@@ -138,7 +140,9 @@ private:
     const geometry_msgs::msg::Pose & camera_pose,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const lanelet::ConstLineString3d traffic_light, const Config & config,
-    autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi);
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi,
+    geometry_msgs::msg::Point & roi_tl_3d, geometry_msgs::msg::Point & roi_br_3d,
+    int & visible_ratio);
   void publishVisibleTrafficLights(
     const geometry_msgs::msg::PoseStamped camera_pose_stamped,
     const std::vector<lanelet::ConstLineString3d> & visible_traffic_lights,

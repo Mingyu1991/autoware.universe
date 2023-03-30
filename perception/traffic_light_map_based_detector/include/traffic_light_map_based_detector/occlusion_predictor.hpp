@@ -62,7 +62,10 @@ public:
 
   void receivePointCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
 
-  void update(const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer);
+  void predict(
+    const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer,
+    const std::vector<geometry_msgs::msg::Point> & roi_tls,
+    const std::vector<geometry_msgs::msg::Point> & roi_brs, std::vector<int> & occlusion_ratios);
 
   uint32_t predict(
     const geometry_msgs::msg::Point & roi_top_left,
@@ -73,6 +76,12 @@ public:
   sensor_msgs::msg::PointCloud2 debug(const sensor_msgs::msg::CameraInfo & camera_info);
 
 private:
+  void filterCloud(
+    const pcl::PointCloud<pcl::PointXYZ> & cloud_in,
+    const std::vector<geometry_msgs::msg::Point> & roi_tls,
+    const std::vector<geometry_msgs::msg::Point> & roi_brs,
+    pcl::PointCloud<pcl::PointXYZ> & cloud_out);
+
   void sampleTrafficLightRoi(
     const geometry_msgs::msg::Point & top_left, const geometry_msgs::msg::Point & bottom_right,
     uint32_t horizontal_sample_num, uint32_t vertical_sample_num,
