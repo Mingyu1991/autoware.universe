@@ -56,8 +56,8 @@ void CloudOcclusionPredictor::receivePointCloud(
 
 void CloudOcclusionPredictor::predict(
   const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer,
-  const std::vector<geometry_msgs::msg::Point> & roi_tls,
-  const std::vector<geometry_msgs::msg::Point> & roi_brs, std::vector<int> & occlusion_ratios)
+  const std::vector<tf2::Vector3> & roi_tls, const std::vector<tf2::Vector3> & roi_brs,
+  std::vector<int> & occlusion_ratios)
 {
   occlusion_ratios.resize(roi_tls.size());
   // if the timestamp difference between cloud and image is too large, discard it.
@@ -130,27 +130,25 @@ void CloudOcclusionPredictor::predict(
 }
 
 void CloudOcclusionPredictor::filterCloud(
-  const pcl::PointCloud<pcl::PointXYZ> & cloud_in,
-  const std::vector<geometry_msgs::msg::Point> & roi_tls,
-  const std::vector<geometry_msgs::msg::Point> & roi_brs,
-  pcl::PointCloud<pcl::PointXYZ> & cloud_out)
+  const pcl::PointCloud<pcl::PointXYZ> & cloud_in, const std::vector<tf2::Vector3> & roi_tls,
+  const std::vector<tf2::Vector3> & roi_brs, pcl::PointCloud<pcl::PointXYZ> & cloud_out)
 {
   float min_x = 0, max_x = 0, min_y = 0, max_y = 0, min_z = 0, max_z = 0;
   for (const auto & pt : roi_tls) {
-    min_x = std::min(min_x, static_cast<float>(pt.x));
-    max_x = std::max(max_x, static_cast<float>(pt.x));
-    min_y = std::min(min_y, static_cast<float>(pt.y));
-    max_y = std::max(max_y, static_cast<float>(pt.y));
-    min_z = std::min(min_z, static_cast<float>(pt.z));
-    max_z = std::max(max_z, static_cast<float>(pt.z));
+    min_x = std::min(min_x, static_cast<float>(pt.x()));
+    max_x = std::max(max_x, static_cast<float>(pt.x()));
+    min_y = std::min(min_y, static_cast<float>(pt.y()));
+    max_y = std::max(max_y, static_cast<float>(pt.y()));
+    min_z = std::min(min_z, static_cast<float>(pt.z()));
+    max_z = std::max(max_z, static_cast<float>(pt.z()));
   }
   for (const auto & pt : roi_brs) {
-    min_x = std::min(min_x, static_cast<float>(pt.x));
-    max_x = std::max(max_x, static_cast<float>(pt.x));
-    min_y = std::min(min_y, static_cast<float>(pt.y));
-    max_y = std::max(max_y, static_cast<float>(pt.y));
-    min_z = std::min(min_z, static_cast<float>(pt.z));
-    max_z = std::max(max_z, static_cast<float>(pt.z));
+    min_x = std::min(min_x, static_cast<float>(pt.x()));
+    max_x = std::max(max_x, static_cast<float>(pt.x()));
+    min_y = std::min(min_y, static_cast<float>(pt.y()));
+    max_y = std::max(max_y, static_cast<float>(pt.y()));
+    min_z = std::min(min_z, static_cast<float>(pt.z()));
+    max_z = std::max(max_z, static_cast<float>(pt.z()));
   }
   const float min_dist_to_cam = 1.0f;
   cloud_out.clear();
@@ -181,17 +179,16 @@ sensor_msgs::msg::PointCloud2 CloudOcclusionPredictor::debug(
 }
 
 void CloudOcclusionPredictor::sampleTrafficLightRoi(
-  const geometry_msgs::msg::Point & top_left, const geometry_msgs::msg::Point & bottom_right,
-  uint32_t horizontal_sample_num, uint32_t vertical_sample_num,
-  pcl::PointCloud<pcl::PointXYZ> & cloud_out)
+  const tf2::Vector3 & top_left, const tf2::Vector3 & bottom_right, uint32_t horizontal_sample_num,
+  uint32_t vertical_sample_num, pcl::PointCloud<pcl::PointXYZ> & cloud_out)
 {
   cloud_out.clear();
-  float x1 = static_cast<float>(top_left.x);
-  float y1 = static_cast<float>(top_left.y);
-  float z1 = static_cast<float>(top_left.z);
-  float x2 = static_cast<float>(bottom_right.x);
-  float y2 = static_cast<float>(bottom_right.y);
-  float z2 = static_cast<float>(bottom_right.z);
+  float x1 = static_cast<float>(top_left.x());
+  float y1 = static_cast<float>(top_left.y());
+  float z1 = static_cast<float>(top_left.z());
+  float x2 = static_cast<float>(bottom_right.x());
+  float y2 = static_cast<float>(bottom_right.y());
+  float z2 = static_cast<float>(bottom_right.z());
   for (uint32_t i1 = 0; i1 < horizontal_sample_num; i1++) {
     for (uint32_t i2 = 0; i2 < vertical_sample_num; i2++) {
       float x = x1 + (x2 - x1) * i1 / (horizontal_sample_num - 1);
@@ -203,8 +200,7 @@ void CloudOcclusionPredictor::sampleTrafficLightRoi(
 }
 
 uint32_t CloudOcclusionPredictor::predict(
-  const geometry_msgs::msg::Point & roi_top_left,
-  const geometry_msgs::msg::Point & roi_bottom_right)
+  const tf2::Vector3 & roi_top_left, const tf2::Vector3 & roi_bottom_right)
 {
   if (history_clouds_.empty()) {
     return 0;

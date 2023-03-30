@@ -27,7 +27,6 @@
 
 #include <autoware_auto_perception_msgs/msg/predicted_objects.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <image_geometry/pinhole_camera_model.h>
@@ -64,12 +63,10 @@ public:
 
   void predict(
     const sensor_msgs::msg::CameraInfo & camera_info, const tf2_ros::Buffer & tf_buffer,
-    const std::vector<geometry_msgs::msg::Point> & roi_tls,
-    const std::vector<geometry_msgs::msg::Point> & roi_brs, std::vector<int> & occlusion_ratios);
+    const std::vector<tf2::Vector3> & roi_tls, const std::vector<tf2::Vector3> & roi_brs,
+    std::vector<int> & occlusion_ratios);
 
-  uint32_t predict(
-    const geometry_msgs::msg::Point & roi_top_left,
-    const geometry_msgs::msg::Point & roi_bottom_right);
+  uint32_t predict(const tf2::Vector3 & roi_top_left, const tf2::Vector3 & roi_bottom_right);
 
   float getCloudDelay();
 
@@ -77,13 +74,11 @@ public:
 
 private:
   void filterCloud(
-    const pcl::PointCloud<pcl::PointXYZ> & cloud_in,
-    const std::vector<geometry_msgs::msg::Point> & roi_tls,
-    const std::vector<geometry_msgs::msg::Point> & roi_brs,
-    pcl::PointCloud<pcl::PointXYZ> & cloud_out);
+    const pcl::PointCloud<pcl::PointXYZ> & cloud_in, const std::vector<tf2::Vector3> & roi_tls,
+    const std::vector<tf2::Vector3> & roi_brs, pcl::PointCloud<pcl::PointXYZ> & cloud_out);
 
   void sampleTrafficLightRoi(
-    const geometry_msgs::msg::Point & top_left, const geometry_msgs::msg::Point & bottom_right,
+    const tf2::Vector3 & top_left, const tf2::Vector3 & bottom_right,
     uint32_t horizontal_sample_num, uint32_t vertical_sample_num,
     pcl::PointCloud<pcl::PointXYZ> & cloud_out);
 
