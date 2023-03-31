@@ -264,6 +264,14 @@ bool MapBasedDetector::getTrafficLightRoi(
   cv::Point2d raw_tl_2d, raw_br_2d;
   // id
   tl_roi.id = traffic_light.id();
+  if (trafficLightId2RegulatoryEleId_.count(tl_roi.id) == 0) {
+    RCLCPP_WARN_STREAM(
+      get_logger(),
+      "failed to find corresponding regulatory element id for traffic light id: " << tl_roi.id);
+    tl_roi.regulatory_element_id = -1;
+  } else {
+    tl_roi.regulatory_element_id = trafficLightId2RegulatoryEleId_[tl_roi.id];
+  }
 
   // for roi.x_offset and roi.y_offset
   {
@@ -361,6 +369,9 @@ void MapBasedDetector::mapCallback(
     lanelet::AutowareTrafficLightConstPtr tl = *tl_itr;
 
     auto lights = tl->trafficLights();
+    for (const auto & light : lights) {
+      trafficLightId2RegulatoryEleId_[light.id()] = tl->id();
+    }
     for (auto lsp : lights) {
       if (!lsp.isLineString()) {  // traffic lights must be linestrings
         continue;

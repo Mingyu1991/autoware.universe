@@ -80,7 +80,7 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
     color, 1);
   cv::putText(
-    image, std::to_string(tl_roi.visible_ratio),
+    image, std::to_string(tl_roi.regulatory_element_id),
     cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + tl_roi.roi.height + 30),
     cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   return true;
@@ -213,18 +213,19 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   }
   image_pub_.publish(cv_ptr->toImageMsg());
 
-  if (input_tl_roi_msg->rois.size()) {
-    cv::Mat image = cv_ptr->image;
-    cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
-    // int width = 1080;
-    // int height = width * image.rows / image.cols;
-    // cv::resize(image, image, cv::Size(width, height));
+  // if (input_tl_roi_msg->rois.size()) {
+  //   cv::Mat image = cv_ptr->image;
+  //   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+  //   // int width = 1080;
+  //   // int height = width * image.rows / image.cols;
+  //   // cv::resize(image, image, cv::Size(width, height));
 
-    std::string save_path = "/home/mingyuli/tmp/tl_output/vis_output/" +
-                            std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds()) +
-                            ".jpg";
-    cv::imwrite(save_path, image);
-  }
+  //   std::string save_path = "/home/mingyuli/tmp/tl_output/vis_output/" +
+  //                           std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds())
+  //                           +
+  //                           ".jpg";
+  //   cv::imwrite(save_path, image);
+  // }
 }
 
 }  // namespace traffic_light

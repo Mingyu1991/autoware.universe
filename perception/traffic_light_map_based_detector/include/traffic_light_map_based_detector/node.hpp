@@ -54,6 +54,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -113,6 +114,7 @@ private:
   lanelet::LaneletMapPtr lanelet_map_ptr_;
   lanelet::traffic_rules::TrafficRulesPtr traffic_rules_ptr_;
   lanelet::routing::RoutingGraphPtr routing_graph_ptr_;
+  std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
   Config config_;
   /**
    * @brief main class for calculating the occlusion probability

@@ -230,6 +230,7 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
   for (const auto & p : bestDetections) {
     autoware_auto_perception_msgs::msg::TrafficLightRoi tlr;
     tlr.id = p.first;
+    tlr.regulatory_element_id = id2roughRoi[tlr.id].regulatory_element_id;
     tlr.roi.x_offset = p.second.x_offset;
     tlr.roi.y_offset = p.second.y_offset;
     tlr.roi.width = p.second.width;
