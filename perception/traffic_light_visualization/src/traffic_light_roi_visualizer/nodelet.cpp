@@ -80,7 +80,7 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
     color, 1);
   cv::putText(
-    image, std::to_string(tl_roi.regulatory_element_id),
+    image, std::to_string(tl_roi.id),
     cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + tl_roi.roi.height + 30),
     cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
   return true;

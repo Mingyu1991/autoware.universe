@@ -173,7 +173,7 @@ void MultiCameraFusion::groupFusion(std::map<IdType, RecordType> & fusionedRecor
   }
   for (auto & p : fusionedRecordMap) {
     IdType reg_ele_id = p.second.first.regulatory_element_id;
-    p.second = regEleId2BestRecord[reg_ele_id];
+    p.second.second.lights = regEleId2BestRecord[reg_ele_id].second.lights;
   }
 }
 
