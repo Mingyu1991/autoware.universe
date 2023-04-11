@@ -10,6 +10,5 @@ ament_auto_add_executable(localization_error_monitor
 )
 
 ament_auto_package(INSTALL_TO_SHARE
-  config
   launch
 )

@@ -1,4 +1,4 @@
-// Copyright 2021-2023 Tier IV, Inc.
+// Copyright 2021 Tier IV, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,9 @@
 
 #include "behavior_path_planner/behavior_path_planner_node.hpp"
 
-#include "behavior_path_planner/marker_util/debug_utilities.hpp"
+#include "behavior_path_planner/debug_utilities.hpp"
 #include "behavior_path_planner/path_utilities.hpp"
 #include "behavior_path_planner/scene_module/avoidance/avoidance_module.hpp"
-#include "behavior_path_planner/util/drivable_area_expansion/map_utils.hpp"
 
 #include <tier4_autoware_utils/tier4_autoware_utils.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
@@ -58,7 +57,6 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
   {
     planner_data_ = std::make_shared<PlannerData>();
     planner_data_->parameters = getCommonParam();
-    planner_data_->drivable_area_expansion_parameters.init(*this);
   }
 
   // publisher
@@ -66,7 +64,6 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
   turn_signal_publisher_ =
     create_publisher<TurnIndicatorsCommand>("~/output/turn_indicators_cmd", 1);
   hazard_signal_publisher_ = create_publisher<HazardLightsCommand>("~/output/hazard_lights_cmd", 1);
-  modified_goal_publisher_ = create_publisher<PoseWithUuidStamped>("~/output/modified_goal", 1);
   debug_avoidance_msg_array_publisher_ =
     create_publisher<AvoidanceDebugMsgArray>("~/debug/avoidance_debug_message_array", 1);
   debug_lane_change_msg_array_publisher_ =
@@ -81,7 +78,7 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
 
   // subscriber
   velocity_subscriber_ = create_subscription<Odometry>(
-    "~/input/odometry", 1, std::bind(&BehaviorPathPlannerNode::onOdometry, this, _1),
+    "~/input/odometry", 1, std::bind(&BehaviorPathPlannerNode::onVelocity, this, _1),
     createSubscriptionOptions(this));
   acceleration_subscriber_ = create_subscription<AccelWithCovarianceStamped>(
     "~/input/accel", 1, std::bind(&BehaviorPathPlannerNode::onAcceleration, this, _1),
@@ -89,8 +86,10 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
   perception_subscriber_ = create_subscription<PredictedObjects>(
     "~/input/perception", 1, std::bind(&BehaviorPathPlannerNode::onPerception, this, _1),
     createSubscriptionOptions(this));
+  // todo: change to ~/input
   occupancy_grid_subscriber_ = create_subscription<OccupancyGrid>(
-    "~/input/occupancy_grid_map", 1, std::bind(&BehaviorPathPlannerNode::onOccupancyGrid, this, _1),
+    "/perception/occupancy_grid_map/map", 1,
+    std::bind(&BehaviorPathPlannerNode::onOccupancyGrid, this, _1),
     createSubscriptionOptions(this));
   scenario_subscriber_ = create_subscription<Scenario>(
     "~/input/scenario", 1,
@@ -291,162 +290,80 @@ SideShiftParameters BehaviorPathPlannerNode::getSideShiftParam()
   p.drivable_area_right_bound_offset = dp("drivable_area_right_bound_offset", 0.0);
   p.shift_request_time_limit = dp("shift_request_time_limit", 1.0);
   p.drivable_area_left_bound_offset = dp("drivable_area_left_bound_offset", 0.0);
-  p.drivable_area_types_to_skip =
-    dp("drivable_area_types_to_skip", std::vector<std::string>({"road_border"}));
 
   return p;
 }
 
 AvoidanceParameters BehaviorPathPlannerNode::getAvoidanceParam()
 {
+  const auto dp = [this](const std::string & str, auto def_val) {
+    std::string name = "avoidance." + str;
+    return this->declare_parameter(name, def_val);
+  };
+
   AvoidanceParameters p{};
-  // general params
-  {
-    std::string ns = "avoidance.";
-    p.resample_interval_for_planning =
-      declare_parameter<double>(ns + "resample_interval_for_planning");
-    p.resample_interval_for_output = declare_parameter<double>(ns + "resample_interval_for_output");
-    p.detection_area_right_expand_dist =
-      declare_parameter<double>(ns + "detection_area_right_expand_dist");
-    p.detection_area_left_expand_dist =
-      declare_parameter<double>(ns + "detection_area_left_expand_dist");
-    p.drivable_area_right_bound_offset =
-      declare_parameter<double>(ns + "drivable_area_right_bound_offset");
-    p.drivable_area_left_bound_offset =
-      declare_parameter<double>(ns + "drivable_area_left_bound_offset");
-    p.drivable_area_types_to_skip =
-      declare_parameter<std::vector<std::string>>(ns + "drivable_area_types_to_skip");
-    p.object_envelope_buffer = declare_parameter<double>(ns + "object_envelope_buffer");
-    p.enable_bound_clipping = declare_parameter<bool>(ns + "enable_bound_clipping");
-    p.enable_avoidance_over_same_direction =
-      declare_parameter<bool>(ns + "enable_avoidance_over_same_direction");
-    p.enable_avoidance_over_opposite_direction =
-      declare_parameter<bool>(ns + "enable_avoidance_over_opposite_direction");
-    p.enable_update_path_when_object_is_gone =
-      declare_parameter<bool>(ns + "enable_update_path_when_object_is_gone");
-    p.enable_safety_check = declare_parameter<bool>(ns + "enable_safety_check");
-    p.enable_yield_maneuver = declare_parameter<bool>(ns + "enable_yield_maneuver");
-    p.disable_path_update = declare_parameter<bool>(ns + "disable_path_update");
-    p.publish_debug_marker = declare_parameter<bool>(ns + "publish_debug_marker");
-    p.print_debug_info = declare_parameter<bool>(ns + "print_debug_info");
-  }
+  p.resample_interval_for_planning = dp("resample_interval_for_planning", 0.3);
+  p.resample_interval_for_output = dp("resample_interval_for_output", 3.0);
+  p.detection_area_right_expand_dist = dp("detection_area_right_expand_dist", 0.0);
+  p.detection_area_left_expand_dist = dp("detection_area_left_expand_dist", 1.0);
+  p.enable_avoidance_over_same_direction = dp("enable_avoidance_over_same_direction", true);
+  p.enable_avoidance_over_opposite_direction = dp("enable_avoidance_over_opposite_direction", true);
+  p.enable_update_path_when_object_is_gone = dp("enable_update_path_when_object_is_gone", false);
 
-  // target object
-  {
-    std::string ns = "avoidance.target_object.";
-    p.avoid_car = declare_parameter<bool>(ns + "car");
-    p.avoid_truck = declare_parameter<bool>(ns + "truck");
-    p.avoid_bus = declare_parameter<bool>(ns + "bus");
-    p.avoid_trailer = declare_parameter<bool>(ns + "trailer");
-    p.avoid_unknown = declare_parameter<bool>(ns + "unknown");
-    p.avoid_bicycle = declare_parameter<bool>(ns + "bicycle");
-    p.avoid_motorcycle = declare_parameter<bool>(ns + "motorcycle");
-    p.avoid_pedestrian = declare_parameter<bool>(ns + "pedestrian");
-  }
+  p.threshold_distance_object_is_on_center = dp("threshold_distance_object_is_on_center", 1.0);
+  p.threshold_speed_object_is_stopped = dp("threshold_speed_object_is_stopped", 1.0);
+  p.threshold_time_object_is_moving = dp("threshold_time_object_is_moving", 1.0);
+  p.object_check_forward_distance = dp("object_check_forward_distance", 150.0);
+  p.object_check_backward_distance = dp("object_check_backward_distance", 2.0);
+  p.object_check_goal_distance = dp("object_check_goal_distance", 20.0);
+  p.object_check_shiftable_ratio = dp("object_check_shiftable_ratio", 1.0);
+  p.object_check_min_road_shoulder_width = dp("object_check_min_road_shoulder_width", 0.5);
+  p.object_envelope_buffer = dp("object_envelope_buffer", 0.1);
+  p.lateral_collision_margin = dp("lateral_collision_margin", 2.0);
+  p.lateral_collision_safety_buffer = dp("lateral_collision_safety_buffer", 0.5);
 
-  // target filtering
-  {
-    std::string ns = "avoidance.target_filtering.";
-    p.threshold_speed_object_is_stopped =
-      declare_parameter<double>(ns + "threshold_speed_object_is_stopped");
-    p.threshold_time_object_is_moving =
-      declare_parameter<double>(ns + "threshold_time_object_is_moving");
-    p.object_check_forward_distance =
-      declare_parameter<double>(ns + "object_check_forward_distance");
-    p.object_check_backward_distance =
-      declare_parameter<double>(ns + "object_check_backward_distance");
-    p.object_check_goal_distance = declare_parameter<double>(ns + "object_check_goal_distance");
-    p.threshold_distance_object_is_on_center =
-      declare_parameter<double>(ns + "threshold_distance_object_is_on_center");
-    p.object_check_shiftable_ratio = declare_parameter<double>(ns + "object_check_shiftable_ratio");
-    p.object_check_min_road_shoulder_width =
-      declare_parameter<double>(ns + "object_check_min_road_shoulder_width");
-    p.object_last_seen_threshold = declare_parameter<double>(ns + "object_last_seen_threshold");
-  }
+  p.prepare_time = dp("prepare_time", 3.0);
+  p.min_prepare_distance = dp("min_prepare_distance", 10.0);
+  p.min_avoidance_distance = dp("min_avoidance_distance", 10.0);
 
-  // safety check
-  {
-    std::string ns = "avoidance.safety_check.";
-    p.safety_check_backward_distance =
-      declare_parameter<double>(ns + "safety_check_backward_distance");
-    p.safety_check_time_horizon = declare_parameter<double>(ns + "safety_check_time_horizon");
-    p.safety_check_idling_time = declare_parameter<double>(ns + "safety_check_idling_time");
-    p.safety_check_accel_for_rss = declare_parameter<double>(ns + "safety_check_accel_for_rss");
-    p.safety_check_hysteresis_factor =
-      declare_parameter<double>(ns + "safety_check_hysteresis_factor");
-  }
+  p.min_nominal_avoidance_speed = dp("min_nominal_avoidance_speed", 5.0);
+  p.min_sharp_avoidance_speed = dp("min_sharp_avoidance_speed", 1.0);
 
-  // avoidance maneuver (lateral)
-  {
-    std::string ns = "avoidance.avoidance.lateral.";
-    p.lateral_collision_margin = declare_parameter<double>(ns + "lateral_collision_margin");
-    p.lateral_collision_safety_buffer =
-      declare_parameter<double>(ns + "lateral_collision_safety_buffer");
-    p.lateral_passable_safety_buffer =
-      declare_parameter<double>(ns + "lateral_passable_safety_buffer");
-    p.road_shoulder_safety_margin = declare_parameter<double>(ns + "road_shoulder_safety_margin");
-    p.avoidance_execution_lateral_threshold =
-      declare_parameter<double>(ns + "avoidance_execution_lateral_threshold");
-    p.max_right_shift_length = declare_parameter<double>(ns + "max_right_shift_length");
-    p.max_left_shift_length = declare_parameter<double>(ns + "max_left_shift_length");
-  }
+  p.road_shoulder_safety_margin = dp("road_shoulder_safety_margin", 0.0);
 
-  // avoidance maneuver (longitudinal)
-  {
-    std::string ns = "avoidance.avoidance.longitudinal.";
-    p.prepare_time = declare_parameter<double>(ns + "prepare_time");
-    p.longitudinal_collision_safety_buffer =
-      declare_parameter<double>(ns + "longitudinal_collision_safety_buffer");
-    p.min_prepare_distance = declare_parameter<double>(ns + "min_prepare_distance");
-    p.min_avoidance_distance = declare_parameter<double>(ns + "min_avoidance_distance");
-    p.min_nominal_avoidance_speed = declare_parameter<double>(ns + "min_nominal_avoidance_speed");
-    p.min_sharp_avoidance_speed = declare_parameter<double>(ns + "min_sharp_avoidance_speed");
-  }
+  p.max_right_shift_length = dp("max_right_shift_length", 1.5);
+  p.max_left_shift_length = dp("max_left_shift_length", 1.5);
 
-  // yield
-  {
-    std::string ns = "avoidance.yield.";
-    p.yield_velocity = declare_parameter<double>(ns + "yield_velocity");
-  }
+  p.nominal_lateral_jerk = dp("nominal_lateral_jerk", 0.3);
+  p.max_lateral_jerk = dp("max_lateral_jerk", 2.0);
 
-  // stop
-  {
-    std::string ns = "avoidance.stop.";
-    p.stop_min_distance = declare_parameter<double>(ns + "min_distance");
-    p.stop_max_distance = declare_parameter<double>(ns + "max_distance");
-  }
+  p.longitudinal_collision_margin_min_distance =
+    dp("longitudinal_collision_margin_min_distance", 0.0);
+  p.longitudinal_collision_margin_time = dp("longitudinal_collision_margin_time", 0.0);
 
-  // constraints
-  {
-    std::string ns = "avoidance.constraints.";
-    p.use_constraints_for_decel = declare_parameter<bool>(ns + "use_constraints_for_decel");
-  }
+  p.object_last_seen_threshold = dp("object_last_seen_threshold", 2.0);
 
-  // constraints (longitudinal)
-  {
-    std::string ns = "avoidance.constraints.longitudinal.";
-    p.nominal_deceleration = declare_parameter<double>(ns + "nominal_deceleration");
-    p.nominal_jerk = declare_parameter<double>(ns + "nominal_jerk");
-    p.max_deceleration = declare_parameter<double>(ns + "max_deceleration");
-    p.max_jerk = declare_parameter<double>(ns + "max_jerk");
-    p.min_avoidance_speed_for_acc_prevention =
-      declare_parameter<double>(ns + "min_avoidance_speed_for_acc_prevention");
-    p.max_avoidance_acceleration = declare_parameter<double>(ns + "max_avoidance_acceleration");
-  }
+  p.min_avoidance_speed_for_acc_prevention = dp("min_avoidance_speed_for_acc_prevention", 3.0);
+  p.max_avoidance_acceleration = dp("max_avoidance_acceleration", 0.5);
 
-  // constraints (lateral)
-  {
-    std::string ns = "avoidance.constraints.lateral.";
-    p.nominal_lateral_jerk = declare_parameter<double>(ns + "nominal_lateral_jerk");
-    p.max_lateral_jerk = declare_parameter<double>(ns + "max_lateral_jerk");
-  }
+  p.publish_debug_marker = dp("publish_debug_marker", false);
+  p.print_debug_info = dp("print_debug_info", false);
 
-  // velocity matrix
-  {
-    std::string ns = "avoidance.target_velocity_matrix.";
-    p.col_size = declare_parameter<int>(ns + "col_size");
-    p.target_velocity_matrix = declare_parameter<std::vector<double>>(ns + "matrix");
-  }
+  p.avoid_car = dp("target_object.car", true);
+  p.avoid_truck = dp("target_object.truck", true);
+  p.avoid_bus = dp("target_object.bus", true);
+  p.avoid_trailer = dp("target_object.trailer", true);
+  p.avoid_unknown = dp("target_object.unknown", false);
+  p.avoid_bicycle = dp("target_object.bicycle", false);
+  p.avoid_motorcycle = dp("target_object.motorcycle", false);
+  p.avoid_pedestrian = dp("target_object.pedestrian", false);
+
+  p.drivable_area_right_bound_offset = dp("drivable_area_right_bound_offset", 0.0);
+  p.drivable_area_left_bound_offset = dp("drivable_area_left_bound_offset", 0.0);
+
+  p.enable_bound_clipping = dp("enable_bound_clipping", false);
+
+  p.avoidance_execution_lateral_threshold = dp("avoidance_execution_lateral_threshold", 0.499);
 
   return p;
 }
@@ -458,8 +375,6 @@ LaneFollowingParameters BehaviorPathPlannerNode::getLaneFollowingParam()
     declare_parameter("lane_following.drivable_area_right_bound_offset", 0.0);
   p.drivable_area_left_bound_offset =
     declare_parameter("lane_following.drivable_area_left_bound_offset", 0.0);
-  p.drivable_area_types_to_skip = declare_parameter(
-    "lane_following.drivable_area_types_to_skip", std::vector<std::string>({"road_border"}));
   p.lane_change_prepare_duration =
     declare_parameter("lane_following.lane_change_prepare_duration", 2.0);
   return p;
@@ -501,8 +416,6 @@ LaneChangeParameters BehaviorPathPlannerNode::getLaneChangeParam()
   // drivable area expansion
   p.drivable_area_right_bound_offset = dp("drivable_area_right_bound_offset", 0.0);
   p.drivable_area_left_bound_offset = dp("drivable_area_left_bound_offset", 0.0);
-  p.drivable_area_types_to_skip =
-    dp("drivable_area_types_to_skip", std::vector<std::string>({"road_border"}));
 
   // debug marker
   p.publish_debug_marker = dp("publish_debug_marker", false);
@@ -614,8 +527,6 @@ PullOverParameters BehaviorPathPlannerNode::getPullOverParam()
   // drivable area
   p.drivable_area_right_bound_offset = dp("drivable_area_right_bound_offset", 0.0);
   p.drivable_area_left_bound_offset = dp("drivable_area_left_bound_offset", 0.0);
-  p.drivable_area_types_to_skip =
-    dp("drivable_area_types_to_skip", std::vector<std::string>({"road_border"}));
   // debug
   p.print_debug_info = dp("print_debug_info", false);
 
@@ -679,8 +590,6 @@ PullOutParameters BehaviorPathPlannerNode::getPullOutParam()
   // drivable area
   p.drivable_area_right_bound_offset = dp("drivable_area_right_bound_offset", 0.0);
   p.drivable_area_left_bound_offset = dp("drivable_area_left_bound_offset", 0.0);
-  p.drivable_area_types_to_skip =
-    dp("drivable_area_types_to_skip", std::vector<std::string>({"road_border"}));
 
   // validation of parameters
   if (p.pull_out_sampling_num < 1) {
@@ -708,19 +617,17 @@ bool BehaviorPathPlannerNode::isDataReady()
 {
   const auto missing = [this](const auto & name) {
     RCLCPP_INFO_SKIPFIRST_THROTTLE(get_logger(), *get_clock(), 5000, "waiting for %s", name);
+    mutex_pd_.unlock();
     return false;
   };
 
+  mutex_pd_.lock();  // for planner_data_
   if (!current_scenario_) {
     return missing("scenario_topic");
   }
 
-  if (!route_ptr_) {
+  if (!planner_data_->route_handler->isHandlerReady()) {
     return missing("route");
-  }
-
-  if (!map_ptr_) {
-    return missing("map");
   }
 
   if (!planner_data_->dynamic_object) {
@@ -735,34 +642,13 @@ bool BehaviorPathPlannerNode::isDataReady()
     return missing("self_acceleration");
   }
 
+  planner_data_->self_pose = self_pose_listener_.getCurrentPose();
+  if (!planner_data_->self_pose) {
+    return missing("self_pose");
+  }
+
+  mutex_pd_.unlock();
   return true;
-}
-
-std::shared_ptr<PlannerData> BehaviorPathPlannerNode::createLatestPlannerData()
-{
-  const std::lock_guard<std::mutex> lock(mutex_pd_);
-
-  // update map
-  if (has_received_map_) {
-    planner_data_->route_handler->setMap(*map_ptr_);
-    has_received_map_ = false;
-  }
-
-  // update route
-  const bool is_first_time = !(planner_data_->route_handler->isHandlerReady());
-  if (has_received_route_) {
-    planner_data_->route_handler->setRoute(*route_ptr_);
-    // Reset behavior tree when new route is received,
-    // so that the each modules do not have to care about the "route jump".
-    if (!is_first_time) {
-      RCLCPP_DEBUG(get_logger(), "new route is received. reset behavior tree.");
-      bt_manager_->resetBehaviorTree();
-    }
-
-    has_received_route_ = false;
-  }
-
-  return std::make_shared<PlannerData>(*planner_data_);
 }
 
 void BehaviorPathPlannerNode::run()
@@ -773,15 +659,22 @@ void BehaviorPathPlannerNode::run()
 
   RCLCPP_DEBUG(get_logger(), "----- BehaviorPathPlannerNode start -----");
   mutex_bt_.lock();  // for bt_manager_
+  mutex_pd_.lock();  // for planner_data_
 
   // behavior_path_planner runs only in LANE DRIVING scenario.
   if (current_scenario_->current_scenario != Scenario::LANEDRIVING) {
     mutex_bt_.unlock();  // for bt_manager_
+    mutex_pd_.unlock();  // for planner_data_
     return;
   }
 
-  // create latest planner data
-  const auto planner_data = createLatestPlannerData();
+  // update planner data
+  planner_data_->self_pose = self_pose_listener_.getCurrentPose();
+
+  const auto planner_data = std::make_shared<PlannerData>(*planner_data_);
+
+  // unlock planner data
+  mutex_pd_.unlock();
 
   // run behavior planner
   const auto output = bt_manager_->run(planner_data);
@@ -798,7 +691,7 @@ void BehaviorPathPlannerNode::run()
   // publish drivable bounds
   publish_bounds(*path);
 
-  const size_t target_idx = planner_data->findEgoIndex(path->points);
+  const size_t target_idx = findEgoIndex(path->points);
   util::clipPathLength(*path, target_idx, planner_data_->parameters);
 
   if (!path->points.empty()) {
@@ -811,12 +704,6 @@ void BehaviorPathPlannerNode::run()
   publishPathCandidate(bt_manager_->getSceneModules());
 
   publishSceneModuleDebugMsg();
-
-  if (output.modified_goal) {
-    PoseWithUuidStamped modified_goal = *(output.modified_goal);
-    modified_goal.header.stamp = path->header.stamp;
-    modified_goal_publisher_->publish(modified_goal);
-  }
 
   if (planner_data->parameters.visualize_maximum_drivable_area) {
     const auto maximum_drivable_area =
@@ -1008,12 +895,11 @@ bool BehaviorPathPlannerNode::skipSmoothGoalConnection(
 bool BehaviorPathPlannerNode::keepInputPoints(
   const std::vector<std::shared_ptr<SceneModuleStatus>> & statuses) const
 {
-  const auto target_module_1 = "PullOver";
-  const auto target_module_2 = "Avoidance";
+  const auto target_module = "PullOver";
 
   for (auto & status : statuses) {
     if (status->is_waiting_approval || status->status == BT::NodeStatus::RUNNING) {
-      if (target_module_1 == status->module_name || target_module_2 == status->module_name) {
+      if (target_module == status->module_name) {
         return true;
       }
     }
@@ -1021,37 +907,64 @@ bool BehaviorPathPlannerNode::keepInputPoints(
   return false;
 }
 
-void BehaviorPathPlannerNode::onOdometry(const Odometry::ConstSharedPtr msg)
+void BehaviorPathPlannerNode::onVelocity(const Odometry::ConstSharedPtr msg)
 {
-  const std::lock_guard<std::mutex> lock(mutex_pd_);
+  std::lock_guard<std::mutex> lock(mutex_pd_);
   planner_data_->self_odometry = msg;
 }
 void BehaviorPathPlannerNode::onAcceleration(const AccelWithCovarianceStamped::ConstSharedPtr msg)
 {
-  const std::lock_guard<std::mutex> lock(mutex_pd_);
+  std::lock_guard<std::mutex> lock(mutex_pd_);
   planner_data_->self_acceleration = msg;
 }
 void BehaviorPathPlannerNode::onPerception(const PredictedObjects::ConstSharedPtr msg)
 {
-  const std::lock_guard<std::mutex> lock(mutex_pd_);
+  std::lock_guard<std::mutex> lock(mutex_pd_);
   planner_data_->dynamic_object = msg;
 }
 void BehaviorPathPlannerNode::onOccupancyGrid(const OccupancyGrid::ConstSharedPtr msg)
 {
-  const std::lock_guard<std::mutex> lock(mutex_pd_);
+  std::lock_guard<std::mutex> lock(mutex_pd_);
   planner_data_->occupancy_grid = msg;
+}
+void BehaviorPathPlannerNode::onExternalApproval(const ApprovalMsg::ConstSharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(mutex_pd_);
+  planner_data_->approval.is_approved.data = msg->approval;
+  // TODO(wep21): Replace msg stamp after {stamp: now} is implemented in ros2 topic pub
+  planner_data_->approval.is_approved.stamp = this->now();
+}
+void BehaviorPathPlannerNode::onForceApproval(const PathChangeModule::ConstSharedPtr msg)
+{
+  std::lock_guard<std::mutex> lock(mutex_pd_);
+  auto getModuleName = [](PathChangeModuleId module) {
+    if (module.type == PathChangeModuleId::FORCE_LANE_CHANGE) {
+      return "ForceLaneChange";
+    } else {
+      return "NONE";
+    }
+  };
+  planner_data_->approval.is_force_approved.module_name = getModuleName(msg->module);
+  planner_data_->approval.is_force_approved.stamp = msg->header.stamp;
 }
 void BehaviorPathPlannerNode::onMap(const HADMapBin::ConstSharedPtr msg)
 {
-  const std::lock_guard<std::mutex> lock(mutex_pd_);
-  map_ptr_ = msg;
-  has_received_map_ = true;
+  std::lock_guard<std::mutex> lock(mutex_pd_);
+  planner_data_->route_handler->setMap(*msg);
 }
 void BehaviorPathPlannerNode::onRoute(const LaneletRoute::ConstSharedPtr msg)
 {
-  const std::lock_guard<std::mutex> lock(mutex_pd_);
-  route_ptr_ = msg;
-  has_received_route_ = true;
+  std::lock_guard<std::mutex> lock(mutex_pd_);
+  const bool is_first_time = !(planner_data_->route_handler->isHandlerReady());
+
+  planner_data_->route_handler->setRoute(*msg);
+
+  // Reset behavior tree when new route is received,
+  // so that the each modules do not have to care about the "route jump".
+  if (!is_first_time) {
+    RCLCPP_DEBUG(get_logger(), "new route is received. reset behavior tree.");
+    bt_manager_->resetBehaviorTree();
+  }
 }
 
 SetParametersResult BehaviorPathPlannerNode::onSetParam(
@@ -1073,62 +986,6 @@ SetParametersResult BehaviorPathPlannerNode::onSetParam(
       parameters, "avoidance.publish_debug_marker", avoidance_param_ptr->publish_debug_marker);
     update_param(
       parameters, "lane_change.publish_debug_marker", lane_change_param_ptr->publish_debug_marker);
-    // Drivable area expansion parameters
-    using drivable_area_expansion::DrivableAreaExpansionParameters;
-    update_param(
-      parameters, DrivableAreaExpansionParameters::ENABLED_PARAM,
-      planner_data_->drivable_area_expansion_parameters.enabled);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::AVOID_DYN_OBJECTS_PARAM,
-      planner_data_->drivable_area_expansion_parameters.avoid_dynamic_objects);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::EXPANSION_METHOD_PARAM,
-      planner_data_->drivable_area_expansion_parameters.expansion_method);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::AVOID_LINESTRING_TYPES_PARAM,
-      planner_data_->drivable_area_expansion_parameters.avoid_linestring_types);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::AVOID_LINESTRING_DIST_PARAM,
-      planner_data_->drivable_area_expansion_parameters.avoid_linestring_dist);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::EGO_EXTRA_OFFSET_FRONT,
-      planner_data_->drivable_area_expansion_parameters.ego_extra_front_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::EGO_EXTRA_OFFSET_REAR,
-      planner_data_->drivable_area_expansion_parameters.ego_extra_rear_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::EGO_EXTRA_OFFSET_LEFT,
-      planner_data_->drivable_area_expansion_parameters.ego_extra_left_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::EGO_EXTRA_OFFSET_RIGHT,
-      planner_data_->drivable_area_expansion_parameters.ego_extra_right_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::DYN_OBJECTS_EXTRA_OFFSET_FRONT,
-      planner_data_->drivable_area_expansion_parameters.dynamic_objects_extra_front_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::DYN_OBJECTS_EXTRA_OFFSET_REAR,
-      planner_data_->drivable_area_expansion_parameters.dynamic_objects_extra_rear_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::DYN_OBJECTS_EXTRA_OFFSET_LEFT,
-      planner_data_->drivable_area_expansion_parameters.dynamic_objects_extra_left_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::DYN_OBJECTS_EXTRA_OFFSET_RIGHT,
-      planner_data_->drivable_area_expansion_parameters.dynamic_objects_extra_right_offset);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::MAX_EXP_DIST_PARAM,
-      planner_data_->drivable_area_expansion_parameters.max_expansion_distance);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::MAX_PATH_ARC_LENGTH_PARAM,
-      planner_data_->drivable_area_expansion_parameters.max_path_arc_length);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::EXTRA_ARC_LENGTH_PARAM,
-      planner_data_->drivable_area_expansion_parameters.extra_arc_length);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::COMPENSATE_PARAM,
-      planner_data_->drivable_area_expansion_parameters.compensate_uncrossable_lines);
-    update_param(
-      parameters, DrivableAreaExpansionParameters::EXTRA_COMPENSATE_PARAM,
-      planner_data_->drivable_area_expansion_parameters.compensate_extra_dist);
   } catch (const rclcpp::exceptions::InvalidParameterTypeException & e) {
     result.successful = false;
     result.reason = e.what();

@@ -23,11 +23,10 @@
 using Label = autoware_auto_perception_msgs::msg::ObjectClassification;
 
 MultipleVehicleTracker::MultipleVehicleTracker(
-  const rclcpp::Time & time, const autoware_auto_perception_msgs::msg::DetectedObject & object,
-  const geometry_msgs::msg::Transform & self_transform)
+  const rclcpp::Time & time, const autoware_auto_perception_msgs::msg::DetectedObject & object)
 : Tracker(time, object.classification),
-  normal_vehicle_tracker_(time, object, self_transform),
-  big_vehicle_tracker_(time, object, self_transform)
+  normal_vehicle_tracker_(time, object),
+  big_vehicle_tracker_(time, object)
 {
 }
 
@@ -39,11 +38,10 @@ bool MultipleVehicleTracker::predict(const rclcpp::Time & time)
 }
 
 bool MultipleVehicleTracker::measure(
-  const autoware_auto_perception_msgs::msg::DetectedObject & object, const rclcpp::Time & time,
-  const geometry_msgs::msg::Transform & self_transform)
+  const autoware_auto_perception_msgs::msg::DetectedObject & object, const rclcpp::Time & time)
 {
-  big_vehicle_tracker_.measure(object, time, self_transform);
-  normal_vehicle_tracker_.measure(object, time, self_transform);
+  big_vehicle_tracker_.measure(object, time);
+  normal_vehicle_tracker_.measure(object, time);
   if (perception_utils::getHighestProbLabel(object.classification) != Label::UNKNOWN)
     setClassification(object.classification);
   return true;

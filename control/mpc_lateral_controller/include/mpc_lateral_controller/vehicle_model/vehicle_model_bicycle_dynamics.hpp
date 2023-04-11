@@ -51,7 +51,13 @@
 #include "eigen3/Eigen/LU"
 #include "mpc_lateral_controller/vehicle_model/vehicle_model_interface.hpp"
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 
 /**
@@ -89,7 +95,7 @@ public:
    * @param [in] dt Discretization time [s]
    */
   void calculateDiscreteMatrix(
-    Eigen::MatrixXd & a_d, Eigen::MatrixXd & b_d, Eigen::MatrixXd & c_d, Eigen::MatrixXd & w_d,
+    Eigen::MatrixXd & a_d, Eigen::MatrixXd & b_d, Eigen::MatrixXd & w_d, Eigen::MatrixXd & c_d,
     const double dt) override;
 
   /**
@@ -106,5 +112,8 @@ private:
   double m_cf;    //!< @brief front cornering power [N/rad]
   double m_cr;    //!< @brief rear cornering power [N/rad]
 };
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 #endif  // MPC_LATERAL_CONTROLLER__VEHICLE_MODEL__VEHICLE_MODEL_BICYCLE_DYNAMICS_HPP_

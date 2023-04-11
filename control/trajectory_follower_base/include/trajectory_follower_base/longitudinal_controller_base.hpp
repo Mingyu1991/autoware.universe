@@ -23,7 +23,13 @@
 
 #include <boost/optional.hpp>
 
-namespace autoware::motion::control::trajectory_follower
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace trajectory_follower
 {
 struct LongitudinalOutput
 {
@@ -44,6 +50,9 @@ protected:
   LateralSyncData lateral_sync_data_;
 };
 
-}  // namespace autoware::motion::control::trajectory_follower
+}  // namespace trajectory_follower
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 
 #endif  // TRAJECTORY_FOLLOWER_BASE__LONGITUDINAL_CONTROLLER_BASE_HPP_

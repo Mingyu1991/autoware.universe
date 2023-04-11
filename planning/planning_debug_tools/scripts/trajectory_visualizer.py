@@ -28,8 +28,6 @@ from nav_msgs.msg import Odometry
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from tf2_ros.buffer import Buffer
-from tf2_ros.transform_listener import TransformListener
 from tier4_planning_msgs.msg import VelocityLimit
 
 parser = argparse.ArgumentParser()
@@ -64,6 +62,7 @@ print("plot type = " + PLOT_TYPE)
 
 class TrajectoryVisualizer(Node):
     def __init__(self):
+
         super().__init__("trajectory_visualizer")
 
         self.fig = plt.figure()
@@ -86,9 +85,6 @@ class TrajectoryVisualizer(Node):
         self.update_behavior_velocity_planner_path = False
         self.update_traj_ob_avoid = False
         self.update_traj_ob_stop = False
-
-        self.tf_buffer = Buffer(node=self)
-        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
         self.self_pose = Pose()
         self.self_pose_received = False

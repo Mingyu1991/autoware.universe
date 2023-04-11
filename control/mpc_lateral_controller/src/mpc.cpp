@@ -27,7 +27,13 @@
 #define DEG2RAD 3.1415926535 / 180.0
 #define RAD2DEG 180.0 / 3.1415926535
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 using namespace std::literals::chrono_literals;
 
@@ -860,4 +866,7 @@ bool MPC::isValid(const MPCMatrix & m) const
 
   return true;
 }
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

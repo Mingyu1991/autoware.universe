@@ -17,7 +17,13 @@
 #include <string>
 #include <vector>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 QPSolverOSQP::QPSolverOSQP(const rclcpp::Logger & logger) : logger_{logger} {}
 bool QPSolverOSQP::solve(
@@ -74,4 +80,7 @@ bool QPSolverOSQP::solve(
   }
   return true;
 }
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

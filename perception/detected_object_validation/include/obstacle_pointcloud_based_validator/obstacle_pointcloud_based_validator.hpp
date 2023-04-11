@@ -35,12 +35,6 @@
 
 namespace obstacle_pointcloud_based_validator
 {
-struct PointsNumThresholdParam
-{
-  size_t min_points_num;
-  size_t max_points_num;
-  float min_points_and_distance_ratio;
-};
 class ObstaclePointCloudBasedValidator : public rclcpp::Node
 {
 public:
@@ -58,7 +52,7 @@ private:
     SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   Sync sync_;
-  PointsNumThresholdParam points_num_threshold_param_;
+  size_t min_pointcloud_num_;
 
   std::shared_ptr<Debugger> debugger_;
 

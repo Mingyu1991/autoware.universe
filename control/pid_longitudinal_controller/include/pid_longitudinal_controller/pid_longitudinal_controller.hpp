@@ -30,7 +30,6 @@
 #include "trajectory_follower_base/longitudinal_controller_base.hpp"
 #include "vehicle_info_util/vehicle_info_util.hpp"
 
-#include "autoware_adapi_v1_msgs/msg/operation_mode_state.hpp"
 #include "autoware_auto_control_msgs/msg/longitudinal_command.hpp"
 #include "autoware_auto_planning_msgs/msg/trajectory.hpp"
 #include "autoware_auto_vehicle_msgs/msg/vehicle_odometry.hpp"
@@ -45,9 +44,15 @@
 #include <utility>
 #include <vector>
 
-namespace autoware::motion::control::pid_longitudinal_controller
+namespace autoware
 {
-using autoware_adapi_v1_msgs::msg::OperationModeState;
+namespace motion
+{
+namespace control
+{
+namespace pid_longitudinal_controller
+{
+
 namespace trajectory_follower = ::autoware::motion::control::trajectory_follower;
 
 /// \class PidLongitudinalController
@@ -89,7 +94,6 @@ private:
   nav_msgs::msg::Odometry m_current_kinematic_state;
   geometry_msgs::msg::AccelWithCovarianceStamped m_current_accel;
   autoware_auto_planning_msgs::msg::Trajectory m_trajectory;
-  OperationModeState m_current_operation_mode;
 
   // vehicle info
   double m_wheel_base;
@@ -226,12 +230,6 @@ private:
    * @param [in] msg trajectory message
    */
   void setCurrentAcceleration(const geometry_msgs::msg::AccelWithCovarianceStamped & msg);
-
-  /**
-   * @brief set current operation mode with received message
-   * @param [in] msg operation mode report message
-   */
-  void setCurrentOperationMode(const OperationModeState & msg);
 
   /**
    * @brief set reference trajectory with received message
@@ -381,6 +379,9 @@ private:
     const Motion & ctrl_cmd, const geometry_msgs::msg::Pose & current_pose,
     const ControlData & control_data);
 };
-}  // namespace autoware::motion::control::pid_longitudinal_controller
+}  // namespace pid_longitudinal_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 
 #endif  // PID_LONGITUDINAL_CONTROLLER__PID_LONGITUDINAL_CONTROLLER_HPP_

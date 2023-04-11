@@ -25,17 +25,23 @@
 #include <utility>
 #include <vector>
 
-namespace autoware::motion::control::trajectory_follower_node
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace trajectory_follower_node
 {
 Controller::Controller(const rclcpp::NodeOptions & node_options) : Node("controller", node_options)
 {
   using std::placeholders::_1;
 
-  const double ctrl_period = declare_parameter<double>("ctrl_period");
-  timeout_thr_sec_ = declare_parameter<double>("timeout_thr_sec");
+  const double ctrl_period = declare_parameter<double>("ctrl_period", 0.03);
+  timeout_thr_sec_ = declare_parameter<double>("timeout_thr_sec", 0.5);
 
   const auto lateral_controller_mode =
-    getLateralControllerMode(declare_parameter<std::string>("lateral_controller_mode", "mpc"));
+    getLateralControllerMode(declare_parameter("lateral_controller_mode", "mpc"));
   switch (lateral_controller_mode) {
     case LateralControllerMode::MPC: {
       lateral_controller_ = std::make_shared<mpc_lateral_controller::MpcLateralController>(*this);
@@ -49,8 +55,8 @@ Controller::Controller(const rclcpp::NodeOptions & node_options) : Node("control
       throw std::domain_error("[LateralController] invalid algorithm");
   }
 
-  const auto longitudinal_controller_mode = getLongitudinalControllerMode(
-    declare_parameter<std::string>("longitudinal_controller_mode", "pid"));
+  const auto longitudinal_controller_mode =
+    getLongitudinalControllerMode(declare_parameter("longitudinal_controller_mode", "pid"));
   switch (longitudinal_controller_mode) {
     case LongitudinalControllerMode::PID: {
       longitudinal_controller_ =
@@ -69,9 +75,6 @@ Controller::Controller(const rclcpp::NodeOptions & node_options) : Node("control
     "~/input/current_odometry", rclcpp::QoS{1}, std::bind(&Controller::onOdometry, this, _1));
   sub_accel_ = create_subscription<geometry_msgs::msg::AccelWithCovarianceStamped>(
     "~/input/current_accel", rclcpp::QoS{1}, std::bind(&Controller::onAccel, this, _1));
-  sub_operation_mode_ = create_subscription<OperationModeState>(
-    "~/input/current_operation_mode", rclcpp::QoS{1},
-    [this](const OperationModeState::SharedPtr msg) { current_operation_mode_ptr_ = msg; });
   control_cmd_pub_ = create_publisher<autoware_auto_control_msgs::msg::AckermannControlCommand>(
     "~/output/control_cmd", rclcpp::QoS{1}.transient_local());
   debug_marker_pub_ =
@@ -166,17 +169,11 @@ boost::optional<trajectory_follower::InputData> Controller::createInputData(
     return {};
   }
 
-  if (!current_operation_mode_ptr_) {
-    RCLCPP_INFO_THROTTLE(get_logger(), clock, 5000, "Waiting for current operation mode.");
-    return {};
-  }
-
   trajectory_follower::InputData input_data;
   input_data.current_trajectory = *current_trajectory_ptr_;
   input_data.current_odometry = *current_odometry_ptr_;
   input_data.current_steering = *current_steering_ptr_;
   input_data.current_accel = *current_accel_ptr_;
-  input_data.current_operation_mode = *current_operation_mode_ptr_;
 
   return input_data;
 }
@@ -251,7 +248,10 @@ void Controller::publishDebugMarker(
   debug_marker_pub_->publish(debug_marker_array);
 }
 
-}  // namespace autoware::motion::control::trajectory_follower_node
+}  // namespace trajectory_follower_node
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 
 #include "rclcpp_components/register_node_macro.hpp"
 RCLCPP_COMPONENTS_REGISTER_NODE(autoware::motion::control::trajectory_follower_node::Controller)

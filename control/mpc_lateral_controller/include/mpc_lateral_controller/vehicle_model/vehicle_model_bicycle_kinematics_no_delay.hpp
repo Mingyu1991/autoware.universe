@@ -42,7 +42,13 @@
 #include "eigen3/Eigen/LU"
 #include "mpc_lateral_controller/vehicle_model/vehicle_model_interface.hpp"
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 
 /**
@@ -85,5 +91,8 @@ public:
 private:
   double m_steer_lim;  //!< @brief steering angle limit [rad]
 };
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 #endif  // MPC_LATERAL_CONTROLLER__VEHICLE_MODEL__VEHICLE_MODEL_BICYCLE_KINEMATICS_NO_DELAY_HPP_

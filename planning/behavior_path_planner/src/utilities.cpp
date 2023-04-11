@@ -14,8 +14,6 @@
 
 #include "behavior_path_planner/utilities.hpp"
 
-#include "behavior_path_planner/util/drivable_area_expansion/drivable_area_expansion.hpp"
-
 #include <lanelet2_extension/utility/message_conversion.hpp>
 #include <lanelet2_extension/utility/query.hpp>
 #include <lanelet2_extension/utility/utilities.hpp>
@@ -490,6 +488,94 @@ double calcLongitudinalDistanceFromEgoToObjects(
       calcLongitudinalDistanceFromEgoToObject(ego_pose, base_link2front, base_link2rear, object));
   }
   return min_distance;
+}
+
+// only works with consecutive lanes
+std::vector<size_t> filterObjectIndicesByLanelets(
+  const PredictedObjects & objects, const lanelet::ConstLanelets & target_lanelets,
+  const double start_arc_length, const double end_arc_length)
+{
+  std::vector<size_t> indices;
+  if (target_lanelets.empty()) {
+    return {};
+  }
+  const auto polygon =
+    lanelet::utils::getPolygonFromArcLength(target_lanelets, start_arc_length, end_arc_length);
+  const auto polygon2d = lanelet::utils::to2D(polygon).basicPolygon();
+  if (polygon2d.empty()) {
+    // no lanelet polygon
+    return {};
+  }
+
+  for (size_t i = 0; i < objects.objects.size(); i++) {
+    const auto & obj = objects.objects.at(i);
+    // create object polygon
+    Polygon2d obj_polygon;
+    if (!calcObjectPolygon(obj, &obj_polygon)) {
+      continue;
+    }
+    // create lanelet polygon
+    Polygon2d lanelet_polygon;
+    lanelet_polygon.outer().reserve(polygon2d.size() + 1);
+    for (const auto & lanelet_point : polygon2d) {
+      lanelet_polygon.outer().emplace_back(lanelet_point.x(), lanelet_point.y());
+    }
+
+    lanelet_polygon.outer().push_back(lanelet_polygon.outer().front());
+
+    // check the object does not intersect the lanelet
+    if (!boost::geometry::disjoint(lanelet_polygon, obj_polygon)) {
+      indices.push_back(i);
+      continue;
+    }
+  }
+  return indices;
+}
+
+// works with random lanelets
+std::vector<size_t> filterObjectIndicesByLanelets(
+  const PredictedObjects & objects, const lanelet::ConstLanelets & target_lanelets)
+{
+  std::vector<size_t> indices;
+  if (target_lanelets.empty()) {
+    return {};
+  }
+
+  for (size_t i = 0; i < objects.objects.size(); i++) {
+    // create object polygon
+    const auto & obj = objects.objects.at(i);
+    // create object polygon
+    Polygon2d obj_polygon;
+    if (!calcObjectPolygon(obj, &obj_polygon)) {
+      RCLCPP_ERROR_STREAM(
+        rclcpp::get_logger("behavior_path_planner").get_child("utilities"),
+        "Failed to calcObjectPolygon...!!!");
+      continue;
+    }
+
+    for (const auto & llt : target_lanelets) {
+      // create lanelet polygon
+      const auto polygon2d = llt.polygon2d().basicPolygon();
+      if (polygon2d.empty()) {
+        // no lanelet polygon
+        continue;
+      }
+      Polygon2d lanelet_polygon;
+      lanelet_polygon.outer().reserve(polygon2d.size() + 1);
+      for (const auto & lanelet_point : polygon2d) {
+        lanelet_polygon.outer().emplace_back(lanelet_point.x(), lanelet_point.y());
+      }
+
+      lanelet_polygon.outer().push_back(lanelet_polygon.outer().front());
+
+      // check the object does not intersect the lanelet
+      if (!boost::geometry::disjoint(lanelet_polygon, obj_polygon)) {
+        indices.push_back(i);
+        break;
+      }
+    }
+  }
+  return indices;
 }
 
 std::pair<std::vector<size_t>, std::vector<size_t>> separateObjectIndicesByLanelets(
@@ -969,12 +1055,8 @@ boost::optional<size_t> getOverlappedLaneletId(const std::vector<DrivableLanes> 
 
     for (const auto & lanelet : lanelets) {
       for (const auto & target_lanelet : target_lanelets) {
-        std::vector<Point2d> intersections{};
-        boost::geometry::intersection(
-          lanelet.polygon2d().basicPolygon(), target_lanelet.polygon2d().basicPolygon(),
-          intersections);
-        // if only one point intersects, it is assumed not to be overlapped
-        if (intersections.size() > 1) {
+        if (boost::geometry::intersects(
+              lanelet.polygon2d().basicPolygon(), target_lanelet.polygon2d().basicPolygon())) {
           return true;
         }
       }
@@ -1036,7 +1118,7 @@ std::vector<DrivableLanes> cutOverlappedLanes(
         std::find(removed_lane_ids.begin(), removed_lane_ids.end(), lane_id) !=
         removed_lane_ids.end()) {
         path.points.erase(path.points.begin() + i, path.points.end());
-        return shorten_lanes;
+        break;
       }
     }
   }
@@ -1077,7 +1159,7 @@ void generateDrivableArea(
 
   // extract data
   const auto transformed_lanes = util::transformToLanelets(lanes);
-  const auto current_pose = planner_data->self_odometry->pose.pose;
+  const auto current_pose = planner_data->self_pose;
   const auto route_handler = planner_data->route_handler;
   constexpr double overlap_threshold = 0.01;
 
@@ -1094,9 +1176,9 @@ void generateDrivableArea(
     };
 
   const auto has_overlap =
-    [&](const lanelet::ConstLanelet & lane, const lanelet::ConstLanelets & ignore_lanelets = {}) {
+    [&](const lanelet::ConstLanelet & lane, const lanelet::Id & ignore_lane_id = lanelet::InvalId) {
       for (const auto & transformed_lane : transformed_lanes) {
-        if (checkHasSameLane(ignore_lanelets, transformed_lane)) {
+        if (transformed_lane.id() == ignore_lane_id) {
           continue;
         }
         if (boost::geometry::intersects(
@@ -1120,16 +1202,6 @@ void generateDrivableArea(
     checkHasSameLane(transformed_lanes, goal_lanelet)) {
     const auto lanes_after_goal = route_handler->getLanesAfterGoal(vehicle_length);
     const auto next_lanes_after_goal = route_handler->getNextLanelets(goal_lanelet);
-    const auto goal_left_lanelet = route_handler->getLeftLanelet(goal_lanelet);
-    const auto goal_right_lanelet = route_handler->getRightLanelet(goal_lanelet);
-    lanelet::ConstLanelets goal_lanelets = {goal_lanelet};
-    if (goal_left_lanelet) {
-      goal_lanelets.push_back(*goal_left_lanelet);
-    }
-    if (goal_right_lanelet) {
-      goal_lanelets.push_back(*goal_right_lanelet);
-    }
-
     for (const auto & lane : lanes_after_goal) {
       // If lane is already in the transformed lanes, ignore it
       if (checkHasSameLane(transformed_lanes, lane)) {
@@ -1137,8 +1209,9 @@ void generateDrivableArea(
       }
       // Check if overlapped
       const bool is_overlapped =
-        (checkHasSameLane(next_lanes_after_goal, lane) ? has_overlap(lane, goal_lanelets)
-                                                       : has_overlap(lane));
+        (checkHasSameLane(next_lanes_after_goal, lane)
+           ? has_overlap(lane, route_handler->getGoalLaneId())
+           : has_overlap(lane));
       if (is_overlapped) {
         continue;
       }
@@ -1155,7 +1228,7 @@ void generateDrivableArea(
 
   // Get Closest segment for the start point
   constexpr double front_length = 0.5;
-  const auto front_pose = path.points.empty() ? current_pose : path.points.front().point.pose;
+  const auto front_pose = path.points.empty() ? current_pose->pose : path.points.front().point.pose;
   const size_t front_left_start_idx =
     findNearestSegmentIndexFromLateralDistance(left_bound, front_pose.position);
   const size_t front_right_start_idx =
@@ -1170,7 +1243,7 @@ void generateDrivableArea(
     findNearestSegmentIndexFromLateralDistance(right_bound, right_start_point);
 
   // Get Closest segment for the goal point
-  const auto goal_pose = path.points.empty() ? current_pose : path.points.back().point.pose;
+  const auto goal_pose = path.points.empty() ? current_pose->pose : path.points.back().point.pose;
   const size_t goal_left_start_idx =
     findNearestSegmentIndexFromLateralDistance(left_bound, goal_pose.position);
   const size_t goal_right_start_idx =
@@ -1179,11 +1252,10 @@ void generateDrivableArea(
     calcLongitudinalOffsetGoalPoint(left_bound, goal_pose, goal_left_start_idx, vehicle_length);
   const auto right_goal_point =
     calcLongitudinalOffsetGoalPoint(right_bound, goal_pose, goal_right_start_idx, vehicle_length);
-  const size_t left_goal_idx = std::max(
-    goal_left_start_idx, findNearestSegmentIndexFromLateralDistance(left_bound, left_goal_point));
-  const size_t right_goal_idx = std::max(
-    goal_right_start_idx,
-    findNearestSegmentIndexFromLateralDistance(right_bound, right_goal_point));
+  const size_t left_goal_idx =
+    findNearestSegmentIndexFromLateralDistance(left_bound, left_goal_point);
+  const size_t right_goal_idx =
+    findNearestSegmentIndexFromLateralDistance(right_bound, right_goal_point);
 
   // Store Data
   path.left_bound.clear();
@@ -1219,12 +1291,6 @@ void generateDrivableArea(
     tier4_autoware_utils::calcDistance2d(path.right_bound.back(), right_goal_point) >
     overlap_threshold) {
     path.right_bound.push_back(right_goal_point);
-  }
-  const auto & expansion_params = planner_data->drivable_area_expansion_parameters;
-  if (expansion_params.enabled) {
-    drivable_area_expansion::expandDrivableArea(
-      path, expansion_params, *planner_data->dynamic_object, *planner_data->route_handler,
-      transformed_lanes);
   }
 }
 
@@ -1645,10 +1711,10 @@ std::shared_ptr<PathWithLaneId> generateCenterLinePath(
   const auto & p = planner_data->parameters;
 
   const auto & route_handler = planner_data->route_handler;
-  const auto & pose = planner_data->self_odometry->pose.pose;
+  const auto & pose = planner_data->self_pose;
 
   lanelet::ConstLanelet current_lane;
-  if (!route_handler->getClosestLaneletWithinRoute(pose, &current_lane)) {
+  if (!route_handler->getClosestLaneletWithinRoute(pose->pose, &current_lane)) {
     RCLCPP_ERROR(
       rclcpp::get_logger("behavior_path_planner").get_child("utilities"),
       "failed to find closest lanelet within route!!!");
@@ -1657,7 +1723,7 @@ std::shared_ptr<PathWithLaneId> generateCenterLinePath(
 
   // For lanelet_sequence with desired length
   lanelet::ConstLanelets lanelet_sequence = route_handler->getLaneletSequence(
-    current_lane, pose, p.backward_path_length, p.forward_path_length);
+    current_lane, pose->pose, p.backward_path_length, p.forward_path_length);
 
   std::vector<DrivableLanes> drivable_lanes(lanelet_sequence.size());
   for (size_t i = 0; i < lanelet_sequence.size(); ++i) {
@@ -1666,7 +1732,7 @@ std::shared_ptr<PathWithLaneId> generateCenterLinePath(
   }
 
   *centerline_path = getCenterLinePath(
-    *route_handler, lanelet_sequence, pose, p.backward_path_length, p.forward_path_length, p);
+    *route_handler, lanelet_sequence, pose->pose, p.backward_path_length, p.forward_path_length, p);
 
   centerline_path->header = route_handler->getRouteHeader();
 
@@ -1682,7 +1748,7 @@ lanelet::ConstLineStrings3d getMaximumDrivableArea(
 {
   const auto & p = planner_data->parameters;
   const auto & route_handler = planner_data->route_handler;
-  const auto & ego_pose = planner_data->self_odometry->pose.pose;
+  const auto & ego_pose = planner_data->self_pose->pose;
 
   lanelet::ConstLanelet current_lane;
   if (!route_handler->getClosestLaneletWithinRoute(ego_pose, &current_lane)) {
@@ -1802,6 +1868,117 @@ PathWithLaneId getCenterLinePath(
   return route_handler.getCenterLinePath(lanelet_sequence, s_backward, s_forward, true);
 }
 
+bool checkLaneIsInIntersection(
+  const RouteHandler & route_handler, const PathWithLaneId & reference_path,
+  const lanelet::ConstLanelets & lanelet_sequence, const BehaviorPathPlannerParameters & parameter,
+  const int num_lane_change, double & additional_length_to_add)
+{
+  if (num_lane_change == 0) {
+    return false;
+  }
+
+  if (lanelet_sequence.size() < 2 || reference_path.points.empty()) {
+    return false;
+  }
+
+  const auto goal_pose = route_handler.getGoalPose();
+  lanelet::ConstLanelet goal_lanelet;
+  if (!route_handler.getGoalLanelet(&goal_lanelet)) {
+    std::cerr << "fail to get goal lanelet for intersection check.\n";
+    return false;
+  }
+  const auto goal_lanelet_point = lanelet::utils::conversion::toLaneletPoint(goal_pose.position);
+
+  const auto min_lane_change_distance =
+    num_lane_change *
+    (parameter.minimum_lane_change_length + parameter.backward_length_buffer_for_end_of_lane);
+  const double goal_distance_in_goal_lanelet = std::invoke([&goal_lanelet_point, &goal_lanelet]() {
+    const auto goal_centerline = goal_lanelet.centerline2d();
+    const auto arc_coordinate =
+      lanelet::geometry::toArcCoordinates(goal_centerline, goal_lanelet_point.basicPoint2d());
+    return arc_coordinate.length;
+  });
+
+  if (goal_distance_in_goal_lanelet > min_lane_change_distance) {
+    return false;
+  }
+
+  const auto & path_points = reference_path.points;
+  const auto & end_of_route_pose = path_points.back().point.pose;
+
+  if (lanelet_sequence.back().id() != goal_lanelet.id()) {
+    const auto get_signed_distance =
+      getSignedDistance(end_of_route_pose, goal_pose, lanelet_sequence);
+
+    if (get_signed_distance > min_lane_change_distance) {
+      return false;
+    }
+  }
+  // if you come to here, basically either back lane is goal, or back lane to goal is not enough
+  // distance
+  auto prev_lane = lanelet_sequence.crbegin();
+  auto find_intersection_iter = lanelet_sequence.crbegin();
+  for (; find_intersection_iter != lanelet_sequence.crend(); ++find_intersection_iter) {
+    prev_lane = std::next(find_intersection_iter);
+    if (prev_lane == lanelet_sequence.crend()) {
+      return false;
+    }
+    const auto lanes = route_handler.getNextLanelets(*prev_lane);
+    const auto is_neighbor_with_turn_direction = std::any_of(
+      lanes.cbegin(), lanes.cend(),
+      [](const lanelet::ConstLanelet & lane) { return lane.hasAttribute("turn_direction"); });
+
+    if (is_neighbor_with_turn_direction) {
+      const auto & intersection_back = find_intersection_iter->centerline2d().back();
+      geometry_msgs::msg::Pose intersection_back_pose;
+      intersection_back_pose.position.x = intersection_back.x();
+      intersection_back_pose.position.y = intersection_back.y();
+      intersection_back_pose.position.z = 0.0;
+      const auto get_signed_distance =
+        getSignedDistance(intersection_back_pose, goal_pose, lanelet_sequence);
+
+      if (get_signed_distance > min_lane_change_distance) {
+        return false;
+      }
+      break;
+    }
+  }
+
+  const auto checkAttribute = [](const lanelet::ConstLineString3d & linestring) noexcept {
+    const auto & attribute_name = lanelet::AttributeNamesString::LaneChange;
+    if (linestring.hasAttribute(attribute_name)) {
+      const auto attr = linestring.attribute(attribute_name);
+      if (attr.value() == std::string("yes")) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const auto isLaneChangeAttributeYes =
+    [checkAttribute](const lanelet::ConstLanelet & lanelet) noexcept {
+      return (checkAttribute(lanelet.rightBound()) || checkAttribute(lanelet.leftBound()));
+    };
+
+  lanelet::ConstLanelets lane_change_prohibited_lanes{*find_intersection_iter};
+  for (auto prev_ll_itr = prev_lane; prev_ll_itr != lanelet_sequence.crend(); ++prev_ll_itr) {
+    if (isLaneChangeAttributeYes(*prev_ll_itr)) {
+      break;
+    }
+    lane_change_prohibited_lanes.push_back(*prev_ll_itr);
+  }
+
+  std::reverse(lane_change_prohibited_lanes.begin(), lane_change_prohibited_lanes.end());
+  const auto prohibited_arc_coordinate =
+    lanelet::utils::getArcCoordinates(lane_change_prohibited_lanes, goal_pose);
+
+  additional_length_to_add =
+    (num_lane_change > 0 ? 1 : -1) *
+    (parameter.backward_length_buffer_for_end_of_lane + prohibited_arc_coordinate.length);
+
+  return true;
+}
+
 // for lane following
 PathWithLaneId setDecelerationVelocity(
   const RouteHandler & route_handler, const PathWithLaneId & input,
@@ -1898,7 +2075,7 @@ std::uint8_t getHighestProbLabel(const std::vector<ObjectClassification> & class
 lanelet::ConstLanelets getCurrentLanes(const std::shared_ptr<const PlannerData> & planner_data)
 {
   const auto & route_handler = planner_data->route_handler;
-  const auto current_pose = planner_data->self_odometry->pose.pose;
+  const auto current_pose = planner_data->self_pose->pose;
   const auto & common_parameters = planner_data->parameters;
 
   lanelet::ConstLanelet current_lane;
@@ -1937,7 +2114,25 @@ lanelet::ConstLanelets extendLanes(
 lanelet::ConstLanelets getExtendedCurrentLanes(
   const std::shared_ptr<const PlannerData> & planner_data)
 {
-  return extendLanes(planner_data->route_handler, getCurrentLanes(planner_data));
+  const auto & route_handler = planner_data->route_handler;
+  const auto current_pose = planner_data->self_pose->pose;
+  const auto common_parameters = planner_data->parameters;
+  const auto routing_graph_ptr = route_handler->getRoutingGraphPtr();
+
+  lanelet::ConstLanelet current_lane;
+  if (!route_handler->getClosestLaneletWithinRoute(current_pose, &current_lane)) {
+    RCLCPP_ERROR(
+      rclcpp::get_logger("behavior_path_planner").get_child("utilities"),
+      "failed to find closest lanelet within route!!!");
+    return {};  // TODO(Horibe) what should be returned?
+  }
+
+  // For current_lanes with desired length
+  const auto current_lanes = route_handler->getLaneletSequence(
+    current_lane, current_pose, common_parameters.backward_path_length,
+    common_parameters.forward_path_length);
+
+  return extendLanes(route_handler, current_lanes);
 }
 
 lanelet::ConstLanelets calcLaneAroundPose(
@@ -2150,20 +2345,20 @@ bool getObjectExpectedPoseAndConvertToPolygon(
 std::vector<PredictedPath> getPredictedPathFromObj(
   const PredictedObject & obj, const bool & is_use_all_predicted_path)
 {
-  if (!is_use_all_predicted_path) {
+  std::vector<PredictedPath> predicted_path_vec;
+  if (is_use_all_predicted_path) {
+    std::copy_if(
+      obj.kinematics.predicted_paths.cbegin(), obj.kinematics.predicted_paths.cend(),
+      std::back_inserter(predicted_path_vec),
+      [](const PredictedPath & path) { return !path.path.empty(); });
+  } else {
     const auto max_confidence_path = std::max_element(
       obj.kinematics.predicted_paths.begin(), obj.kinematics.predicted_paths.end(),
-      [](const auto & path1, const auto & path2) { return path1.confidence < path2.confidence; });
+      [](const auto & path1, const auto & path2) { return path1.confidence > path2.confidence; });
     if (max_confidence_path != obj.kinematics.predicted_paths.end()) {
-      return {*max_confidence_path};
+      predicted_path_vec.push_back(*max_confidence_path);
     }
   }
-
-  std::vector<PredictedPath> predicted_path_vec;
-  std::copy_if(
-    obj.kinematics.predicted_paths.cbegin(), obj.kinematics.predicted_paths.cend(),
-    std::back_inserter(predicted_path_vec),
-    [](const PredictedPath & path) { return !path.path.empty(); });
   return predicted_path_vec;
 }
 
@@ -2240,43 +2435,19 @@ bool hasEnoughDistance(
   const auto is_obj_in_front = isObjectFront(front_vehicle_pose);
   debug.is_front = is_obj_in_front;
 
-  const auto [front_vehicle_velocity, rear_vehicle_velocity] = std::invoke([&]() {
-    debug.object_twist.linear = object_current_twist.linear;
-    if (is_obj_in_front) {
-      return std::make_pair(
-        util::l2Norm(object_current_twist.linear), util::l2Norm(ego_current_twist.linear));
-    }
-    return std::make_pair(
-      util::l2Norm(ego_current_twist.linear), util::l2Norm(object_current_twist.linear));
-  });
+  const auto front_vehicle_velocity =
+    (is_obj_in_front) ? object_current_twist.linear : ego_current_twist.linear;
 
-  const auto is_unsafe_dist_between_vehicle = std::invoke([&]() {
-    // ignore this for parked vehicle.
-    if (l2Norm(object_current_twist.linear) < 0.1) {
-      return false;
-    }
-
-    // the value guarantee distance between vehicles are always more than dist
-    const auto max_vel = std::max(front_vehicle_velocity, rear_vehicle_velocity);
-    constexpr auto scale = 0.8;
-    const auto dist = scale * std::abs(max_vel) + param.longitudinal_distance_min_threshold;
-
-    // return value rounded to the nearest two floating point
-    return std::abs(front_vehicle_pose.position.x) < dist;
-  });
-
-  if (is_unsafe_dist_between_vehicle) {
-    return false;
-  }
+  const auto rear_vehicle_velocity =
+    (is_obj_in_front) ? ego_current_twist.linear : object_current_twist.linear;
+  debug.object_twist.linear = (is_obj_in_front) ? front_vehicle_velocity : rear_vehicle_velocity;
 
   const auto front_vehicle_stop_threshold = frontVehicleStopDistance(
-    front_vehicle_velocity, front_decel, std::abs(front_vehicle_pose.position.x));
+    util::l2Norm(front_vehicle_velocity), front_decel, std::fabs(front_vehicle_pose.position.x));
 
-  // longitudinal_distance_min_threshold here guarantee future stopping distance must be more than
-  // longitudinal_distance_min_threshold
   const auto rear_vehicle_stop_threshold = std::max(
     rearVehicleStopDistance(
-      rear_vehicle_velocity, rear_decel, param.rear_vehicle_reaction_time,
+      util::l2Norm(rear_vehicle_velocity), rear_decel, param.rear_vehicle_reaction_time,
       param.rear_vehicle_safety_time_margin),
     param.longitudinal_distance_min_threshold);
 

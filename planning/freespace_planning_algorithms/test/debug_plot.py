@@ -202,6 +202,7 @@ if __name__ == "__main__":
         algo_name = algo_names[i]
         algo_pngs = []
         for j in range(n_case):
+
             fig, ax = plt.subplots()
 
             result_dir = dir_name_table[(algo_name, j)]

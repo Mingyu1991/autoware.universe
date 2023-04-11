@@ -11,6 +11,7 @@ find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
 find_package(PCL REQUIRED)
+find_package(OpenMP)
 find_package(CGAL REQUIRED COMPONENTS Core)
 
 include_directories(
@@ -20,6 +21,7 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${GRID_MAP_INCLUDE_DIR}
 )
 
 add_library(pointcloud_preprocessor_filter_base SHARED
@@ -69,6 +71,13 @@ target_link_libraries(pointcloud_preprocessor_filter
   ${OpenCV_LIBRARIES}
   ${PCL_LIBRARIES}
 )
+
+if(OPENMP_FOUND)
+  set_target_properties(pointcloud_preprocessor_filter PROPERTIES
+    COMPILE_FLAGS ${OpenMP_CXX_FLAGS}
+    LINK_FLAGS ${OpenMP_CXX_FLAGS}
+  )
+endif()
 
 # ========== Concatenate data ==========
 rclcpp_components_register_node(pointcloud_preprocessor_filter

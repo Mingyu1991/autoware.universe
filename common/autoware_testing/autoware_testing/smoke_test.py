@@ -52,6 +52,7 @@ def resolve_node(context, *args, **kwargs):
 
 @pytest.mark.launch_test
 def generate_test_description():
+
     arg_package = DeclareLaunchArgument(
         "arg_package", default_value=["default"], description="Package containing tested executable"
     )

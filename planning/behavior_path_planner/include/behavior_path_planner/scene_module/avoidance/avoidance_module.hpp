@@ -15,9 +15,10 @@
 #ifndef BEHAVIOR_PATH_PLANNER__SCENE_MODULE__AVOIDANCE__AVOIDANCE_MODULE_HPP_
 #define BEHAVIOR_PATH_PLANNER__SCENE_MODULE__AVOIDANCE__AVOIDANCE_MODULE_HPP_
 
+#include "behavior_path_planner/scene_module/avoidance/avoidance_module_data.hpp"
 #include "behavior_path_planner/scene_module/scene_module_interface.hpp"
 #include "behavior_path_planner/scene_module/scene_module_visitor.hpp"
-#include "behavior_path_planner/util/avoidance/avoidance_module_data.hpp"
+#include "behavior_path_planner/scene_module/utils/path_shifter.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -27,7 +28,6 @@
 #include <tier4_planning_msgs/msg/avoidance_debug_msg.hpp>
 #include <tier4_planning_msgs/msg/avoidance_debug_msg_array.hpp>
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
@@ -35,12 +35,7 @@
 
 namespace behavior_path_planner
 {
-
-using motion_utils::calcSignedArcLength;
-using motion_utils::findNearestIndex;
-
 using tier4_planning_msgs::msg::AvoidanceDebugMsg;
-
 class AvoidanceModule : public SceneModuleInterface
 {
 public:
@@ -50,10 +45,6 @@ public:
   bool isExecutionRequested() const override;
   bool isExecutionReady() const override;
   BT::NodeStatus updateState() override;
-  BT::NodeStatus getNodeStatusWhileWaitingApproval() const override
-  {
-    return BT::NodeStatus::SUCCESS;
-  }
   BehaviorModuleOutput plan() override;
   CandidateOutput planCandidate() const override;
   BehaviorModuleOutput planWaitingApproval() override;
@@ -140,13 +131,13 @@ private:
 
   void updateRegisteredRTCStatus(const PathWithLaneId & path)
   {
-    const Point ego_position = planner_data_->self_odometry->pose.pose.position;
+    const Point ego_position = planner_data_->self_pose->pose.position;
 
     for (const auto & left_shift : left_shift_array_) {
-      const double start_distance =
-        calcSignedArcLength(path.points, ego_position, left_shift.start_pose.position);
-      const double finish_distance =
-        calcSignedArcLength(path.points, ego_position, left_shift.finish_pose.position);
+      const double start_distance = motion_utils::calcSignedArcLength(
+        path.points, ego_position, left_shift.start_pose.position);
+      const double finish_distance = motion_utils::calcSignedArcLength(
+        path.points, ego_position, left_shift.finish_pose.position);
       rtc_interface_left_.updateCooperateStatus(
         left_shift.uuid, true, start_distance, finish_distance, clock_->now());
       if (finish_distance > -1.0e-03) {
@@ -157,10 +148,10 @@ private:
     }
 
     for (const auto & right_shift : right_shift_array_) {
-      const double start_distance =
-        calcSignedArcLength(path.points, ego_position, right_shift.start_pose.position);
-      const double finish_distance =
-        calcSignedArcLength(path.points, ego_position, right_shift.finish_pose.position);
+      const double start_distance = motion_utils::calcSignedArcLength(
+        path.points, ego_position, right_shift.start_pose.position);
+      const double finish_distance = motion_utils::calcSignedArcLength(
+        path.points, ego_position, right_shift.finish_pose.position);
       rtc_interface_right_.updateCooperateStatus(
         right_shift.uuid, true, start_distance, finish_distance, clock_->now());
       if (finish_distance > -1.0e-03) {
@@ -205,17 +196,10 @@ private:
    * object pre-process
    */
   void fillAvoidanceTargetObjects(AvoidancePlanningData & data, DebugData & debug) const;
-
   void fillObjectEnvelopePolygon(const Pose & closest_pose, ObjectData & object_data) const;
-
   void fillObjectMovingTime(ObjectData & object_data) const;
-
   void compensateDetectionLost(
     ObjectDataArray & target_objects, ObjectDataArray & other_objects) const;
-
-  void fillShiftLine(AvoidancePlanningData & data, DebugData & debug) const;
-
-  void fillDebugData(const AvoidancePlanningData & data, DebugData & debug) const;
 
   // data used in previous planning
   ShiftedPath prev_output_;
@@ -240,16 +224,15 @@ private:
   ObjectDataArray registered_objects_;
   void updateRegisteredObject(const ObjectDataArray & objects);
 
-  // ========= shift line generator ======
+  // -- for shift point generation --
+  AvoidLineArray calcShiftLines(AvoidLineArray & current_raw_shift_lines, DebugData & debug) const;
 
-  AvoidLineArray calcRawShiftLinesFromObjects(
-    AvoidancePlanningData & data, DebugData & debug) const;
-
-  AvoidLineArray applyPreProcessToRawShiftLines(
-    AvoidLineArray & current_raw_shift_points, DebugData & debug) const;
-
+  // shift point generation: generator
   double getShiftLength(
     const ObjectData & object, const bool & is_object_on_right, const double & avoid_margin) const;
+  AvoidLineArray calcRawShiftLinesFromObjects(const ObjectDataArray & objects) const;
+  double getRightShiftBound() const;
+  double getLeftShiftBound() const;
 
   // shift point generation: combiner
   AvoidLineArray combineRawShiftLinesWithUniqueCheck(
@@ -285,7 +268,7 @@ private:
   void fillAdditionalInfoFromLongitudinal(AvoidLineArray & shift_lines) const;
 
   // -- for new shift point approval --
-  AvoidLineArray findNewShiftLine(
+  boost::optional<AvoidLineArray> findNewShiftLine(
     const AvoidLineArray & shift_lines, const PathShifter & shifter) const;
   void addShiftLineIfApproved(const AvoidLineArray & point);
   void addNewShiftLines(PathShifter & path_shifter, const AvoidLineArray & shift_lines) const;
@@ -297,6 +280,9 @@ private:
   // -- velocity planning --
   std::shared_ptr<double> ego_velocity_starting_avoidance_ptr_;
   void modifyPathVelocityToPreventAccelerationOnAvoidance(ShiftedPath & shifted_path);
+
+  // clean up shifter
+  void postProcess(PathShifter & shifter) const;
 
   // turn signal
   TurnSignalInfo calcTurnSignalInfo(const ShiftedPath & path) const;
@@ -314,159 +300,32 @@ private:
   void updateAvoidanceDebugData(std::vector<AvoidanceDebugMsg> & avoidance_debug_msg_array) const;
   mutable std::vector<AvoidanceDebugMsg> debug_avoidance_initializer_for_shift_line_;
   mutable rclcpp::Time debug_avoidance_initializer_for_shift_line_time_;
-
-  double getLateralMarginFromVelocity(const double velocity) const;
-
-  double getRSSLongitudinalDistance(
-    const double v_ego, const double v_obj, const bool is_front_object) const;
-
-  ObjectDataArray getAdjacentLaneObjects(const lanelet::ConstLanelets & adjacent_lanes) const;
-
-  // ========= plan ======================
-
-  AvoidanceState updateEgoState(const AvoidancePlanningData & data) const;
-
-  void updateEgoBehavior(const AvoidancePlanningData & data, ShiftedPath & path);
-
-  void insertWaitPoint(const bool use_constraints_for_decel, ShiftedPath & shifted_path) const;
-
-  void insertPrepareVelocity(const bool avoidable, ShiftedPath & shifted_path) const;
-
-  void insertYieldVelocity(ShiftedPath & shifted_path) const;
-
-  void removeAllRegisteredShiftPoints(PathShifter & path_shifter)
-  {
-    current_raw_shift_lines_.clear();
-    registered_raw_shift_lines_.clear();
-    path_shifter.setShiftLines(ShiftLineArray{});
-  }
-
-  void postProcess(PathShifter & path_shifter) const
-  {
-    const size_t nearest_idx = planner_data_->findEgoIndex(path_shifter.getReferencePath().points);
-    path_shifter.removeBehindShiftLineAndSetBaseOffset(nearest_idx);
-  }
-
-  double getFeasibleDecelDistance(const double target_velocity) const;
-
-  double getMildDecelDistance(const double target_velocity) const;
-
-  // ========= safety check ==============
-
-  lanelet::ConstLanelets getAdjacentLane(
-    const PathShifter & path_shifter, const double forward_distance,
-    const double backward_distance) const;
-
-  bool isSafePath(
-    const PathShifter & path_shifter, ShiftedPath & shifted_path, DebugData & debug) const;
-
-  bool isSafePath(
-    const PathWithLaneId & path, const lanelet::ConstLanelets & check_lanes,
-    DebugData & debug) const;
-
-  bool isEnoughMargin(
-    const PathPointWithLaneId & p_ego, const double t, const ObjectData & object,
-    MarginData & margin_data) const;
-
+  // =====================================
   // ========= helper functions ==========
-
-  double getEgoSpeed() const
-  {
-    return std::abs(planner_data_->self_odometry->twist.twist.linear.x);
-  }
-
-  double getNominalAvoidanceEgoSpeed() const
-  {
-    return std::max(getEgoSpeed(), parameters_->min_nominal_avoidance_speed);
-  }
-
-  double getSharpAvoidanceEgoSpeed() const
-  {
-    return std::max(getEgoSpeed(), parameters_->min_sharp_avoidance_speed);
-  }
-
-  float getMinimumAvoidanceEgoSpeed() const { return parameters_->target_velocity_matrix.front(); }
-
-  float getMaximumAvoidanceEgoSpeed() const
-  {
-    return parameters_->target_velocity_matrix.at(parameters_->col_size - 1);
-  }
-
-  double getNominalPrepareDistance() const
-  {
-    const auto & p = parameters_;
-    const auto epsilon_m = 0.01;  // for floating error to pass "has_enough_distance" check.
-    const auto nominal_distance =
-      std::max(getEgoSpeed() * p->prepare_time, p->min_prepare_distance);
-    return nominal_distance + epsilon_m;
-  }
-
-  double getNominalAvoidanceDistance(const double shift_length) const
-  {
-    const auto & p = parameters_;
-    const auto distance_by_jerk = PathShifter::calcLongitudinalDistFromJerk(
-      shift_length, p->nominal_lateral_jerk, getNominalAvoidanceEgoSpeed());
-
-    return std::max(p->min_avoidance_distance, distance_by_jerk);
-  }
-
-  double getMinimumAvoidanceDistance(const double shift_length) const
-  {
-    const auto & p = parameters_;
-    const auto distance_by_jerk = path_shifter_.calcLongitudinalDistFromJerk(
-      shift_length, p->nominal_lateral_jerk, getMinimumAvoidanceEgoSpeed());
-
-    return std::max(p->min_avoidance_distance, distance_by_jerk);
-  }
-
-  double getSharpAvoidanceDistance(const double shift_length) const
-  {
-    const auto & p = parameters_;
-    const auto distance_by_jerk = PathShifter::calcLongitudinalDistFromJerk(
-      shift_length, p->max_lateral_jerk, getSharpAvoidanceEgoSpeed());
-
-    return std::max(p->min_avoidance_distance, distance_by_jerk);
-  }
-
-  double getRightShiftBound() const
-  {
-    // TODO(Horibe) write me. Real lane boundary must be considered here.
-    return -parameters_->max_right_shift_length;
-  }
-
-  double getLeftShiftBound() const
-  {
-    // TODO(Horibe) write me. Real lane boundary must be considered here.
-    return parameters_->max_left_shift_length;
-  }
-
-  double getCurrentShift() const
-  {
-    return prev_output_.shift_length.at(
-      findNearestIndex(prev_output_.path.points, getEgoPosition()));
-  }
-
-  double getCurrentLinearShift() const
-  {
-    return prev_linear_shift_path_.shift_length.at(
-      findNearestIndex(prev_linear_shift_path_.path.points, getEgoPosition()));
-  }
-
-  double getCurrentBaseShift() const { return path_shifter_.getBaseOffset(); }
-
-  Point getEgoPosition() const { return planner_data_->self_odometry->pose.pose.position; }
-
-  Pose getEgoPose() const { return planner_data_->self_odometry->pose.pose; }
-
-  Pose getUnshiftedEgoPose(const ShiftedPath & prev_path) const;
+  // =====================================
 
   PathWithLaneId calcCenterLinePath(
-    const std::shared_ptr<const PlannerData> & planner_data, const Pose & pose) const;
+    const std::shared_ptr<const PlannerData> & planner_data, const PoseStamped & pose) const;
 
   // TODO(Horibe): think later.
   // for unique ID
   mutable uint64_t original_unique_id = 0;  // TODO(Horibe) remove mutable
   uint64_t getOriginalShiftLineUniqueId() const { return original_unique_id++; }
+
+  double getNominalAvoidanceDistance(const double shift_length) const;
+  double getNominalPrepareDistance() const;
+  double getNominalAvoidanceEgoSpeed() const;
+
+  double getSharpAvoidanceDistance(const double shift_length) const;
+  double getSharpAvoidanceEgoSpeed() const;
+
+  double getEgoSpeed() const;
+  Point getEgoPosition() const;
+  PoseStamped getEgoPose() const;
+  PoseStamped getUnshiftedEgoPose(const ShiftedPath & prev_path) const;
+  double getCurrentBaseShift() const { return path_shifter_.getBaseOffset(); }
+  double getCurrentShift() const;
+  double getCurrentLinearShift() const;
 
   /**
    * avoidance module misc data

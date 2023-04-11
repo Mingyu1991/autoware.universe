@@ -43,7 +43,13 @@
 #include <string>
 #include <vector>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 
 struct MPCParam
@@ -438,6 +444,9 @@ public:
    */
   inline void setClock(rclcpp::Clock::SharedPtr clock) { m_clock = clock; }
 };  // class MPC
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 
 #endif  // MPC_LATERAL_CONTROLLER__MPC_HPP_

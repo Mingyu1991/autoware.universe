@@ -71,6 +71,7 @@ private:
   BT::Tree bt_tree_;
   BT::Blackboard::Ptr blackboard_;
 
+  BT::NodeStatus checkForceApproval(const std::string & name);
   void resetNotRunningModulePathCandidate();
 
   // For Groot monitoring

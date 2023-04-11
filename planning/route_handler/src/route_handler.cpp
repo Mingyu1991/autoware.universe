@@ -336,8 +336,6 @@ lanelet::ConstPolygon3d RouteHandler::getIntersectionAreaById(const lanelet::Id 
 
 Header RouteHandler::getRouteHeader() const { return route_msg_.header; }
 
-UUID RouteHandler::getRouteUuid() const { return route_msg_.uuid; }
-
 std::vector<lanelet::ConstLanelet> RouteHandler::getLanesBeforePose(
   const geometry_msgs::msg::Pose & pose, const double length) const
 {
@@ -1084,14 +1082,6 @@ lanelet::ConstLineStrings3d RouteHandler::getFurthestLinestring(
     linestrings.emplace_back(lanelet.leftBound());
   }
   return linestrings;
-}
-
-std::vector<lanelet::ConstLanelets> RouteHandler::getPrecedingLaneletSequence(
-  const lanelet::ConstLanelet & lanelet, const double length,
-  const lanelet::ConstLanelets & exclude_lanelets) const
-{
-  return lanelet::utils::query::getPrecedingLaneletSequences(
-    routing_graph_ptr_, lanelet, length, exclude_lanelets);
 }
 
 bool RouteHandler::getLaneChangeTarget(

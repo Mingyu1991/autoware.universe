@@ -17,6 +17,7 @@
 
 #include "behavior_path_planner/behavior_tree_manager.hpp"
 #include "behavior_path_planner/data_manager.hpp"
+#include "behavior_path_planner/scene_module/avoidance/avoidance_module_data.hpp"
 #include "behavior_path_planner/scene_module/lane_change/external_request_lane_change_module.hpp"
 #include "behavior_path_planner/scene_module/lane_change/lane_change_module.hpp"
 #include "behavior_path_planner/scene_module/lane_following/lane_following_module.hpp"
@@ -25,7 +26,8 @@
 #include "behavior_path_planner/scene_module/side_shift/side_shift_module.hpp"
 #include "behavior_path_planner/steering_factor_interface.hpp"
 #include "behavior_path_planner/turn_signal_decider.hpp"
-#include "behavior_path_planner/util/avoidance/avoidance_module_data.hpp"
+
+#include <tier4_autoware_utils/ros/self_pose_listener.hpp>
 
 #include "tier4_planning_msgs/msg/detail/lane_change_debug_msg_array__struct.hpp"
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
@@ -35,7 +37,6 @@
 #include <autoware_auto_vehicle_msgs/msg/hazard_lights_command.hpp>
 #include <autoware_auto_vehicle_msgs/msg/turn_indicators_command.hpp>
 #include <autoware_planning_msgs/msg/lanelet_route.hpp>
-#include <autoware_planning_msgs/msg/pose_with_uuid_stamped.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <tier4_planning_msgs/msg/approval.hpp>
@@ -65,6 +66,7 @@ inline void update_param(
 
 namespace behavior_path_planner
 {
+using ApprovalMsg = tier4_planning_msgs::msg::Approval;
 using autoware_auto_mapping_msgs::msg::HADMapBin;
 using autoware_auto_perception_msgs::msg::PredictedObjects;
 using autoware_auto_planning_msgs::msg::Path;
@@ -72,7 +74,6 @@ using autoware_auto_planning_msgs::msg::PathWithLaneId;
 using autoware_auto_vehicle_msgs::msg::HazardLightsCommand;
 using autoware_auto_vehicle_msgs::msg::TurnIndicatorsCommand;
 using autoware_planning_msgs::msg::LaneletRoute;
-using autoware_planning_msgs::msg::PoseWithUuidStamped;
 using geometry_msgs::msg::TwistStamped;
 using nav_msgs::msg::OccupancyGrid;
 using nav_msgs::msg::Odometry;
@@ -80,6 +81,7 @@ using rcl_interfaces::msg::SetParametersResult;
 using steering_factor_interface::SteeringFactorInterface;
 using tier4_planning_msgs::msg::AvoidanceDebugMsgArray;
 using tier4_planning_msgs::msg::LaneChangeDebugMsgArray;
+using tier4_planning_msgs::msg::PathChangeModule;
 using tier4_planning_msgs::msg::Scenario;
 using visualization_msgs::msg::Marker;
 using visualization_msgs::msg::MarkerArray;
@@ -101,7 +103,6 @@ private:
   rclcpp::Publisher<TurnIndicatorsCommand>::SharedPtr turn_signal_publisher_;
   rclcpp::Publisher<HazardLightsCommand>::SharedPtr hazard_signal_publisher_;
   rclcpp::Publisher<MarkerArray>::SharedPtr bound_publisher_;
-  rclcpp::Publisher<PoseWithUuidStamped>::SharedPtr modified_goal_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   std::map<std::string, rclcpp::Publisher<Path>::SharedPtr> path_candidate_publishers_;
@@ -109,12 +110,8 @@ private:
   std::shared_ptr<PlannerData> planner_data_;
   std::shared_ptr<BehaviorTreeManager> bt_manager_;
   std::unique_ptr<SteeringFactorInterface> steering_factor_interface_ptr_;
+  tier4_autoware_utils::SelfPoseListener self_pose_listener_{this};
   Scenario::SharedPtr current_scenario_{nullptr};
-
-  HADMapBin::ConstSharedPtr map_ptr_{nullptr};
-  LaneletRoute::ConstSharedPtr route_ptr_{nullptr};
-  bool has_received_map_{false};
-  bool has_received_route_{false};
 
   TurnSignalDecider turn_signal_decider_;
 
@@ -123,9 +120,6 @@ private:
 
   // setup
   bool isDataReady();
-
-  // update planner data
-  std::shared_ptr<PlannerData> createLatestPlannerData();
 
   // parameters
   std::shared_ptr<AvoidanceParameters> avoidance_param_ptr;
@@ -141,10 +135,12 @@ private:
   PullOutParameters getPullOutParam();
 
   // callback
-  void onOdometry(const Odometry::ConstSharedPtr msg);
+  void onVelocity(const Odometry::ConstSharedPtr msg);
   void onAcceleration(const AccelWithCovarianceStamped::ConstSharedPtr msg);
   void onPerception(const PredictedObjects::ConstSharedPtr msg);
   void onOccupancyGrid(const OccupancyGrid::ConstSharedPtr msg);
+  void onExternalApproval(const ApprovalMsg::ConstSharedPtr msg);
+  void onForceApproval(const PathChangeModule::ConstSharedPtr msg);
   void onMap(const HADMapBin::ConstSharedPtr map_msg);
   void onRoute(const LaneletRoute::ConstSharedPtr route_msg);
   SetParametersResult onSetParam(const std::vector<rclcpp::Parameter> & parameters);
@@ -213,6 +209,24 @@ private:
    */
   Path convertToPath(
     const std::shared_ptr<PathWithLaneId> & path_candidate_ptr, const bool is_ready);
+
+  template <class T>
+  size_t findEgoIndex(const std::vector<T> & points) const
+  {
+    const auto & p = planner_data_;
+    return motion_utils::findFirstNearestIndexWithSoftConstraints(
+      points, p->self_pose->pose, p->parameters.ego_nearest_dist_threshold,
+      p->parameters.ego_nearest_yaw_threshold);
+  }
+
+  template <class T>
+  size_t findEgoSegmentIndex(const std::vector<T> & points) const
+  {
+    const auto & p = planner_data_;
+    return motion_utils::findFirstNearestSegmentIndexWithSoftConstraints(
+      points, p->self_pose->pose, p->parameters.ego_nearest_dist_threshold,
+      p->parameters.ego_nearest_yaw_threshold);
+  }
 };
 }  // namespace behavior_path_planner
 

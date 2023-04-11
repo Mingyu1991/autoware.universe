@@ -14,7 +14,7 @@
 
 # Get user-provided variables
 set(DOWNLOAD_ARTIFACTS OFF CACHE BOOL "enable artifacts download")
-set(MODELZOO_VERSION "3.0.0-20221221" CACHE STRING "targeted ModelZoo version")
+set(MODELZOO_VERSION "2.1.0-20221102" CACHE STRING "targeted ModelZoo version")
 
 #
 # Download the selected neural network if it is not already present on disk.
@@ -32,7 +32,6 @@ set(MODELZOO_VERSION "3.0.0-20221221" CACHE STRING "targeted ModelZoo version")
 function(get_neural_network MODEL_NAME MODEL_BACKEND DEPENDENCY)
   set(DATA_PATH ${CMAKE_CURRENT_SOURCE_DIR}/data)
   set(EXTERNALPROJECT_NAME ${MODEL_NAME}_${MODEL_BACKEND})
-  set(PREPROCESSING "")
 
   # Prioritize user-provided models.
   if(IS_DIRECTORY "${DATA_PATH}/user/${MODEL_NAME}")
@@ -43,47 +42,36 @@ function(get_neural_network MODEL_NAME MODEL_BACKEND DEPENDENCY)
       "${DATA_PATH}/models/${MODEL_NAME}/inference_engine_tvm_config.hpp"
       COPYONLY
     )
-    if(EXISTS "${DATA_PATH}/user/${MODEL_NAME}/preprocessing_inference_engine_tvm_config.hpp")
-      configure_file(
-        "${DATA_PATH}/user/${MODEL_NAME}/preprocessing_inference_engine_tvm_config.hpp"
-        "${DATA_PATH}/models/${MODEL_NAME}/preprocessing_inference_engine_tvm_config.hpp"
-        COPYONLY
-      )
-    endif()
+    set(DOWNLOAD_DIR "")
     set(SOURCE_DIR "${DATA_PATH}/user/${MODEL_NAME}")
     set(INSTALL_DIRECTORY "${DATA_PATH}/user/${MODEL_NAME}")
   else()
     set(ARCHIVE_NAME "${MODEL_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${MODEL_BACKEND}-${MODELZOO_VERSION}.tar.gz")
 
     # Use previously-downloaded archives if available.
-    set(DOWNLOAD_DIR "${DATA_PATH}/downloads")
-    if(DOWNLOAD_ARTIFACTS)
+    if(EXISTS "${DATA_PATH}/downloads/${ARCHIVE_NAME}")
+      set(URL "${DATA_PATH}/downloads/${ARCHIVE_NAME}")
+    elseif(DOWNLOAD_ARTIFACTS)
       message(STATUS "Downloading ${ARCHIVE_NAME} ...")
-      if(NOT EXISTS "${DATA_PATH}/downloads/${ARCHIVE_NAME}")
-        set(URL "https://autoware-modelzoo.s3.us-east-2.amazonaws.com/models/${MODELZOO_VERSION}/${ARCHIVE_NAME}")
-        file(DOWNLOAD ${URL} "${DOWNLOAD_DIR}/${ARCHIVE_NAME}")
-      endif()
+      set(URL "https://autoware-modelzoo.s3.us-east-2.amazonaws.com/models/${MODELZOO_VERSION}/${ARCHIVE_NAME}")
     else()
       message(WARNING "Skipped download for ${MODEL_NAME} (enable by setting DOWNLOAD_ARTIFACTS)")
       set(${DEPENDENCY} "" PARENT_SCOPE)
       return()
     endif()
+    set(DOWNLOAD_DIR "${DATA_PATH}/downloads")
     set(SOURCE_DIR "${DATA_PATH}/models/${MODEL_NAME}")
     set(INSTALL_DIRECTORY "${DATA_PATH}/models/${MODEL_NAME}")
-    file(ARCHIVE_EXTRACT INPUT "${DOWNLOAD_DIR}/${ARCHIVE_NAME}" DESTINATION "${SOURCE_DIR}")
-    if(EXISTS "${DATA_PATH}/models/${MODEL_NAME}/preprocessing_inference_engine_tvm_config.hpp")
-      set(PREPROCESSING "${DATA_PATH}/models/${MODEL_NAME}/preprocessing_inference_engine_tvm_config.hpp")
-    endif()
-
   endif()
 
   include(ExternalProject)
   externalproject_add(${EXTERNALPROJECT_NAME}
+    DOWNLOAD_DIR ${DOWNLOAD_DIR}
     SOURCE_DIR ${SOURCE_DIR}
+    URL ${URL}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     BUILD_BYPRODUCTS "${DATA_PATH}/models/${MODEL_NAME}/inference_engine_tvm_config.hpp"
-    BUILD_BYPRODUCTS ${PREPROCESSING}
     INSTALL_COMMAND ""
   )
   install(

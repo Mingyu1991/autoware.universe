@@ -18,7 +18,6 @@ It consists of several modules. Please refer to the links listed below for detai
 - [Occlusion Spot](occlusion-spot-design.md)
 - [No Stopping Area](no-stopping-area-design.md)
 - [Run Out](run-out-design.md)
-- [Speed Bump](speed-bump-design.md)
 
 When each module plans velocity, it considers based on `base_link`(center of rear-wheel axis) pose.
 So for example, in order to stop at a stop line with the vehicles' front on the stop line, it calculates `base_link` position from the distance between `base_link` to front and modifies path velocity from the `base_link` position.
@@ -56,7 +55,6 @@ So for example, in order to stop at a stop line with the vehicles' front on the 
 | `launch_stop_line`      | bool   | whether to launch stop_line module                                                  |
 | `launch_occlusion_spot` | bool   | whether to launch occlusion_spot module                                             |
 | `launch_run_out`        | bool   | whether to launch run_out module                                                    |
-| `launch_speed_bump`     | bool   | whether to launch speed_bump module                                                 |
 | `forward_path_length`   | double | forward path length                                                                 |
 | `backward_path_length`  | double | backward path length                                                                |
 | `max_accel`             | double | (to be a global parameter) max acceleration of the vehicle                          |

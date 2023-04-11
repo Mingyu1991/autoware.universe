@@ -168,18 +168,13 @@ visualization_msgs::msg::MarkerArray NoStoppingAreaModule::createVirtualWallMark
   const auto now = clock_->now();
 
   auto id = module_id_;
-  std::vector<Pose> stop_poses;
-
   for (const auto & p : debug_data_.stop_poses) {
     const auto p_front =
       tier4_autoware_utils::calcOffsetPose(p, debug_data_.base_link2front, 0.0, 0.0);
-    stop_poses.push_back(p_front);
+    appendMarkerArray(
+      motion_utils::createStopVirtualWallMarker(p_front, "no_stopping_area", now, id++),
+      &wall_marker, now);
   }
-  appendMarkerArray(
-    virtual_wall_marker_creator_->createStopVirtualWallMarker(
-      stop_poses, "no_stopping_area", now, id),
-    &wall_marker, now);
-
   return wall_marker;
 }
 }  // namespace behavior_velocity_planner

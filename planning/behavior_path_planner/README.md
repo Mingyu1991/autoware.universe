@@ -54,17 +54,6 @@ The following modules are currently supported:
 
 ## Inner-workings / Algorithms
 
-### Parameters for drivable area expansion
-
-Optionally, the drivable area can be expanded by a static distance.
-Expansion parameters are defined for each module of the `behavior_path_planner` and should be prefixed accordingly (see `config/drivable_area_expansion.yaml` for an example).
-
-| Name                             | Unit | Type            | Description                                | Default value |
-| :------------------------------- | :--- | :-------------- | :----------------------------------------- | :------------ |
-| drivable_area_right_bound_offset | [m]  | double          | expansion distance of the right bound      | 0.0           |
-| drivable_area_right_bound_offset | [m]  | double          | expansion distance of the left bound       | 0.0           |
-| drivable_area_types_to_skip      |      | list of strings | types of linestrings that are not expanded | [road_border] |
-
 ### Behavior Tree
 
 In the behavior path planner, the behavior tree mechanism is used to manage which modules are activated in which situations. In general, this "behavior manager" like function is expected to become bigger as more and more modules are added in the future. To improve maintainability, we adopted the behavior tree. The behavior tree has the following advantages: easy visualization, easy configuration management (behaviors can be changed by replacing configuration files), and high scalability compared to the state machine.
@@ -135,7 +124,6 @@ Dynamic objects that satisfy the following conditions are considered to be avoid
 - low speed (default: < `1.0 m/s`)
 - Not being around center line (default: deviation from center > `0.5 m`)
 - Any footprint of the object in on the detection area (driving lane + `1 m` margin for lateral direction).
-- Object is not behind ego(default: > -`2.0 m`) or too far(default: < `150.0 m`) and object is not behind the path goal.
 
 <!-- The target objects are `CAR`, `TRUCK`, or `BUS` type with low speed (default: < `1.0 m/s`). If the object is around the center of lane, it is not considered as a target (default: deviation from center > `0.5 m`). -->
 

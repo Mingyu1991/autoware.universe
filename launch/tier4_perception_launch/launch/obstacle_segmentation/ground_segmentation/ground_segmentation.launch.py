@@ -33,9 +33,8 @@ class GroundSegmentationPipeline:
         self.context = context
         self.vehicle_info = self.get_vehicle_info()
         ground_segmentation_param_path = os.path.join(
-            LaunchConfiguration("obstacle_segmentation_ground_segmentation_param_path").perform(
-                context
-            ),
+            LaunchConfiguration("tier4_perception_launch_param_path").perform(context),
+            "obstacle_segmentation/ground_segmentation/ground_segmentation.param.yaml",
         )
         with open(ground_segmentation_param_path, "r") as f:
             self.ground_segmentation_param = yaml.safe_load(f)["/**"]["ros__parameters"]
@@ -249,6 +248,7 @@ class GroundSegmentationPipeline:
         return components
 
     def create_single_frame_obstacle_segmentation_components(self, input_topic, output_topic):
+
         additional_lidars = self.ground_segmentation_param["additional_lidars"]
         use_ransac = bool(self.ground_segmentation_param["ransac_input_topics"])
         use_additional = bool(additional_lidars)
@@ -329,9 +329,12 @@ class GroundSegmentationPipeline:
                         "inpaint_radius": 1.0,
                         "param_file_path": PathJoinSubstitution(
                             [
-                                LaunchConfiguration(
-                                    "obstacle_segmentation_ground_segmentation_elevation_map_param_path"
-                                ).perform(context),
+                                LaunchConfiguration("tier4_perception_launch_param_path").perform(
+                                    context
+                                ),
+                                "obstacle_segmentation",
+                                "ground_segmentation",
+                                "elevation_map_parameters.yaml",
                             ]
                         ),
                         "elevation_map_directory": PathJoinSubstitution(
@@ -423,6 +426,7 @@ class GroundSegmentationPipeline:
 
     @staticmethod
     def get_additional_lidars_concatenated_component(input_topics, output_topic):
+
         return ComposableNode(
             package="pointcloud_preprocessor",
             plugin="pointcloud_preprocessor::PointCloudConcatenateDataSynchronizerComponent",
@@ -461,9 +465,7 @@ def launch_setup(context, *args, **kwargs):
     components.extend(
         pipeline.create_single_frame_obstacle_segmentation_components(
             input_topic=LaunchConfiguration("input/pointcloud"),
-            output_topic=pipeline.single_frame_obstacle_seg_output
-            if pipeline.use_single_frame_filter or pipeline.use_time_series_filter
-            else pipeline.output_topic,
+            output_topic=pipeline.single_frame_obstacle_seg_output,
         )
     )
 
@@ -505,6 +507,7 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+
     launch_arguments = []
 
     def add_launch_arg(name: str, default_value=None):
@@ -515,6 +518,7 @@ def generate_launch_description():
     add_launch_arg("use_intra_process", "True")
     add_launch_arg("use_pointcloud_container", "False")
     add_launch_arg("container_name", "perception_pipeline_container")
+    add_launch_arg("tier4_perception_launch_param_path", "tier4_perception_launch parameter path")
     add_launch_arg("input/pointcloud", "/sensing/lidar/concatenated/pointcloud")
 
     set_container_executable = SetLaunchConfiguration(

@@ -28,7 +28,13 @@
 #include <algorithm>
 #include <limits>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 namespace longitudinal_utils
 {
@@ -176,4 +182,7 @@ double applyDiffLimitFilter(
   return applyDiffLimitFilter(input_val, prev_val, dt, max_val, min_val);
 }
 }  // namespace longitudinal_utils
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

@@ -22,7 +22,13 @@
 #include <string>
 #include <vector>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 namespace MPCUtils
 {
@@ -249,9 +255,6 @@ bool convertToAutowareTrajectory(
     p.longitudinal_velocity_mps =
       static_cast<decltype(p.longitudinal_velocity_mps)>(input.vx.at(i));
     output.points.push_back(p);
-    if (output.points.size() == output.points.max_size()) {
-      break;
-    }
   }
   return true;
 }
@@ -426,4 +429,7 @@ void extendTrajectoryInYawDirection(
 }
 
 }  // namespace MPCUtils
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

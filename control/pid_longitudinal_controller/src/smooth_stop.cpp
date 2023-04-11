@@ -22,7 +22,13 @@
 #include <utility>
 #include <vector>
 
-namespace autoware::motion::control::pid_longitudinal_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace pid_longitudinal_controller
 {
 void SmoothStop::init(const double pred_vel_in_target, const double pred_stop_dist)
 {
@@ -158,4 +164,7 @@ double SmoothStop::calculate(
   // when the car is not running
   return m_params.strong_stop_acc;
 }
-}  // namespace autoware::motion::control::pid_longitudinal_controller
+}  // namespace pid_longitudinal_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

@@ -15,7 +15,13 @@
 #ifndef TRAJECTORY_FOLLOWER_BASE__SYNC_DATA_HPP_
 #define TRAJECTORY_FOLLOWER_BASE__SYNC_DATA_HPP_
 
-namespace autoware::motion::control::trajectory_follower
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace trajectory_follower
 {
 struct LateralSyncData
 {
@@ -28,6 +34,9 @@ struct LongitudinalSyncData
   // bool is_velocity_converged{false};
 };
 
-}  // namespace autoware::motion::control::trajectory_follower
+}  // namespace trajectory_follower
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 
 #endif  // TRAJECTORY_FOLLOWER_BASE__SYNC_DATA_HPP_

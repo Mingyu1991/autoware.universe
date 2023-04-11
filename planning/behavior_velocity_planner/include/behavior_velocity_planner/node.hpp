@@ -40,7 +40,6 @@
 
 namespace behavior_velocity_planner
 {
-using autoware_auto_mapping_msgs::msg::HADMapBin;
 using tier4_planning_msgs::msg::VelocityLimit;
 class BehaviorVelocityPlannerNode : public rclcpp::Node
 {
@@ -79,7 +78,7 @@ private:
   void onPredictedObjects(
     const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg);
   void onNoGroundPointCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
-  void onOdometry(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
+  void onVehicleVelocity(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
   void onAcceleration(const geometry_msgs::msg::AccelWithCovarianceStamped::ConstSharedPtr msg);
   void onLaneletMap(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr msg);
   void onTrafficSignals(
@@ -110,8 +109,6 @@ private:
   PlannerData planner_data_;
   BehaviorVelocityPlannerManager planner_manager_;
   bool is_driving_forward_{true};
-  HADMapBin::ConstSharedPtr map_ptr_{nullptr};
-  bool has_received_map_;
 
   // mutex for planner_data_
   std::mutex mutex_;

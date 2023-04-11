@@ -22,7 +22,13 @@
 #include <iostream>
 #include <vector>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 
 /**
@@ -90,5 +96,8 @@ public:
     return points;
   }
 };
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 #endif  // MPC_LATERAL_CONTROLLER__MPC_TRAJECTORY_HPP_

@@ -14,7 +14,13 @@
 
 #include "mpc_lateral_controller/vehicle_model/vehicle_model_interface.hpp"
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 VehicleModelInterface::VehicleModelInterface(int dim_x, int dim_u, int dim_y, double wheelbase)
 : m_dim_x(dim_x), m_dim_u(dim_u), m_dim_y(dim_y), m_wheelbase(wheelbase)
@@ -26,4 +32,7 @@ int VehicleModelInterface::getDimY() { return m_dim_y; }
 double VehicleModelInterface::getWheelbase() { return m_wheelbase; }
 void VehicleModelInterface::setVelocity(const double velocity) { m_velocity = velocity; }
 void VehicleModelInterface::setCurvature(const double curvature) { m_curvature = curvature; }
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

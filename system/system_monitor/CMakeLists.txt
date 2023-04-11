@@ -118,8 +118,7 @@ ament_auto_add_executable(hdd_reader
 )
 
 ament_auto_add_executable(traffic_reader
-  reader/traffic_reader/traffic_reader_main.cpp
-  reader/traffic_reader/traffic_reader_service.cpp
+  reader/traffic_reader/traffic_reader.cpp
 )
 
 find_library(NL3 nl-3 REQUIRED)

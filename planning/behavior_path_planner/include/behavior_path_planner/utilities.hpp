@@ -16,8 +16,8 @@
 #define BEHAVIOR_PATH_PLANNER__UTILITIES_HPP_
 
 #include "behavior_path_planner/data_manager.hpp"
-#include "behavior_path_planner/marker_util/debug_utilities.hpp"
-#include "behavior_path_planner/util/pull_out/pull_out_path.hpp"
+#include "behavior_path_planner/debug_utilities.hpp"
+#include "behavior_path_planner/scene_module/pull_out/pull_out_path.hpp"
 
 #include <opencv2/opencv.hpp>
 #include <route_handler/route_handler.hpp>
@@ -43,7 +43,6 @@
 #else
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #endif
-
 #include <limits>
 #include <memory>
 #include <string>
@@ -64,6 +63,7 @@ using autoware_auto_planning_msgs::msg::PathWithLaneId;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::Pose;
 using geometry_msgs::msg::PoseArray;
+using geometry_msgs::msg::PoseStamped;
 using geometry_msgs::msg::Twist;
 using geometry_msgs::msg::Vector3;
 using route_handler::RouteHandler;
@@ -290,6 +290,21 @@ double calcLongitudinalDistanceFromEgoToObjects(
   const PredictedObjects & dynamic_objects);
 
 /**
+ * @brief Get index of the obstacles inside the lanelets with start and end length
+ * @return Indices corresponding to the obstacle inside the lanelets
+ */
+std::vector<size_t> filterObjectIndicesByLanelets(
+  const PredictedObjects & objects, const lanelet::ConstLanelets & lanelets,
+  const double start_arc_length, const double end_arc_length);
+
+/**
+ * @brief Get index of the obstacles inside the lanelets
+ * @return Indices corresponding to the obstacle inside the lanelets
+ */
+std::vector<size_t> filterObjectIndicesByLanelets(
+  const PredictedObjects & objects, const lanelet::ConstLanelets & target_lanelets);
+
+/**
  * @brief Separate index of the obstacles into two part based on whether the object is within
  * lanelet.
  * @return Indices of objects pair. first objects are in the lanelet, and second others are out of
@@ -418,6 +433,11 @@ PathWithLaneId setDecelerationVelocity(
   const RouteHandler & route_handler, const PathWithLaneId & input,
   const lanelet::ConstLanelets & lanelet_sequence, const double lane_change_prepare_duration,
   const double lane_change_buffer);
+
+bool checkLaneIsInIntersection(
+  const RouteHandler & route_handler, const PathWithLaneId & ref,
+  const lanelet::ConstLanelets & lanelet_sequence, const BehaviorPathPlannerParameters & parameters,
+  const int num_lane_change, double & additional_length_to_add);
 
 PathWithLaneId setDecelerationVelocity(
   const PathWithLaneId & input, const double target_velocity, const Pose target_pose,

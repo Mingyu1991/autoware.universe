@@ -41,7 +41,13 @@
 #include <string>
 #include <vector>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 namespace MPCUtils
 {
@@ -186,5 +192,8 @@ void extendTrajectoryInYawDirection(
   const double yaw, const double interval, const bool is_forward_shift, MPCTrajectory & traj);
 
 }  // namespace MPCUtils
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 #endif  // MPC_LATERAL_CONTROLLER__MPC_UTILS_HPP_

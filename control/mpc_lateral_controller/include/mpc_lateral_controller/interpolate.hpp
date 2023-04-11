@@ -19,7 +19,13 @@
 #include <iostream>
 #include <vector>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 
 /**
@@ -42,5 +48,8 @@ bool linearInterpolate(
 bool linearInterpolate(
   const std::vector<double> & base_index, const std::vector<double> & base_value,
   const double & return_index, double & return_value);
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 #endif  // MPC_LATERAL_CONTROLLER__INTERPOLATE_HPP_

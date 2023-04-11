@@ -19,7 +19,6 @@
 
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <lanelet2_extension/utility/message_conversion.hpp>
-#include <lanelet2_extension/utility/utilities.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tier4_autoware_utils/ros/debug_publisher.hpp>
 #include <tier4_autoware_utils/ros/processing_time_publisher.hpp>
@@ -36,7 +35,6 @@
 
 #include <lanelet2_core/LaneletMap.h>
 
-#include <map>
 #include <memory>
 #include <vector>
 
@@ -48,10 +46,6 @@ struct NodeParam
 {
   double update_rate;
   bool visualize_lanelet;
-  bool include_right_lanes;
-  bool include_left_lanes;
-  bool include_opposite_lanes;
-  bool include_conflicting_lanes;
 };
 
 class LaneDepartureCheckerNode : public rclcpp::Node
@@ -72,7 +66,6 @@ private:
   geometry_msgs::msg::PoseStamped::ConstSharedPtr current_pose_;
   nav_msgs::msg::Odometry::ConstSharedPtr current_odom_;
   lanelet::LaneletMapPtr lanelet_map_;
-  lanelet::ConstLanelets shoulder_lanelets_;
   lanelet::traffic_rules::TrafficRulesPtr traffic_rules_;
   lanelet::routing::RoutingGraphPtr routing_graph_;
   LaneletRoute::ConstSharedPtr route_;
@@ -124,27 +117,6 @@ private:
 
   // Visualization
   visualization_msgs::msg::MarkerArray createMarkerArray() const;
-
-  // Lanelet Neighbor Search
-  lanelet::ConstLanelets getAllSharedLineStringLanelets(
-    const lanelet::ConstLanelet & current_lane, const bool is_right, const bool is_left,
-    const bool is_opposite, const bool is_conflicting, const bool & invert_opposite);
-
-  lanelet::ConstLanelets getAllRightSharedLinestringLanelets(
-    const lanelet::ConstLanelet & lane, const bool & include_opposite,
-    const bool & invert_opposite = false);
-
-  lanelet::ConstLanelets getAllLeftSharedLinestringLanelets(
-    const lanelet::ConstLanelet & lane, const bool & include_opposite,
-    const bool & invert_opposite = false);
-
-  boost::optional<lanelet::ConstLanelet> getLeftLanelet(const lanelet::ConstLanelet & lanelet);
-
-  lanelet::Lanelets getLeftOppositeLanelets(const lanelet::ConstLanelet & lanelet);
-  boost::optional<lanelet::ConstLanelet> getRightLanelet(
-    const lanelet::ConstLanelet & lanelet) const;
-
-  lanelet::Lanelets getRightOppositeLanelets(const lanelet::ConstLanelet & lanelet);
 };
 }  // namespace lane_departure_checker
 

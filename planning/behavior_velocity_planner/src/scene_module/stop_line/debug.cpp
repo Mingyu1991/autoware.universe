@@ -98,7 +98,6 @@ visualization_msgs::msg::MarkerArray StopLineModule::createVirtualWallMarkerArra
 {
   const auto now = this->clock_->now();
   visualization_msgs::msg::MarkerArray wall_marker;
-
   if (!debug_data_.stop_pose) {
     return wall_marker;
   }
@@ -106,11 +105,9 @@ visualization_msgs::msg::MarkerArray StopLineModule::createVirtualWallMarkerArra
     *debug_data_.stop_pose, debug_data_.base_link2front, 0.0, 0.0);
   if (state_ == State::APPROACH || state_ == State::STOPPED) {
     appendMarkerArray(
-      virtual_wall_marker_creator_->createStopVirtualWallMarker(
-        {p_front}, "stopline", now, module_id_),
-      &wall_marker, now);
+      motion_utils::createStopVirtualWallMarker(p_front, "stopline", now, module_id_), &wall_marker,
+      now);
   }
-
   return wall_marker;
 }
 }  // namespace behavior_velocity_planner

@@ -16,7 +16,13 @@
 
 #include <cmath>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 KinematicsBicycleModelNoDelay::KinematicsBicycleModelNoDelay(
   const double wheelbase, const double steer_lim)
@@ -59,4 +65,7 @@ void KinematicsBicycleModelNoDelay::calculateReferenceInput(Eigen::MatrixXd & u_
 {
   u_ref(0, 0) = std::atan(m_wheelbase * m_curvature);
 }
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

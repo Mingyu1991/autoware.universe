@@ -312,7 +312,7 @@ Trajectory PIDBasedPlanner::planCruise(
         0);
       tier4_autoware_utils::appendMarkerArray(markers, &debug_data.cruise_wall_marker);
 
-      // cruise obstacle
+      // cruise obstalce
       debug_data.obstacles_to_cruise.push_back(cruise_obstacle_info->obstacle);
     }
 

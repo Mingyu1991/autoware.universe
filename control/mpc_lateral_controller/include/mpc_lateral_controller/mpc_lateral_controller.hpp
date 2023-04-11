@@ -22,7 +22,6 @@
 #include "mpc_lateral_controller/mpc_utils.hpp"
 #include "mpc_lateral_controller/qp_solver/qp_solver_osqp.hpp"
 #include "mpc_lateral_controller/qp_solver/qp_solver_unconstr_fast.hpp"
-#include "mpc_lateral_controller/steering_offset/steering_offset.hpp"
 #include "mpc_lateral_controller/vehicle_model/vehicle_model_bicycle_dynamics.hpp"
 #include "mpc_lateral_controller/vehicle_model/vehicle_model_bicycle_kinematics.hpp"
 #include "mpc_lateral_controller/vehicle_model/vehicle_model_bicycle_kinematics_no_delay.hpp"
@@ -49,7 +48,13 @@
 #include <string>
 #include <vector>
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 
 namespace trajectory_follower = ::autoware::motion::control::trajectory_follower;
@@ -74,7 +79,6 @@ private:
   rclcpp::Publisher<autoware_auto_planning_msgs::msg::Trajectory>::SharedPtr m_pub_predicted_traj;
   //!< @brief topic publisher for control debug values
   rclcpp::Publisher<tier4_debug_msgs::msg::Float32MultiArrayStamped>::SharedPtr m_pub_debug_values;
-  rclcpp::Publisher<tier4_debug_msgs::msg::Float32Stamped>::SharedPtr m_pub_steer_offset;
   //!< @brief subscription for transform messages
   rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr m_tf_sub;
   rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr m_tf_static_sub;
@@ -130,10 +134,6 @@ private:
   // ego nearest index search
   double m_ego_nearest_dist_threshold;
   double m_ego_nearest_yaw_threshold;
-
-  // for steering offset compensation
-  bool enable_auto_steering_offset_removal_;
-  std::shared_ptr<SteeringOffsetEstimator> steering_offset_;
 
   //!< initialize timer to work in real, simulation, and replay
   void initTimer(double period_s);
@@ -212,6 +212,9 @@ private:
   rcl_interfaces::msg::SetParametersResult paramCallback(
     const std::vector<rclcpp::Parameter> & parameters);
 };
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 
 #endif  // MPC_LATERAL_CONTROLLER__MPC_LATERAL_CONTROLLER_HPP_

@@ -20,7 +20,13 @@
 #include <iostream>
 #include <vector>
 
-namespace autoware::motion::control::pid_longitudinal_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace pid_longitudinal_controller
 {
 
 /**
@@ -62,5 +68,8 @@ public:
     return ret;
   }
 };
-}  // namespace autoware::motion::control::pid_longitudinal_controller
+}  // namespace pid_longitudinal_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 #endif  // PID_LONGITUDINAL_CONTROLLER__LOWPASS_FILTER_HPP_

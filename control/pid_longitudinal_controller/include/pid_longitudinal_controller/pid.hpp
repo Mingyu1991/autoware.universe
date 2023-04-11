@@ -17,7 +17,13 @@
 
 #include <vector>
 
-namespace autoware::motion::control::pid_longitudinal_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace pid_longitudinal_controller
 {
 
 /// @brief implementation of a PID controller
@@ -89,6 +95,9 @@ private:
   bool m_is_gains_set;
   bool m_is_limits_set;
 };
-}  // namespace autoware::motion::control::pid_longitudinal_controller
+}  // namespace pid_longitudinal_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware
 
 #endif  // PID_LONGITUDINAL_CONTROLLER__PID_HPP_

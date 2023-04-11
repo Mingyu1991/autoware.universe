@@ -14,8 +14,6 @@
 
 #include "state.hpp"
 
-#include "util.hpp"
-
 #include <motion_utils/motion_utils.hpp>
 #include <tier4_autoware_utils/tier4_autoware_utils.hpp>
 
@@ -71,7 +69,7 @@ AutonomousMode::AutonomousMode(rclcpp::Node * node)
   // params for mode change completed
   {
     auto & p = stable_check_param_;
-    p.duration = node->get_parameter("stable_check.duration").as_double();
+    p.duration = node->declare_parameter<double>("stable_check.duration");
     p.dist_threshold = node->declare_parameter<double>("stable_check.dist_threshold");
     p.speed_upper_threshold = node->declare_parameter<double>("stable_check.speed_upper_threshold");
     p.speed_lower_threshold = node->declare_parameter<double>("stable_check.speed_lower_threshold");
@@ -199,7 +197,7 @@ std::pair<bool, bool> AutonomousMode::hasDangerLateralAcceleration()
 bool AutonomousMode::isModeChangeAvailable()
 {
   if (!check_engage_condition_) {
-    setAllOk(debug_info_);
+    debug_info_.is_all_ok = true;
     return true;
   }
 

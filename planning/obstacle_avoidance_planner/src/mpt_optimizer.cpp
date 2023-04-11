@@ -43,16 +43,13 @@ geometry_msgs::msg::Pose convertRefPointsToPose(const ReferencePoint & ref_point
 }
 
 std::tuple<Eigen::VectorXd, Eigen::VectorXd> extractBounds(
-  const std::vector<ReferencePoint> & ref_points, const size_t l_idx,
-  const VehicleParam & vehicle_param_)
+  const std::vector<ReferencePoint> & ref_points, const size_t l_idx, const double offset)
 {
-  const double base_to_right = (vehicle_param_.wheel_tread / 2.0) + vehicle_param_.right_overhang;
-  const double base_to_left = (vehicle_param_.wheel_tread / 2.0) + vehicle_param_.left_overhang;
   Eigen::VectorXd ub_vec(ref_points.size());
   Eigen::VectorXd lb_vec(ref_points.size());
   for (size_t i = 0; i < ref_points.size(); ++i) {
-    ub_vec(i) = ref_points.at(i).vehicle_bounds.at(l_idx).upper_bound + base_to_left;
-    lb_vec(i) = ref_points.at(i).vehicle_bounds.at(l_idx).lower_bound - base_to_right;
+    ub_vec(i) = ref_points.at(i).vehicle_bounds.at(l_idx).upper_bound + offset;
+    lb_vec(i) = ref_points.at(i).vehicle_bounds.at(l_idx).lower_bound - offset;
   }
   return {ub_vec, lb_vec};
 }
@@ -314,15 +311,6 @@ boost::optional<MPTOptimizer::MPTTrajs> MPTOptimizer::getModelPredictiveTrajecto
       RCLCPP_ERROR(
         rclcpp::get_logger("mpt_optimizer"),
         "return boost::none since lateral deviation is too large.");
-      return boost::none;
-    }
-  }
-  constexpr double max_yaw_deviation = 50.0 / 180 * 3.14;
-  for (const double yaw_error : debug_data.yaw_errors) {
-    if (max_yaw_deviation < std::abs(yaw_error)) {
-      RCLCPP_ERROR(
-        rclcpp::get_logger("mpt_optimizer"),
-        "return boost::none since yaw deviation is too large.");
       return boost::none;
     }
   }
@@ -1066,7 +1054,9 @@ MPTOptimizer::ConstraintMatrix MPTOptimizer::getConstraintMatrix(
     const Eigen::VectorXd CW = C_sparse_mat * mpt_mat.Wex + C_vec;
 
     // calculate bounds
-    const auto & [part_ub, part_lb] = extractBounds(ref_points, l_idx, vehicle_param_);
+    const double bounds_offset =
+      vehicle_param_.width / 2.0 - mpt_param_.vehicle_circle_radiuses.at(l_idx);
+    const auto & [part_ub, part_lb] = extractBounds(ref_points, l_idx, bounds_offset);
 
     // soft constraints
     if (mpt_param_.soft_constraint) {
@@ -1207,7 +1197,6 @@ std::vector<autoware_auto_planning_msgs::msg::TrajectoryPoint> MPTOptimizer::get
     ref_pose.orientation = tier4_autoware_utils::createQuaternionFromYaw(ref_point.yaw);
     debug_data.mpt_ref_poses.push_back(ref_pose);
     debug_data.lateral_errors.push_back(lat_error);
-    debug_data.yaw_errors.push_back(yaw_error);
 
     ref_point.optimized_kinematic_state << lat_error_vec.at(i), yaw_error_vec.at(i);
     if (i >= fixed_ref_points.size()) {
@@ -1412,8 +1401,7 @@ void MPTOptimizer::calcBounds(
                                          mpt_param_.soft_clearance_from_road +
                                          mpt_param_.extra_desired_clearance_from_road;
   */
-  const double base_to_right = (vehicle_param_.wheel_tread / 2.0) + vehicle_param_.right_overhang;
-  const double base_to_left = (vehicle_param_.wheel_tread / 2.0) + vehicle_param_.left_overhang;
+  const double min_soft_road_clearance = vehicle_param_.width / 2.0;
 
   // search bounds candidate for each ref points
   debug_data.bounds_candidates.clear();
@@ -1429,9 +1417,11 @@ void MPTOptimizer::calcBounds(
     const Eigen::Vector2d left_point = current_ref_point + left_vertical_vec.normalized() * 5.0;
     const Eigen::Vector2d right_point = current_ref_point + right_vertical_vec.normalized() * 5.0;
     const double lat_dist_to_left_bound = std::min(
-      calcLateralDistToBound(current_ref_point, left_point, left_bound) - base_to_left, 5.0);
+      calcLateralDistToBound(current_ref_point, left_point, left_bound) - min_soft_road_clearance,
+      5.0);
     const double lat_dist_to_right_bound = std::max(
-      calcLateralDistToBound(current_ref_point, right_point, right_bound, true) + base_to_right,
+      calcLateralDistToBound(current_ref_point, right_point, right_bound, true) +
+        min_soft_road_clearance,
       -5.0);
 
     ref_points.at(i).bounds = Bounds{
@@ -1444,11 +1434,11 @@ void MPTOptimizer::calcBounds(
   const double lat_dist_to_left_bound =
     -motion_utils::calcLateralOffset(
       left_bound, convertRefPointsToPose(ref_points.back()).position) -
-    base_to_left;
+    min_soft_road_clearance;
   const double lat_dist_to_right_bound =
     -motion_utils::calcLateralOffset(
       right_bound, convertRefPointsToPose(ref_points.back()).position) +
-    base_to_right;
+    min_soft_road_clearance;
   ref_points.back().bounds = Bounds{
     lat_dist_to_right_bound, lat_dist_to_left_bound, CollisionType::NO_COLLISION,
     CollisionType::NO_COLLISION};
@@ -1472,8 +1462,8 @@ void MPTOptimizer::calcVehicleBounds(
     return;
   }
 
-  SplineInterpolationPoints2d ref_points_spline_interpolation(
-    points_utils::convertToPoints(ref_points));
+  SplineInterpolationPoints2d ref_points_spline_interpolation;
+  ref_points_spline_interpolation.calcSplineCoefficients(points_utils::convertToPoints(ref_points));
 
   for (size_t p_idx = 0; p_idx < ref_points.size(); ++p_idx) {
     const auto & ref_point = ref_points.at(p_idx);

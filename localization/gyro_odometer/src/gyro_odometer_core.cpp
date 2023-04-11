@@ -80,7 +80,6 @@ geometry_msgs::msg::TwistWithCovarianceStamped concatGyroAndOdometer(
   } else {
     twist_with_cov.header.stamp = latest_vehicle_twist_stamp;
   }
-  twist_with_cov.header.frame_id = gyro_queue.front().header.frame_id;
   twist_with_cov.twist.twist.linear.x = vx_mean;
   twist_with_cov.twist.twist.angular = gyro_mean;
 
@@ -100,8 +99,8 @@ geometry_msgs::msg::TwistWithCovarianceStamped concatGyroAndOdometer(
   return twist_with_cov;
 }
 
-GyroOdometer::GyroOdometer(const rclcpp::NodeOptions & options)
-: Node("gyro_odometer", options),
+GyroOdometer::GyroOdometer()
+: Node("gyro_odometer"),
   output_frame_(declare_parameter("base_link", "base_link")),
   message_timeout_sec_(declare_parameter("message_timeout_sec", 0.2)),
   vehicle_twist_arrived_(false),
@@ -212,7 +211,6 @@ void GyroOdometer::callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr imu_m
 
   sensor_msgs::msg::Imu gyro_base_link;
   gyro_base_link.header = imu_msg_ptr->header;
-  gyro_base_link.header.frame_id = output_frame_;
   gyro_base_link.angular_velocity = transformed_angular_velocity.vector;
   gyro_base_link.angular_velocity_covariance =
     transformCovariance(imu_msg_ptr->angular_velocity_covariance);

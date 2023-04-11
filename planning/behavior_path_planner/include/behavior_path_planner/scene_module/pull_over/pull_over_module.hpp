@@ -15,13 +15,13 @@
 #ifndef BEHAVIOR_PATH_PLANNER__SCENE_MODULE__PULL_OVER__PULL_OVER_MODULE_HPP_
 #define BEHAVIOR_PATH_PLANNER__SCENE_MODULE__PULL_OVER__PULL_OVER_MODULE_HPP_
 
+#include "behavior_path_planner/scene_module/pull_over/geometric_pull_over.hpp"
+#include "behavior_path_planner/scene_module/pull_over/goal_searcher.hpp"
+#include "behavior_path_planner/scene_module/pull_over/pull_over_parameters.hpp"
+#include "behavior_path_planner/scene_module/pull_over/shift_pull_over.hpp"
 #include "behavior_path_planner/scene_module/scene_module_interface.hpp"
-#include "behavior_path_planner/util/geometric_parallel_parking/geometric_parallel_parking.hpp"
-#include "behavior_path_planner/util/occupancy_grid_based_collision_detector/occupancy_grid_based_collision_detector.hpp"
-#include "behavior_path_planner/util/pull_over/geometric_pull_over.hpp"
-#include "behavior_path_planner/util/pull_over/goal_searcher.hpp"
-#include "behavior_path_planner/util/pull_over/pull_over_parameters.hpp"
-#include "behavior_path_planner/util/pull_over/shift_pull_over.hpp"
+#include "behavior_path_planner/scene_module/utils/geometric_parallel_parking.hpp"
+#include "behavior_path_planner/scene_module/utils/occupancy_grid_based_collision_detector.hpp"
 
 #include <lane_departure_checker/lane_departure_checker.hpp>
 
@@ -105,11 +105,11 @@ private:
   vehicle_info_util::VehicleInfo vehicle_info_;
 
   rclcpp::Subscription<OccupancyGrid>::SharedPtr occupancy_grid_sub_;
+  rclcpp::Publisher<PoseStamped>::SharedPtr goal_pose_pub_;
 
   PUllOverStatus status_;
   std::shared_ptr<OccupancyGridBasedCollisionDetector> occupancy_grid_map_;
-  std::optional<GoalCandidate> modified_goal_pose_;
-  std::optional<size_t> prev_goal_id_;
+  Pose modified_goal_pose_;
   Pose refined_goal_pose_;
   GoalCandidates goal_candidates_;
   std::vector<PullOverPath> pull_over_path_candidates_;

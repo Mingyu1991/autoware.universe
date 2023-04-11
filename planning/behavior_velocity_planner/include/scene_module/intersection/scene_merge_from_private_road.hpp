@@ -31,7 +31,6 @@
 #include <lanelet2_routing/RoutingGraph.h>
 
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -74,8 +73,8 @@ public:
 
   MergeFromPrivateRoadModule(
     const int64_t module_id, const int64_t lane_id, std::shared_ptr<const PlannerData> planner_data,
-    const PlannerParam & planner_param, const std::set<int> & assoc_ids,
-    const rclcpp::Logger logger, const rclcpp::Clock::SharedPtr clock);
+    const PlannerParam & planner_param, const rclcpp::Logger logger,
+    const rclcpp::Clock::SharedPtr clock);
 
   /**
    * @brief plan go-stop velocity at traffic crossing with collision check between reference path
@@ -86,26 +85,21 @@ public:
   visualization_msgs::msg::MarkerArray createDebugMarkerArray() override;
   visualization_msgs::msg::MarkerArray createVirtualWallMarkerArray() override;
 
-  const std::set<int> & getAssocIds() const { return assoc_ids_; }
-
 private:
-  const int64_t lane_id_;
-  const std::set<int> assoc_ids_;
+  int64_t lane_id_;
+  std::string turn_direction_;
+  bool has_traffic_light_;
 
   autoware_auto_planning_msgs::msg::PathWithLaneId extractPathNearExitOfPrivateRoad(
     const autoware_auto_planning_msgs::msg::PathWithLaneId & path, const double extend_length);
 
   // Parameter
   PlannerParam planner_param_;
-  std::optional<util::IntersectionLanelets> intersection_lanelets_;
 
   StateMachine state_machine_;  //! for state
 
   // Debug
   mutable DebugData debug_data_;
-
-  std::shared_ptr<motion_utils::VirtualWallMarkerCreator> virtual_wall_marker_creator_ =
-    std::make_shared<motion_utils::VirtualWallMarkerCreator>();
 };
 }  // namespace behavior_velocity_planner
 

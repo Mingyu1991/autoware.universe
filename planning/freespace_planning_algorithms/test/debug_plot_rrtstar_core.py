@@ -97,6 +97,7 @@ class Tree:
 
 
 if __name__ == "__main__":
+
     with open("/tmp/rrt_result.txt", "r") as f:
         dict_data = json.load(f)
     tree = Tree.from_dict(dict_data)

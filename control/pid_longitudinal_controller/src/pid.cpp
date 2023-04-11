@@ -20,7 +20,13 @@
 #include <utility>
 #include <vector>
 
-namespace autoware::motion::control::pid_longitudinal_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace pid_longitudinal_controller
 {
 PIDController::PIDController()
 : m_error_integral(0.0),
@@ -102,4 +108,7 @@ void PIDController::reset()
   m_prev_error = 0.0;
   m_is_first_time = true;
 }
-}  // namespace autoware::motion::control::pid_longitudinal_controller
+}  // namespace pid_longitudinal_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

@@ -59,23 +59,22 @@ lanelet::ConstLanelet combine_lanelets(const lanelet::ConstLanelets & lanelets)
   lanelet::Points3d lefts;
   lanelet::Points3d rights;
   lanelet::Points3d centers;
-  std::vector<uint64_t> left_bound_ids;
-  std::vector<uint64_t> right_bound_ids;
+  std::vector<uint64_t> bound_ids;
 
   for (const auto & llt : lanelets) {
     if (llt.id() != 0) {
-      left_bound_ids.push_back(llt.leftBound().id());
-      right_bound_ids.push_back(llt.rightBound().id());
+      bound_ids.push_back(llt.leftBound().id());
+      bound_ids.push_back(llt.rightBound().id());
     }
   }
 
   for (const auto & llt : lanelets) {
-    if (std::count(right_bound_ids.begin(), right_bound_ids.end(), llt.leftBound().id()) < 1) {
+    if (std::count(bound_ids.begin(), bound_ids.end(), llt.leftBound().id()) < 2) {
       for (const auto & pt : llt.leftBound()) {
         lefts.push_back(lanelet::Point3d(pt));
       }
     }
-    if (std::count(left_bound_ids.begin(), left_bound_ids.end(), llt.rightBound().id()) < 1) {
+    if (std::count(bound_ids.begin(), bound_ids.end(), llt.rightBound().id()) < 2) {
       for (const auto & pt : llt.rightBound()) {
         rights.push_back(lanelet::Point3d(pt));
       }

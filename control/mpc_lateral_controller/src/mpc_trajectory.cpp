@@ -14,7 +14,13 @@
 
 #include "mpc_lateral_controller/mpc_trajectory.hpp"
 
-namespace autoware::motion::control::mpc_lateral_controller
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace mpc_lateral_controller
 {
 void MPCTrajectory::push_back(
   const double & xp, const double & yp, const double & zp, const double & yawp, const double & vxp,
@@ -54,4 +60,7 @@ size_t MPCTrajectory::size() const
     return 0;
   }
 }
-}  // namespace autoware::motion::control::mpc_lateral_controller
+}  // namespace mpc_lateral_controller
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

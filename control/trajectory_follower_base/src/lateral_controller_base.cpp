@@ -14,11 +14,20 @@
 
 #include "trajectory_follower_base/lateral_controller_base.hpp"
 
-namespace autoware::motion::control::trajectory_follower
+namespace autoware
+{
+namespace motion
+{
+namespace control
+{
+namespace trajectory_follower
 {
 void LateralControllerBase::sync(LongitudinalSyncData const & longitudinal_sync_data)
 {
   longitudinal_sync_data_ = longitudinal_sync_data;
 }
 
-}  // namespace autoware::motion::control::trajectory_follower
+}  // namespace trajectory_follower
+}  // namespace control
+}  // namespace motion
+}  // namespace autoware

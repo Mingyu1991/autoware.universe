@@ -102,7 +102,7 @@ PathWithLaneId LaneFollowingModule::getReferencePath() const
   PathWithLaneId reference_path{};
 
   const auto & route_handler = planner_data_->route_handler;
-  const auto current_pose = planner_data_->self_odometry->pose.pose;
+  const auto current_pose = planner_data_->self_pose->pose;
   const auto p = planner_data_->parameters;
 
   // Set header
@@ -133,7 +133,7 @@ PathWithLaneId LaneFollowingModule::getReferencePath() const
     p.forward_path_length, p);
 
   // clip backward length
-  const size_t current_seg_idx = planner_data_->findEgoSegmentIndex(reference_path.points);
+  const size_t current_seg_idx = findEgoSegmentIndex(reference_path.points);
   util::clipPathLength(
     reference_path, current_seg_idx, p.forward_path_length, p.backward_path_length);
   const auto drivable_lanelets = getLaneletsFromPath(reference_path, route_handler);
@@ -142,8 +142,17 @@ PathWithLaneId LaneFollowingModule::getReferencePath() const
   {
     const int num_lane_change =
       std::abs(route_handler->getNumLaneToPreferredLane(current_lanes.back()));
+    double optional_lengths{0.0};
+    const auto isInIntersection = util::checkLaneIsInIntersection(
+      *route_handler, reference_path, current_lanes, p, num_lane_change, optional_lengths);
+    if (isInIntersection) {
+      reference_path = util::getCenterLinePath(
+        *route_handler, current_lanes, current_pose, p.backward_path_length, p.forward_path_length,
+        p, optional_lengths);
+    }
 
-    const double lane_change_buffer = util::calcLaneChangeBuffer(p, num_lane_change);
+    const double lane_change_buffer =
+      util::calcLaneChangeBuffer(p, num_lane_change, optional_lengths);
 
     reference_path = util::setDecelerationVelocity(
       *route_handler, reference_path, current_lanes, parameters_.lane_change_prepare_duration,
@@ -154,7 +163,7 @@ PathWithLaneId LaneFollowingModule::getReferencePath() const
 
   const auto expanded_lanes = util::expandLanelets(
     shorten_lanes, parameters_.drivable_area_left_bound_offset,
-    parameters_.drivable_area_right_bound_offset, parameters_.drivable_area_types_to_skip);
+    parameters_.drivable_area_right_bound_offset);
 
   util::generateDrivableArea(reference_path, expanded_lanes, p.vehicle_length, planner_data_);
 

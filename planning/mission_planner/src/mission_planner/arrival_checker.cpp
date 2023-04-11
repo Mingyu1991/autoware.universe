@@ -18,6 +18,9 @@
 
 #include <tf2/utils.h>
 
+// TODO(Takagi, Isamu): remove when modified goal is always published
+#include <memory>
+
 namespace mission_planner
 {
 
@@ -28,48 +31,40 @@ ArrivalChecker::ArrivalChecker(rclcpp::Node * node) : vehicle_stop_checker_(node
   distance_ = node->declare_parameter<double>("arrival_check_distance");
   duration_ = node->declare_parameter<double>("arrival_check_duration");
 
-  sub_goal_ = node->create_subscription<PoseWithUuidStamped>(
+  sub_goal_ = node->create_subscription<geometry_msgs::msg::PoseStamped>(
     "input/modified_goal", 1,
-    [this](const PoseWithUuidStamped::ConstSharedPtr msg) { modify_goal(*msg); });
+    [this](const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) { goal_pose_ = msg; });
 }
 
-void ArrivalChecker::set_goal()
+void ArrivalChecker::reset_goal()
 {
-  // Ignore the modified goal after the route is cleared.
-  goal_with_uuid_ = std::nullopt;
+  // Disable checking until the modified goal is received.
+  goal_pose_.reset();
 }
 
-void ArrivalChecker::set_goal(const PoseWithUuidStamped & goal)
+// TODO(Takagi, Isamu): remove when modified goal is always published
+void ArrivalChecker::reset_goal(const geometry_msgs::msg::PoseStamped & goal)
 {
-  // Ignore the modified goal for the previous route using uuid.
-  goal_with_uuid_ = goal;
+  const auto pose = std::make_shared<geometry_msgs::msg::PoseStamped>();
+  *pose = goal;
+  goal_pose_ = pose;
 }
 
-void ArrivalChecker::modify_goal(const PoseWithUuidStamped & modified_goal)
+bool ArrivalChecker::is_arrived(const geometry_msgs::msg::PoseStamped & pose) const
 {
-  if (!goal_with_uuid_) {
-    return;
-  }
-  if (goal_with_uuid_.value().uuid.uuid != modified_goal.uuid.uuid) {
-    return;
-  }
-  set_goal(modified_goal);
-}
-
-bool ArrivalChecker::is_arrived(const PoseStamped & pose) const
-{
-  if (!goal_with_uuid_) {
+  // Check if the modified goal is received.
+  if (goal_pose_ == nullptr) {
     return false;
   }
-  const auto goal = goal_with_uuid_.value();
+  const auto & goal = *goal_pose_;
 
-  // Check frame id
+  // Check frame_id.
   if (goal.header.frame_id != pose.header.frame_id) {
     return false;
   }
 
   // Check distance.
-  if (distance_ < tier4_autoware_utils::calcDistance2d(pose.pose, goal.pose)) {
+  if (distance_ < tier4_autoware_utils::calcDistance2d(pose, goal)) {
     return false;
   }
 
