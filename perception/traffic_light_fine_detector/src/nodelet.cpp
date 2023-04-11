@@ -60,6 +60,7 @@ TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
   int num_class = 2;
   using std::placeholders::_1;
   using std::placeholders::_2;
+  using std::placeholders::_3;
 
   std::string model_path = declare_parameter("fine_detection_onnx_file", "");
   std::string label_path = declare_parameter("fine_detection_label_file", "");
@@ -84,17 +85,17 @@ TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
 
   std::lock_guard<std::mutex> lock(connect_mutex_);
   output_roi_pub_ =
-    this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
+    this->create_publisher<TrafficLightRoiArray>(
       "~/output/rois", 1);
   exe_time_pub_ =
     this->create_publisher<tier4_debug_msgs::msg::Float32Stamped>("~/debug/exe_time_ms", 1);
   if (is_approximate_sync_) {
-    approximate_sync_.reset(new ApproximateSync(ApproximateSyncPolicy(10), image_sub_, roi_sub_));
+    approximate_sync_.reset(new ApproximateSync(ApproximateSyncPolicy(10), image_sub_, rough_roi_sub_, expect_roi_sub_));
     approximate_sync_->registerCallback(
-      std::bind(&TrafficLightFineDetectorNodelet::callback, this, _1, _2));
+      std::bind(&TrafficLightFineDetectorNodelet::callback, this, _1, _2, _3));
   } else {
-    sync_.reset(new Sync(SyncPolicy(10), image_sub_, roi_sub_));
-    sync_->registerCallback(std::bind(&TrafficLightFineDetectorNodelet::callback, this, _1, _2));
+    sync_.reset(new Sync(SyncPolicy(10), image_sub_, rough_roi_sub_, expect_roi_sub_));
+    sync_->registerCallback(std::bind(&TrafficLightFineDetectorNodelet::callback, this, _1, _2, _3));
   }
 }
 
@@ -103,16 +104,19 @@ void TrafficLightFineDetectorNodelet::connectCb()
   std::lock_guard<std::mutex> lock(connect_mutex_);
   if (output_roi_pub_->get_subscription_count() == 0) {
     image_sub_.unsubscribe();
-    roi_sub_.unsubscribe();
+    rough_roi_sub_.unsubscribe();
+    expect_roi_sub_.unsubscribe();
   } else if (!image_sub_.getSubscriber()) {
     image_sub_.subscribe(this, "~/input/image", "raw", rmw_qos_profile_sensor_data);
-    roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
+    rough_roi_sub_.subscribe(this, "~/input/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
+    expect_roi_sub_.subscribe(this, "~/expect/rois", rclcpp::QoS{1}.get_rmw_qos_profile());
   }
 }
 
 void TrafficLightFineDetectorNodelet::callback(
   const sensor_msgs::msg::Image::ConstSharedPtr in_image_msg,
-  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg)
+    const TrafficLightRoiArray::ConstSharedPtr rough_roi_msg,
+    const TrafficLightRoiArray::ConstSharedPtr expect_roi_msg)
 {
   if (in_image_msg->width < 2 || in_image_msg->height < 2) {
     return;
@@ -122,13 +126,15 @@ void TrafficLightFineDetectorNodelet::callback(
   using std::chrono::milliseconds;
   const auto exe_start_time = high_resolution_clock::now();
   cv::Mat original_image;
-  autoware_auto_perception_msgs::msg::TrafficLightRoiArray out_rois;
-  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> id2roughRoi;
+  TrafficLightRoiArray out_rois;
+  std::map<int, TrafficLightRoi> id2expectRoi;
   std::map<int, tensorrt_yolox::ObjectArray> id2detections;
+  for(const auto & expect_roi : expect_roi_msg->rois){
+    id2expectRoi[expect_roi.id] = expect_roi;
+  }
 
   rosMsg2CvMat(in_image_msg, original_image, "bgr8");
-  for (const auto & rough_roi : in_roi_msg->rois) {
-    id2roughRoi[rough_roi.id] = rough_roi;
+  for (const auto & rough_roi : rough_roi_msg->rois) {
     cv::Point lt(rough_roi.roi.x_offset, rough_roi.roi.y_offset);
     cv::Point rb(
       rough_roi.roi.x_offset + rough_roi.roi.width, rough_roi.roi.y_offset + rough_roi.roi.height);
@@ -154,8 +160,8 @@ void TrafficLightFineDetectorNodelet::callback(
       id2detections[rough_roi.id].push_back(det);
     }
   }
-  detectionMatch(id2roughRoi, id2detections, out_rois);
-  out_rois.header = in_roi_msg->header;
+  detectionMatch(id2expectRoi, id2detections, out_rois);
+  out_rois.header = rough_roi_msg->header;
   output_roi_pub_->publish(out_rois);
   const auto exe_end_time = high_resolution_clock::now();
   const double exe_time =
@@ -167,16 +173,16 @@ void TrafficLightFineDetectorNodelet::callback(
 }
 
 float TrafficLightFineDetectorNodelet::evalMatchScore(
-  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> & id2roughRoi,
+  std::map<int, TrafficLightRoi> & id2expectRoi,
   std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
   std::map<int, tensorrt_yolox::Object> & id2bestDetection)
 {
   float score_sum = 0.0f;
   id2bestDetection.clear();
-  for (const auto & rough_roi_p : id2roughRoi) {
-    int tlr_id = rough_roi_p.first;
+  for (const auto & roi_p : id2expectRoi) {
+    int tlr_id = roi_p.first;
     float max_score = 0.0f;
-    const sensor_msgs::msg::RegionOfInterest & expected_roi = rough_roi_p.second.expect_roi;
+    const sensor_msgs::msg::RegionOfInterest & expected_roi = roi_p.second.roi;
     for (const tensorrt_yolox::Object & detection : id2detections[tlr_id]) {
       float score = ::calWeightedIou(expected_roi, detection);
       if (score > max_score) {
@@ -190,16 +196,16 @@ float TrafficLightFineDetectorNodelet::evalMatchScore(
 }
 
 void TrafficLightFineDetectorNodelet::detectionMatch(
-  std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> & id2roughRoi,
+  std::map<int, TrafficLightRoi> & id2expectRoi,
   std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
-  autoware_auto_perception_msgs::msg::TrafficLightRoiArray & out_rois)
+  TrafficLightRoiArray & out_rois)
 {
   float max_score = 0.0f;
   std::map<int, tensorrt_yolox::Object> bestDetections;
-  for (const auto & rough_roi_pair : id2roughRoi) {
-    int tlr_id = rough_roi_pair.first;
+  for (const auto & roi_pair : id2expectRoi) {
+    int tlr_id = roi_pair.first;
     // the expected roi calculated from tf information
-    const sensor_msgs::msg::RegionOfInterest & expect_roi = rough_roi_pair.second.expect_roi;
+    const sensor_msgs::msg::RegionOfInterest & expect_roi = roi_pair.second.roi;
     int expect_cx = expect_roi.x_offset + expect_roi.width / 2;
     int expect_cy = expect_roi.y_offset + expect_roi.height / 2;
     for (const tensorrt_yolox::Object & det : id2detections[tlr_id]) {
@@ -210,15 +216,15 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
       int dx = det_cx - expect_cx;
       int dy = det_cy - expect_cy;
       // transfer all the rough rois by the offset
-      std::map<int, autoware_auto_perception_msgs::msg::TrafficLightRoi> id2roughRoi_copy =
-        id2roughRoi;
-      for (auto & p : id2roughRoi_copy) {
-        p.second.expect_roi.x_offset += dx;
-        p.second.expect_roi.y_offset += dy;
+      std::map<int, TrafficLightRoi> id2expectRoi_copy =
+        id2expectRoi;
+      for (auto & p : id2expectRoi_copy) {
+        p.second.roi.x_offset += dx;
+        p.second.roi.y_offset += dy;
       }
       // calculate the "match score" between expected rois and id2detections_copy
       std::map<int, tensorrt_yolox::Object> id2bestDetection;
-      float score = evalMatchScore(id2roughRoi_copy, id2detections, id2bestDetection);
+      float score = evalMatchScore(id2expectRoi_copy, id2detections, id2bestDetection);
       if (score > max_score) {
         max_score = score;
         bestDetections = id2bestDetection;
@@ -228,14 +234,12 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
 
   out_rois.rois.clear();
   for (const auto & p : bestDetections) {
-    autoware_auto_perception_msgs::msg::TrafficLightRoi tlr;
+    TrafficLightRoi tlr;
     tlr.id = p.first;
-    tlr.regulatory_element_id = id2roughRoi[tlr.id].regulatory_element_id;
     tlr.roi.x_offset = p.second.x_offset;
     tlr.roi.y_offset = p.second.y_offset;
     tlr.roi.width = p.second.width;
     tlr.roi.height = p.second.height;
-    tlr.expect_roi = id2roughRoi[tlr.id].expect_roi;
     out_rois.rois.push_back(tlr);
   }
 }

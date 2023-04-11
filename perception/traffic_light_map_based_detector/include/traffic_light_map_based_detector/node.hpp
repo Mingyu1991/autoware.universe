@@ -36,7 +36,6 @@
 #include <lanelet2_extension/regulatory_elements/autoware_traffic_light.hpp>
 #include <lanelet2_extension/utility/query.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <traffic_light_map_based_detector/occlusion_predictor.hpp>
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
@@ -75,9 +74,6 @@ private:
     double max_vibration_height;
     double max_vibration_width;
     double max_vibration_depth;
-    bool use_occlusion_predictor;
-    float azimuth_occlusion_resolution;
-    float elevation_occlusion_resolution;
     int min_cloud_size;
     float max_valid_pt_distance;
   };
@@ -95,13 +91,10 @@ private:
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
   rclcpp::Subscription<autoware_planning_msgs::msg::LaneletRoute>::SharedPtr route_sub_;
-  // used for occlusion prediction
-  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
 
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
+  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr expect_roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
-  // for debug only
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_pub_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
@@ -116,15 +109,9 @@ private:
   lanelet::routing::RoutingGraphPtr routing_graph_ptr_;
   std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
   Config config_;
-  /**
-   * @brief main class for calculating the occlusion probability
-   *
-   */
-  std::shared_ptr<CloudOcclusionPredictor> cloud_occlusion_predictor_;
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg);
-  void pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
   void routeCallback(const autoware_planning_msgs::msg::LaneletRoute::ConstSharedPtr input_msg);
   void getVisibleTrafficLights(
     const TrafficLightSet & all_traffic_lights, const tf2::Transform & tf_map2camera,
@@ -134,8 +121,8 @@ private:
     const tf2::Transform & tf_map2camera,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const lanelet::ConstLineString3d traffic_light, const Config & config,
-    autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi, tf2::Vector3 & roi_tl_3d,
-    tf2::Vector3 & roi_br_3d, int & visible_ratio);
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & rough_roi,
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & expect_roi);
   void publishVisibleTrafficLights(
     const tf2::Transform & tf_map2camera, const std_msgs::msg::Header & cam_info_header,
     const std::vector<lanelet::ConstLineString3d> & visible_traffic_lights,

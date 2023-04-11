@@ -123,11 +123,6 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   config_.max_vibration_height = declare_parameter<double>("max_vibration_height", 0.0);
   config_.max_vibration_width = declare_parameter<double>("max_vibration_width", 0.0);
   config_.max_vibration_depth = declare_parameter<double>("max_vibration_depth", 0.0);
-  config_.use_occlusion_predictor = declare_parameter<bool>("use_occlusion_predictor", false);
-  config_.azimuth_occlusion_resolution =
-    declare_parameter<float>("azimuth_occlusion_resolution", 0.15);
-  config_.elevation_occlusion_resolution =
-    declare_parameter<float>("elevation_occlusion_resolution", 0.08);
   config_.min_cloud_size = declare_parameter<int>("min_cloud_size", 100000);
   config_.max_valid_pt_distance = declare_parameter<float>("max_valid_pt_distance", 50.0);
 
@@ -145,17 +140,9 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   // publishers
   roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
     "~/output/rois", 1);
+  expect_roi_pub_ = this->create_publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>(
+    "~/expect/rois", 1);
   viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/debug/markers", 1);
-  point_cloud_pub_ =
-    this->create_publisher<sensor_msgs::msg::PointCloud2>("~/map_based_detector/debug_cloud", 1);
-  if (config_.use_occlusion_predictor) {
-    cloud_occlusion_predictor_ = std::make_shared<CloudOcclusionPredictor>(
-      config_.max_valid_pt_distance, config_.azimuth_occlusion_resolution,
-      config_.elevation_occlusion_resolution);
-    point_cloud_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-      "~/input/cloud", rclcpp::SensorDataQoS(),
-      std::bind(&MapBasedDetector::pointCloudCallback, this, _1));
-  }
 }
 
 void MapBasedDetector::cameraInfoCallback(
@@ -170,6 +157,8 @@ void MapBasedDetector::cameraInfoCallback(
 
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray output_msg;
   output_msg.header = input_msg->header;
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray expect_roi_msg;
+  expect_roi_msg = output_msg;
 
   /* Camera pose */
   tf2::Transform tf_map2camera;
@@ -206,53 +195,27 @@ void MapBasedDetector::cameraInfoCallback(
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.
    */
-
-  std::vector<tf2::Vector3> roi_tls, roi_brs;
-  std::vector<int> visible_ratios;
   for (const auto & traffic_light : visible_traffic_lights) {
-    autoware_auto_perception_msgs::msg::TrafficLightRoi tl_roi;
-    tf2::Vector3 roi_tl, roi_br;
-    int visible_ratio;
+    autoware_auto_perception_msgs::msg::TrafficLightRoi rough_roi, expect_roi;
     if (!getTrafficLightRoi(
-          tf_map2camera, pinhole_camera_model, traffic_light, config_, tl_roi, roi_tl, roi_br,
-          visible_ratio)) {
+          tf_map2camera, pinhole_camera_model, traffic_light, config_, rough_roi, expect_roi)) {
       continue;
     }
-    output_msg.rois.push_back(tl_roi);
-    roi_tls.push_back(roi_tl);
-    roi_brs.push_back(roi_br);
-    visible_ratios.push_back(visible_ratio);
-  }
-  if (cloud_occlusion_predictor_) {
-    std::vector<int> occlusion_ratios;
-    cloud_occlusion_predictor_->predict(*input_msg, tf_buffer_, roi_tls, roi_brs, occlusion_ratios);
-    point_cloud_pub_->publish(cloud_occlusion_predictor_->debug(*input_msg));
-    assert(occlusion_ratios.size() == visible_ratios.size());
-    for (size_t i = 0; i < visible_ratios.size(); i++) {
-      visible_ratios[i] = std::min(visible_ratios[i], 100 - occlusion_ratios[i]);
-      output_msg.rois[i].visible_ratio = visible_ratios[i];
-    }
+    output_msg.rois.push_back(rough_roi);
+    expect_roi_msg.rois.push_back(expect_roi);
   }
 
   roi_pub_->publish(output_msg);
+  expect_roi_pub_->publish(expect_roi_msg);
   publishVisibleTrafficLights(tf_map2camera, input_msg->header, visible_traffic_lights, viz_pub_);
-}
-
-void MapBasedDetector::pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
-{
-  // sometimes the top lidar doesn't publish any point and necessary to filter it out
-  int cloud_size = msg->width * msg->height;
-  if (cloud_size >= config_.min_cloud_size) {
-    cloud_occlusion_predictor_->receivePointCloud(msg);
-  }
 }
 
 bool MapBasedDetector::getTrafficLightRoi(
   const tf2::Transform & tf_map2camera,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
   const lanelet::ConstLineString3d traffic_light, const Config & config,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & tl_roi, tf2::Vector3 & roi_tl_3d,
-  tf2::Vector3 & roi_br_3d, int & visible_ratio)
+  autoware_auto_perception_msgs::msg::TrafficLightRoi & rough_roi,
+  autoware_auto_perception_msgs::msg::TrafficLightRoi & expect_roi)
 {
   const double tl_height = traffic_light.attributeOr("height", 0.0);
   // traffic light bottom left
@@ -263,15 +226,8 @@ bool MapBasedDetector::getTrafficLightRoi(
   // image size
   cv::Point2d raw_tl_2d, raw_br_2d;
   // id
-  tl_roi.id = traffic_light.id();
-  if (trafficLightId2RegulatoryEleId_.count(tl_roi.id) == 0) {
-    RCLCPP_WARN_STREAM(
-      get_logger(),
-      "failed to find corresponding regulatory element id for traffic light id: " << tl_roi.id);
-    tl_roi.regulatory_element_id = -1;
-  } else {
-    tl_roi.regulatory_element_id = trafficLightId2RegulatoryEleId_[tl_roi.id];
-  }
+  rough_roi.id = traffic_light.id();
+  expect_roi.id = traffic_light.id();
 
   // for roi.x_offset and roi.y_offset
   {
@@ -290,20 +246,20 @@ bool MapBasedDetector::getTrafficLightRoi(
       }
       cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, camera2tl);
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.expect_roi.x_offset = point2d.x;
-      tl_roi.expect_roi.y_offset = point2d.y;
+      expect_roi.roi.x_offset = point2d.x;
+      expect_roi.roi.y_offset = point2d.y;
     }
     // enlarged target position in camera coordinate
     {
-      roi_tl_3d = camera2tl - tf2::Vector3(max_vibration_x, max_vibration_y, max_vibration_z);
-      if (roi_tl_3d.z() <= 0.0) {
+      tf2::Vector3 point3d = camera2tl - tf2::Vector3(max_vibration_x, max_vibration_y, max_vibration_z);
+      if (point3d.z() <= 0.0) {
         return false;
       }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_tl_3d);
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
       raw_tl_2d = point2d;
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.roi.x_offset = point2d.x;
-      tl_roi.roi.y_offset = point2d.y;
+      rough_roi.roi.x_offset = point2d.x;
+      rough_roi.roi.y_offset = point2d.y;
     }
   }
 
@@ -324,33 +280,26 @@ bool MapBasedDetector::getTrafficLightRoi(
       }
       cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, camera2tl);
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.expect_roi.width = point2d.x - tl_roi.expect_roi.x_offset;
-      tl_roi.expect_roi.height = point2d.y - tl_roi.expect_roi.y_offset;
+      expect_roi.roi.width = point2d.x - expect_roi.roi.x_offset;
+      expect_roi.roi.height = point2d.y - expect_roi.roi.y_offset;
     }
     // enlarged target position in camera coordinate
     {
-      roi_br_3d = camera2tl + tf2::Vector3(max_vibration_x, max_vibration_y, -max_vibration_z);
-      if (roi_br_3d.z() <= 0.0) {
+      tf2::Vector3 point3d = camera2tl + tf2::Vector3(max_vibration_x, max_vibration_y, -max_vibration_z);
+      if (point3d.z() <= 0.0) {
         return false;
       }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, roi_br_3d);
+      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
       raw_br_2d = point2d;
       roundInImageFrame(pinhole_camera_model, point2d);
-      tl_roi.roi.width = point2d.x - tl_roi.roi.x_offset;
-      tl_roi.roi.height = point2d.y - tl_roi.roi.y_offset;
+      rough_roi.roi.width = point2d.x - rough_roi.roi.x_offset;
+      rough_roi.roi.height = point2d.y - rough_roi.roi.y_offset;
     }
 
-    if (tl_roi.roi.width < 1 || tl_roi.roi.height < 1) {
+    if (rough_roi.roi.width < 1 || rough_roi.roi.height < 1) {
       return false;
     }
   }
-  // calculate visible rate from truncate rate
-  int expect_roi_area = static_cast<int>((raw_br_2d.y - raw_tl_2d.y) * (raw_br_2d.x - raw_tl_2d.x));
-  int roi_area = tl_roi.roi.width * tl_roi.roi.height;
-  // expect_roi_area might be smaller than roi_area because of the error caused by conversion from
-  // float to int
-  expect_roi_area = std::max(expect_roi_area, roi_area);
-  visible_ratio = 100 * roi_area / expect_roi_area;
   return true;
 }
 

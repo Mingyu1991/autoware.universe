@@ -15,7 +15,6 @@ include_directories(
 
 ament_auto_add_library(traffic_light_map_based_detector SHARED
   src/node.cpp
-  src/occlusion_predictor.cpp
 )
 
 link_directories(${PCL_LIBRARY_DIRS} )
