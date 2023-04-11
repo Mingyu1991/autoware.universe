@@ -52,6 +52,7 @@ class TrafficLightFineDetectorNodelet : public rclcpp::Node
 {
   using TrafficLightRoi = autoware_auto_perception_msgs::msg::TrafficLightRoi;
   using TrafficLightRoiArray = autoware_auto_perception_msgs::msg::TrafficLightRoiArray;
+
 public:
   explicit TrafficLightFineDetectorNodelet(const rclcpp::NodeOptions & options);
   void connectCb();
@@ -69,8 +70,7 @@ private:
     std::map<int, tensorrt_yolox::Object> & id2bestDetection);
   void detectionMatch(
     std::map<int, TrafficLightRoi> & id2expectRoi,
-    std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
-    TrafficLightRoiArray & out_rois);
+    std::map<int, tensorrt_yolox::ObjectArray> & id2detections, TrafficLightRoiArray & out_rois);
   bool rosMsg2CvMat(
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image,
     std::string encode = "rgb8");
@@ -78,7 +78,6 @@ private:
   bool readLabelFile(const std::string & filepath, int & tlr_id, int & num_class);
 
   // variables
-  std::shared_ptr<image_transport::ImageTransport> image_transport_;
   image_transport::SubscriberFilter image_sub_;
   message_filters::Subscriber<TrafficLightRoiArray> rough_roi_sub_;
   message_filters::Subscriber<TrafficLightRoiArray> expect_roi_sub_;
