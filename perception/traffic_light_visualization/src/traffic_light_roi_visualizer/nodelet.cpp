@@ -213,19 +213,18 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   }
   image_pub_.publish(cv_ptr->toImageMsg());
 
-  // if (input_tl_roi_msg->rois.size()) {
-  //   cv::Mat image = cv_ptr->image;
-  //   cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
-  //   // int width = 1080;
-  //   // int height = width * image.rows / image.cols;
-  //   // cv::resize(image, image, cv::Size(width, height));
+  if (input_tl_roi_msg->rois.size()) {
+    cv::Mat image = cv_ptr->image;
+    cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+    // int width = 1080;
+    // int height = width * image.rows / image.cols;
+    // cv::resize(image, image, cv::Size(width, height));
 
-  //   std::string save_path = "/home/mingyuli/tmp/tl_output/vis_output/" +
-  //                           std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds())
-  //                           +
-  //                           ".jpg";
-  //   cv::imwrite(save_path, image);
-  // }
+    std::string save_path = "/home/mingyu/tmp/vis_output/" +
+                            std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds()) +
+                            ".jpg";
+    cv::imwrite(save_path, image);
+  }
 }
 
 }  // namespace traffic_light

@@ -74,8 +74,8 @@ private:
     double max_vibration_height;
     double max_vibration_width;
     double max_vibration_depth;
-    int min_cloud_size;
-    float max_valid_pt_distance;
+    double min_timestamp_offset;
+    double max_timestamp_offset;
   };
 
   struct IdLessThan
@@ -93,7 +93,8 @@ private:
   rclcpp::Subscription<autoware_planning_msgs::msg::LaneletRoute>::SharedPtr route_sub_;
 
   rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr roi_pub_;
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr expect_roi_pub_;
+  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>::SharedPtr
+    expect_roi_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
 
   tf2_ros::Buffer tf_buffer_;
@@ -110,6 +111,7 @@ private:
   std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
   Config config_;
 
+  bool getTransform(const rclcpp::Time & t, const std::string & frame_id, tf2::Transform & tf);
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
   void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr input_msg);
   void routeCallback(const autoware_planning_msgs::msg::LaneletRoute::ConstSharedPtr input_msg);
@@ -117,6 +119,16 @@ private:
     const TrafficLightSet & all_traffic_lights, const tf2::Transform & tf_map2camera,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     std::vector<lanelet::ConstLineString3d> & visible_traffic_lights);
+  bool getTrafficLightRoi(
+    const tf2::Transform & tf_map2camera,
+    const image_geometry::PinholeCameraModel & pinhole_camera_model,
+    const lanelet::ConstLineString3d traffic_light, const Config & config,
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & roi);
+  bool getTrafficLightRoi(
+    const std::vector<tf2::Transform> & tf_map2camera_vec,
+    const image_geometry::PinholeCameraModel & pinhole_camera_model,
+    const lanelet::ConstLineString3d traffic_light, const Config & config,
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & roi);
   bool getTrafficLightRoi(
     const tf2::Transform & tf_map2camera,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
