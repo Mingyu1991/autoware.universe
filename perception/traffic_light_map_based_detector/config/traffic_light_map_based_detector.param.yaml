@@ -5,8 +5,10 @@
     max_vibration_height: 0.5            # -0.25 ~ 0.25 m
     max_vibration_width: 0.5             # -0.25 ~ 0.25 m
     max_vibration_depth: 0.5             # -0.25 ~ 0.25 m
-    # if the camera info timestamp t is not accurate enough because of data transfer delay in driver,
+    max_detection_range: 200.0
+    # if the camera info timestamp t doesn't match tf timestamp,
     # the traffic light rough roi will be calculated based on the tf between (t + min_timestamp_offset)
-    # and (t + max_timestamp_offset)
-    min_timestamp_offset: -0.3
-    max_timestamp_offset: 0.0
+    # and (t + max_timestamp_offset) every timestamp_sample_len seconds.
+    min_timestamp_offset: -0.3 # seconds
+    max_timestamp_offset: 0.0  # seconds
+    timestamp_sample_len: 0.02 # seconds

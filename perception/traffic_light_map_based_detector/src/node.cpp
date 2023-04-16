@@ -125,7 +125,12 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   config_.max_vibration_depth = declare_parameter<double>("max_vibration_depth", 0.0);
   config_.min_timestamp_offset = declare_parameter<double>("min_timestamp_offset", 0.0);
   config_.max_timestamp_offset = declare_parameter<double>("max_timestamp_offset", 0.0);
+  config_.timestamp_sample_len = declare_parameter<double>("timestamp_sample_len", 0.01);
+  config_.max_detection_range = declare_parameter<double>("max_detection_range", 200.0);
 
+  assert(
+    config_.max_detection_range > 0 && config_.timestamp_sample_len > 0 &&
+    config_.max_timestamp_offset > config_.min_timestamp_offset);
   // subscribers
   map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
     "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
@@ -219,7 +224,15 @@ void MapBasedDetector::cameraInfoCallback(
    * Get the ROI from the lanelet and the intrinsic matrix of camera to determine where it appears
    * in image.
    */
-  Config expect_roi_cfg{0, 0, 0, 0, 0, 0, 0};
+  /**
+   * set all offset to zero when calculating the expect roi
+   */
+  Config expect_roi_cfg = config_;
+  expect_roi_cfg.max_vibration_depth = 0;
+  expect_roi_cfg.max_vibration_height = 0;
+  expect_roi_cfg.max_vibration_width = 0;
+  expect_roi_cfg.max_vibration_yaw = 0;
+  expect_roi_cfg.max_vibration_pitch = 0;
   for (const auto & traffic_light : visible_traffic_lights) {
     autoware_auto_perception_msgs::msg::TrafficLightRoi rough_roi, expect_roi;
     if (!getTrafficLightRoi(
@@ -350,101 +363,6 @@ bool MapBasedDetector::getTrafficLightRoi(
   return true;
 }
 
-bool MapBasedDetector::getTrafficLightRoi(
-  const tf2::Transform & tf_map2camera,
-  const image_geometry::PinholeCameraModel & pinhole_camera_model,
-  const lanelet::ConstLineString3d traffic_light, const Config & config,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & rough_roi,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & expect_roi)
-{
-  const double tl_height = traffic_light.attributeOr("height", 0.0);
-  // traffic light bottom left
-  const auto & tl_bl_point = traffic_light.front();
-  // traffic light bottom right
-  const auto & tl_br_point = traffic_light.back();
-  // rough roi top left and bottom right points projected on the image without being clipped by
-  // image size
-  cv::Point2d raw_tl_2d, raw_br_2d;
-  // id
-  rough_roi.id = traffic_light.id();
-  expect_roi.id = traffic_light.id();
-
-  // for roi.x_offset and roi.y_offset
-  {
-    tf2::Vector3 map2tl(tl_bl_point.x(), tl_bl_point.y(), tl_bl_point.z() + tl_height);
-    tf2::Vector3 camera2tl = tf_map2camera.inverse() * map2tl;
-    // max vibration
-    const double max_vibration_x =
-      std::sin(config.max_vibration_yaw * 0.5) * camera2tl.z() + config.max_vibration_width * 0.5;
-    const double max_vibration_y = std::sin(config.max_vibration_pitch * 0.5) * camera2tl.z() +
-                                   config.max_vibration_height * 0.5;
-    const double max_vibration_z = config.max_vibration_depth * 0.5;
-    // expect target position in camera coordinate
-    {
-      if (camera2tl.z() <= 0.0) {
-        return false;
-      }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, camera2tl);
-      roundInImageFrame(pinhole_camera_model, point2d);
-      expect_roi.roi.x_offset = point2d.x;
-      expect_roi.roi.y_offset = point2d.y;
-    }
-    // enlarged target position in camera coordinate
-    {
-      tf2::Vector3 point3d =
-        camera2tl - tf2::Vector3(max_vibration_x, max_vibration_y, max_vibration_z);
-      if (point3d.z() <= 0.0) {
-        return false;
-      }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
-      raw_tl_2d = point2d;
-      roundInImageFrame(pinhole_camera_model, point2d);
-      rough_roi.roi.x_offset = point2d.x;
-      rough_roi.roi.y_offset = point2d.y;
-    }
-  }
-
-  // for roi.width and roi.height
-  {
-    tf2::Vector3 map2tl(tl_br_point.x(), tl_br_point.y(), tl_br_point.z());
-    tf2::Vector3 camera2tl = tf_map2camera.inverse() * map2tl;
-    // max vibration
-    const double max_vibration_x =
-      std::sin(config.max_vibration_yaw * 0.5) * camera2tl.z() + config.max_vibration_width * 0.5;
-    const double max_vibration_y = std::sin(config.max_vibration_pitch * 0.5) * camera2tl.z() +
-                                   config.max_vibration_height * 0.5;
-    const double max_vibration_z = config.max_vibration_depth * 0.5;
-    // target position in camera coordinate
-    {
-      if (camera2tl.z() <= 0.0) {
-        return false;
-      }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, camera2tl);
-      roundInImageFrame(pinhole_camera_model, point2d);
-      expect_roi.roi.width = point2d.x - expect_roi.roi.x_offset;
-      expect_roi.roi.height = point2d.y - expect_roi.roi.y_offset;
-    }
-    // enlarged target position in camera coordinate
-    {
-      tf2::Vector3 point3d =
-        camera2tl + tf2::Vector3(max_vibration_x, max_vibration_y, -max_vibration_z);
-      if (point3d.z() <= 0.0) {
-        return false;
-      }
-      cv::Point2d point2d = calcRawImagePointFromPoint3D(pinhole_camera_model, point3d);
-      raw_br_2d = point2d;
-      roundInImageFrame(pinhole_camera_model, point2d);
-      rough_roi.roi.width = point2d.x - rough_roi.roi.x_offset;
-      rough_roi.roi.height = point2d.y - rough_roi.roi.y_offset;
-    }
-
-    if (rough_roi.roi.width < 1 || rough_roi.roi.height < 1) {
-      return false;
-    }
-  }
-  return true;
-}
-
 void MapBasedDetector::mapCallback(
   const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg)
 {
@@ -531,8 +449,7 @@ void MapBasedDetector::getVisibleTrafficLights(
     tl_center.setX((tl_br.x() + tl_bl.x()) / 2.0);
     tl_center.setY((tl_br.y() + tl_bl.y()) / 2.0);
     tl_center.setZ((tl_br.z() + tl_bl.z() + tl_height) / 2.0);
-    constexpr double max_distance_range = 300.0;
-    if (!isInDistanceRange(tl_center, tf_map2camera.getOrigin(), max_distance_range)) {
+    if (!isInDistanceRange(tl_center, tf_map2camera.getOrigin(), config_.max_detection_range)) {
       continue;
     }
 
