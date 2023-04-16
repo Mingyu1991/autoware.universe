@@ -56,25 +56,83 @@ class TrafficLightFineDetectorNodelet : public rclcpp::Node
 public:
   explicit TrafficLightFineDetectorNodelet(const rclcpp::NodeOptions & options);
   void connectCb();
+  /**
+   * @brief main process function.
+   *
+   * @param image_msg        ros image message
+   * @param rough_roi_msg    rough rois message
+   * @param expect_roi_msg   expect rois message
+   */
   void callback(
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg,
     const TrafficLightRoiArray::ConstSharedPtr rough_roi_msg,
     const TrafficLightRoiArray::ConstSharedPtr expect_roi_msg);
 
 private:
+  /**
+   * @brief convert the images into data stream ready for gpu process
+   *
+   * @param in_imgs    cv::Mat images
+   * @param num_rois   number of rois
+   * @param data       output data stream
+   * @return true      succeed
+   * @return false     failed
+   */
   bool cvMat2CnnInput(
     const std::vector<cv::Mat> & in_imgs, const int num_rois, std::vector<float> & data);
+  /**
+   * @brief Calculate the match score. Details will be explained in docs of evalMatchScore
+   *
+   * @param id2expectRoi
+   * @param id2detections
+   * @param id2bestDetection
+   * @return float
+   */
   float evalMatchScore(
     std::map<int, TrafficLightRoi> & id2expectRoi,
     std::map<int, tensorrt_yolox::ObjectArray> & id2detections,
     std::map<int, tensorrt_yolox::Object> & id2bestDetection);
+  /**
+   * @brief Every traffic light roi might have several possible detections. This function
+   * is designed to select the best detection for every traffic light by making use of
+   * the relative positions between the traffic lights projected on the image (expect/rois).
+   * To be specified, for every detection, all the expect rois will be transfered so that
+   * this detection will match the corresponding expect roi. Note that the expect rois
+   * of other traffic lights will also be transfered equally. Then, for every expect roi,
+   * it will calculate the match score (which is IoU_detection_roi * detection_confidence)
+   * with every detection.
+   * The combination of detections that will get highest match score sum will be the selected
+   * detections
+   *
+   * @param id2expectRoi    id to expect/roi map
+   * @param id2detections   id to detections map
+   * @param out_rois        output rois converted from the selected detections
+   */
   void detectionMatch(
     std::map<int, TrafficLightRoi> & id2expectRoi,
     std::map<int, tensorrt_yolox::ObjectArray> & id2detections, TrafficLightRoiArray & out_rois);
+  /**
+   * @brief convert image message to cv::Mat
+   *
+   * @param image_msg   input image message
+   * @param image       output cv::Mat image
+   * @param encode      image encode
+   * @return true       succeed
+   * @return false      failed
+   */
   bool rosMsg2CvMat(
     const sensor_msgs::msg::Image::ConstSharedPtr image_msg, cv::Mat & image,
     std::string encode = "rgb8");
   bool fitInFrame(cv::Point & lt, cv::Point & rb, const cv::Size & size);
+  /**
+   * @brief Read the label file to get class number and traffic_light class index of the model
+   *
+   * @param filepath   path to the label file
+   * @param tlr_id     output traffic light class index
+   * @param num_class  output class number
+   * @return true      succeed
+   * @return false     failed
+   */
   bool readLabelFile(const std::string & filepath, int & tlr_id, int & num_class);
 
   // variables
