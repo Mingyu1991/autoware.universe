@@ -21,6 +21,7 @@
     <let name="map_based_detector_output_topic" value="rois" unless="$(var enable_fine_detection)"/>
     <include file="$(find-pkg-share traffic_light_map_based_detector)/launch/traffic_light_map_based_detector.launch.xml">
       <arg name="input/camera_info" value="$(var input/camera_info)"/>
+      <arg name="min_timestamp_offset" value="-0.5"/>
       <arg name="expect/rois" value="expect/rois"/>
       <arg name="output/rois" value="$(var map_based_detector_output_topic)"/>
     </include>
@@ -47,6 +48,7 @@
     <let name="map_based_detector_output_topic" value="rois" unless="$(var enable_fine_detection)"/>
     <include file="$(find-pkg-share traffic_light_map_based_detector)/launch/traffic_light_map_based_detector.launch.xml">
       <arg name="input/camera_info" value="$(var input/camera_info)"/>
+      <arg name="min_timestamp_offset" value="-0.3"/>
       <arg name="expect/rois" value="expect/rois"/>
       <arg name="output/rois" value="$(var map_based_detector_output_topic)"/>
     </include>
