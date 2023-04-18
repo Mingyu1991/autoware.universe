@@ -110,7 +110,7 @@ private:
   lanelet::LaneletMapPtr lanelet_map_ptr_;
   lanelet::traffic_rules::TrafficRulesPtr traffic_rules_ptr_;
   lanelet::routing::RoutingGraphPtr routing_graph_ptr_;
-  std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
+
   Config config_;
   /**
    * @brief Calculated the transform from map to frame_id at timestamp t

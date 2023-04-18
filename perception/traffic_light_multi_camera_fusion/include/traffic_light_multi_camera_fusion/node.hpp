@@ -33,13 +33,17 @@
 #ifndef TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_
 #define TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_
 
+#include <lanelet2_extension/utility/message_conversion.hpp>
+#include <lanelet2_extension/utility/query.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 
+#include <lanelet2_core/LaneletMap.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/exact_time.h>
 #include <message_filters/synchronizer.h>
@@ -73,6 +77,8 @@ private:
   void trafficSignalRoiCallback(
     const RoiArrayType::ConstSharedPtr roi_msg, const SignalArrayType::ConstSharedPtr signal_msg);
 
+  void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
+
   void multiCameraFusion(std::map<IdType, RecordType> & fusionedRecordMap);
 
   void groupFusion(std::map<IdType, RecordType> & fusionedRecordMap);
@@ -85,8 +91,11 @@ private:
   std::vector<std::unique_ptr<mf::Subscriber<SignalArrayType>>> signal_subs_;
   std::vector<std::unique_ptr<mf::Subscriber<RoiArrayType>>> roi_subs_;
   std::vector<std::unique_ptr<ExactSync>> sync_subs_;
+  rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
 
   rclcpp::Publisher<SignalArrayType>::SharedPtr signal_pub_;
+
+  std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
   /*
   save record arrays by increasing timestamp order.
   use multimap in case there are multiple cameras publishing images at exactly the same time

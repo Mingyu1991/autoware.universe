@@ -60,6 +60,9 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
       std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2));
   }
 
+  map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
+    "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
+    std::bind(&MultiCameraFusion::mapCallback, this, _1));
   signal_pub_ = create_publisher<SignalArrayType>("~/output/traffic_signals", rclcpp::QoS{1});
 }
 
@@ -86,6 +89,29 @@ void MultiCameraFusion::trafficSignalRoiCallback(
   signal_pub_->publish(out_msg);
 }
 
+void MultiCameraFusion::mapCallback(
+  const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg)
+{
+  lanelet::LaneletMapPtr lanelet_map_ptr = std::make_shared<lanelet::LaneletMap>();
+
+  lanelet::utils::conversion::fromBinMsg(*input_msg, lanelet_map_ptr);
+  lanelet::ConstLanelets all_lanelets = lanelet::utils::query::laneletLayer(lanelet_map_ptr);
+  std::vector<lanelet::AutowareTrafficLightConstPtr> all_lanelet_traffic_lights =
+    lanelet::utils::query::autowareTrafficLights(all_lanelets);
+  for (auto tl_itr = all_lanelet_traffic_lights.begin(); tl_itr != all_lanelet_traffic_lights.end();
+       ++tl_itr) {
+    lanelet::AutowareTrafficLightConstPtr tl = *tl_itr;
+
+    auto lights = tl->trafficLights();
+    for (const auto & light : lights) {
+      trafficLightId2RegulatoryEleId_[light.id()] = tl->id();
+    }
+  }
+  RCLCPP_INFO_STREAM(
+    get_logger(), "received map! trafficLightId2RegulatoryEleId_ size = "
+                    << trafficLightId2RegulatoryEleId_.size());
+}
+
 int MultiCameraFusion::compareRecord(const RecordType & r1, const RecordType & r2) const
 {
   bool r1_is_unknown = isUnknown(r1.second);
@@ -101,8 +127,10 @@ int MultiCameraFusion::compareRecord(const RecordType & r1, const RecordType & r
   ignore the small score difference by dividing by 10,
   so that the area score could be more important
   */
-  int visible_score_1 = r1.first.visible_ratio / 10;
-  int visible_score_2 = r2.first.visible_ratio / 10;
+  // int visible_score_1 = r1.first.visible_ratio / 10;
+  // int visible_score_2 = r2.first.visible_ratio / 10;
+  int visible_score_1 = 100;
+  int visible_score_2 = 100;
   if (visible_score_1 == visible_score_2) {
     int area_1 = r1.first.roi.width * r1.first.roi.height;
     int area_2 = r2.first.roi.width * r2.first.roi.height;
@@ -164,7 +192,8 @@ void MultiCameraFusion::groupFusion(std::map<IdType, RecordType> & fusionedRecor
   */
   std::map<IdType, RecordType> regEleId2BestRecord;
   for (auto & p : fusionedRecordMap) {
-    IdType reg_ele_id = p.second.first.regulatory_element_id;
+    IdType reg_ele_id = trafficLightId2RegulatoryEleId_[p.second.first.id];
+    ;
     if (
       regEleId2BestRecord.count(reg_ele_id) == 0 ||
       compareRecord(p.second, regEleId2BestRecord[reg_ele_id]) >= 0) {
@@ -172,7 +201,8 @@ void MultiCameraFusion::groupFusion(std::map<IdType, RecordType> & fusionedRecor
     }
   }
   for (auto & p : fusionedRecordMap) {
-    IdType reg_ele_id = p.second.first.regulatory_element_id;
+    IdType reg_ele_id = trafficLightId2RegulatoryEleId_[p.second.first.id];
+    ;
     p.second.second.lights = regEleId2BestRecord[reg_ele_id].second.lights;
   }
 }
