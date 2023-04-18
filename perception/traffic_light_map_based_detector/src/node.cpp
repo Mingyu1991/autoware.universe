@@ -200,6 +200,9 @@ void MapBasedDetector::cameraInfoCallback(
       get_logger(), *get_clock(), 5000, "cannot get transform from map frame to camera frame");
     return;
   }
+  if (tf_map2camera_vec.empty()) {
+    tf_map2camera_vec.push_back(tf_map2camera);
+  }
   // tf_map2camera_vec.push_back(tf_map2camera);
 
   /*
