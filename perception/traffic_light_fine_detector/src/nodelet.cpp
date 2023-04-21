@@ -149,8 +149,24 @@ void TrafficLightFineDetectorNodelet::callback(
       if (detection.score < score_thresh_ || detection.type != tlr_id_) {
         continue;
       }
+      // cv::Point lt_roi(lt.x + detection.x_offset, lt.y + detection.y_offset);
+      // cv::Point rb_roi(lt_roi.x + detection.width, lt_roi.y + detection.height);
+      // fitInFrame(lt_roi, rb_roi, cv::Size(original_image.size()));
+      // tensorrt_yolox::Object det = detection;
+      // det.x_offset = lt_roi.x;
+      // det.y_offset = lt_roi.y;
+      // det.width = rb_roi.x - lt_roi.x;
+      // det.height = rb_roi.y - lt_roi.y;
+      // id2detections[rough_roi.id].push_back(det);
       cv::Point lt_roi(lt.x + detection.x_offset, lt.y + detection.y_offset);
       cv::Point rb_roi(lt_roi.x + detection.width, lt_roi.y + detection.height);
+      const auto & expect_roi = id2expectRoi[rough_roi.id].roi;
+      int cx = (lt_roi.x + rb_roi.x) / 2;
+      int cy = (lt_roi.y + rb_roi.y) / 2;
+      lt_roi.x = cx - expect_roi.width / 2;
+      lt_roi.y = cy - expect_roi.height / 2;
+      rb_roi.x = cx + expect_roi.width / 2;
+      rb_roi.y = cy + expect_roi.height / 2;
       fitInFrame(lt_roi, rb_roi, cv::Size(original_image.size()));
       tensorrt_yolox::Object det = detection;
       det.x_offset = lt_roi.x;

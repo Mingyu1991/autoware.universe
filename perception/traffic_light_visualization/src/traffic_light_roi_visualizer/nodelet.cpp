@@ -220,8 +220,13 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
     int width = 1080;
     int height = width * image.rows / image.cols;
     cv::resize(image, image, cv::Size(width, height));
-
-    std::string save_path = "/home/mingyu/tmp/vis_output/" +
+    std::string folder;
+    if (input_image_msg->header.frame_id.find("camera6") != std::string::npos) {
+      folder = "camera6_vis_output/";
+    } else {
+      folder = "camera7_vis_output/";
+    }
+    std::string save_path = "/home/mingyu/tmp/" + folder +
                             std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds()) +
                             ".jpg";
     cv::imwrite(save_path, image);

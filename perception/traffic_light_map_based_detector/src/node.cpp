@@ -238,8 +238,12 @@ void MapBasedDetector::cameraInfoCallback(
   expect_roi_cfg.max_vibration_pitch = 0;
   for (const auto & traffic_light : visible_traffic_lights) {
     autoware_auto_perception_msgs::msg::TrafficLightRoi rough_roi, expect_roi;
+    // if (!getTrafficLightRoi(
+    //       tf_map2camera, pinhole_camera_model, traffic_light, expect_roi_cfg, expect_roi)) {
+    //   continue;
+    // }
     if (!getTrafficLightRoi(
-          tf_map2camera, pinhole_camera_model, traffic_light, expect_roi_cfg, expect_roi)) {
+          tf_map2camera_vec[0], pinhole_camera_model, traffic_light, expect_roi_cfg, expect_roi)) {
       continue;
     }
     if (!getTrafficLightRoi(
