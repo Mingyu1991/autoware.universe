@@ -60,13 +60,13 @@ def generate_launch_description():
     add_launch_arg("classifier_type", "1")
     add_launch_arg(
         "model_file_path",
-        os.path.join(classifier_share_dir, "data", "traffic_light_classifier_mobilenetv2.onnx"),
+        os.path.join(classifier_share_dir, "data", "traffic_light_classifier_efficientNet_b1.onnx"),
     )
     add_launch_arg("label_file_path", os.path.join(classifier_share_dir, "data", "lamp_labels.txt"))
     add_launch_arg("precision", "fp16")
     add_launch_arg("input_c", "3")
-    add_launch_arg("input_h", "224")
-    add_launch_arg("input_w", "224")
+    add_launch_arg("input_h", "128")
+    add_launch_arg("input_w", "128")
 
     add_launch_arg("use_crosswalk_traffic_light_estimator", "True")
     add_launch_arg("use_intra_process", "False")
