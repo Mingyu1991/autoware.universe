@@ -34,8 +34,8 @@ CNNClassifier::CNNClassifier(rclcpp::Node * node_ptr) : node_ptr_(node_ptr)
   std::string label_file_path;
   std::string model_file_path;
   precision = node_ptr_->declare_parameter("precision", "fp16");
-  label_file_path = node_ptr_->declare_parameter("label_file_path", "labels.txt");
-  model_file_path = node_ptr_->declare_parameter("model_file_path", "model.onnx");
+  label_file_path = node_ptr_->declare_parameter("classifier_label_path", "labels.txt");
+  model_file_path = node_ptr_->declare_parameter("classifier_model_path", "model.onnx");
   input_c_ = node_ptr_->declare_parameter("input_c", 3);
   input_h_ = node_ptr_->declare_parameter("input_h", 224);
   input_w_ = node_ptr_->declare_parameter("input_w", 224);

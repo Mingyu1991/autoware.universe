@@ -62,8 +62,8 @@ TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
   using std::placeholders::_2;
   using std::placeholders::_3;
 
-  std::string model_path = declare_parameter("fine_detection_onnx_file", "");
-  std::string label_path = declare_parameter("fine_detection_label_file", "");
+  std::string model_path = declare_parameter("fine_detector_model_path", "");
+  std::string label_path = declare_parameter("fine_detector_label_path", "");
   std::string precision = declare_parameter("fine_detector_precision", "fp32");
   // Objects with a score lower than this value will be ignored.
   // This threshold will be ignored if specified model contains EfficientNMS_TRT module in it
