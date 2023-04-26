@@ -76,6 +76,8 @@ private:
     {autoware_auto_perception_msgs::msg::TrafficLight::LEFT_ARROW, "left"},
     {autoware_auto_perception_msgs::msg::TrafficLight::RIGHT_ARROW, "right"},
     {autoware_auto_perception_msgs::msg::TrafficLight::UP_ARROW, "straight"},
+    {autoware_auto_perception_msgs::msg::TrafficLight::UP_LEFT_ARROW, "up_left"},
+    {autoware_auto_perception_msgs::msg::TrafficLight::UP_RIGHT_ARROW, "up_right"},
     {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_ARROW, "down"},
     {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_LEFT_ARROW, "down_left"},
     {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_RIGHT_ARROW, "down_right"},

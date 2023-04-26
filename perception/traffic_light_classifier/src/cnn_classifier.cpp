@@ -177,10 +177,6 @@ bool CNNClassifier::postProcess(
   }
   std::vector<size_t> sorted_indices = argsort(output_tensor, num_output_);
 
-  // ROS_INFO("label: %s, score: %.2f\%",
-  //          labels_[sorted_indices[0]].c_str(),
-  //          probs[sorted_indices[0]] * 100);
-
   size_t max_indice = sorted_indices.front();
   std::string match_label = labels_[max_indice];
   float probability = apply_softmax ? probs[max_indice] : output_tensor[max_indice];
