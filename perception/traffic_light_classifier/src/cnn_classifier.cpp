@@ -36,50 +36,62 @@ CNNClassifier::CNNClassifier(rclcpp::Node * node_ptr) : node_ptr_(node_ptr)
   precision = node_ptr_->declare_parameter("precision", "fp16");
   label_file_path = node_ptr_->declare_parameter("classifier_label_path", "labels.txt");
   model_file_path = node_ptr_->declare_parameter("classifier_model_path", "model.onnx");
-  input_c_ = node_ptr_->declare_parameter("input_c", 3);
-  input_h_ = node_ptr_->declare_parameter("input_h", 224);
-  input_w_ = node_ptr_->declare_parameter("input_w", 224);
   auto input_name = node_ptr_->declare_parameter("input_name", "input");
   auto output_name = node_ptr_->declare_parameter("output_name", "output");
   apply_softmax_ = node_ptr_->declare_parameter("apply_softmax", false);
 
   readLabelfile(label_file_path, labels_);
 
-  trt_ = std::make_shared<Tn::TrtCommon>(model_file_path, precision, input_name, output_name);
-  trt_->setup();
+  tensorrt_common::BatchConfig batch_config{1, 1, 1};
+  size_t max_workspace_size = 1 << 30;
+
+  trt_common_ = std::make_unique<tensorrt_common::TrtCommon>(
+    model_file_path, precision, nullptr, batch_config, max_workspace_size);
+  trt_common_->setup();
+  if (!trt_common_->isInitialized()) {
+    return;
+  }
+  BOOST_ASSERT_MSG(trt_common_->getBindingDimensions() == 2, "Model number bindings must be 2!");
+  const auto input_dims = trt_common_->getBindingDimensions(0);
+  BOOST_ASSERT_MSG(input_dims.nbDims == 4, "Model input dimension must be 4!");
+  batch_size_ = input_dims.d[0];
+  input_c_ = input_dims.d[1];
+  input_h_ = input_dims.d[2];
+  input_w_ = input_dims.d[3];
+  num_input_ = batch_size_ * input_c_ * input_h_ * input_w_;
+  const auto output_dims = trt_common_->getBindingDimensions(1);
+  num_output_ =
+    std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>());
 }
 
 bool CNNClassifier::getTrafficSignal(
   const cv::Mat & input_image, autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal)
 {
-  if (!trt_->isInitialized()) {
+  if (!trt_common_->isInitialized()) {
     RCLCPP_WARN(node_ptr_->get_logger(), "failed to init tensorrt");
     return false;
   }
 
-  int num_input = trt_->getNumInput();
-  int num_output = trt_->getNumOutput();
-
-  std::vector<float> input_data_host(num_input);
+  std::vector<float> input_data_host(num_input_);
 
   cv::Mat image = input_image.clone();
   preProcess(image, input_data_host, true);
 
-  auto input_data_device = Tn::make_unique<float[]>(num_input);
+  auto input_data_device = cuda_utils::make_unique<float[]>(num_input_);
   cudaMemcpy(
-    input_data_device.get(), input_data_host.data(), num_input * sizeof(float),
+    input_data_device.get(), input_data_host.data(), num_input_ * sizeof(float),
     cudaMemcpyHostToDevice);
 
-  auto output_data_device = Tn::make_unique<float[]>(num_output);
+  auto output_data_device = cuda_utils::make_unique<float[]>(num_output_);
 
   // do inference
   std::vector<void *> bindings = {input_data_device.get(), output_data_device.get()};
 
-  trt_->context_->executeV2(bindings.data());
+  trt_common_->enqueueV2(bindings.data(), *stream_, nullptr);
 
-  std::vector<float> output_data_host(num_output);
+  std::vector<float> output_data_host(num_output_);
   cudaMemcpy(
-    output_data_host.data(), output_data_device.get(), num_output * sizeof(float),
+    output_data_host.data(), output_data_device.get(), num_output_ * sizeof(float),
     cudaMemcpyDeviceToHost);
 
   postProcess(output_data_host, traffic_signal, apply_softmax_);
@@ -160,11 +172,10 @@ bool CNNClassifier::postProcess(
   autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal, bool apply_softmax)
 {
   std::vector<float> probs;
-  int num_output = trt_->getNumOutput();
   if (apply_softmax) {
-    calcSoftmax(output_tensor, probs, num_output);
+    calcSoftmax(output_tensor, probs, num_output_);
   }
-  std::vector<size_t> sorted_indices = argsort(output_tensor, num_output);
+  std::vector<size_t> sorted_indices = argsort(output_tensor, num_output_);
 
   // ROS_INFO("label: %s, score: %.2f\%",
   //          labels_[sorted_indices[0]].c_str(),

@@ -17,16 +17,20 @@
 
 #include "traffic_light_classifier/classifier_interface.hpp"
 
+#include <cuda_utils/cuda_unique_ptr.hpp>
+#include <cuda_utils/stream_unique_ptr.hpp>
 #include <image_transport/image_transport.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <trt_common.hpp>
+#include <tensorrt_common/tensorrt_common.hpp>
 
 #include <autoware_auto_perception_msgs/msg/traffic_light.hpp>
 
 #include <cv_bridge/cv_bridge.h>
 
+#include <fstream>
 #include <map>
 #include <memory>
 #include <string>
@@ -34,6 +38,12 @@
 
 namespace traffic_light
 {
+
+using cuda_utils::CudaUniquePtr;
+using cuda_utils::CudaUniquePtrHost;
+using cuda_utils::makeCudaStream;
+using cuda_utils::StreamUniquePtr;
+
 class CNNClassifier : public ClassifierInterface
 {
 public:
@@ -98,14 +108,18 @@ private:
 
   rclcpp::Node * node_ptr_;
 
-  std::shared_ptr<Tn::TrtCommon> trt_;
+  std::unique_ptr<tensorrt_common::TrtCommon> trt_common_;
+  StreamUniquePtr stream_{makeCudaStream()};
   image_transport::Publisher image_pub_;
   std::vector<std::string> labels_;
   std::vector<float> mean_{123.675, 116.28, 103.53};
   std::vector<float> std_{58.395, 57.12, 57.375};
+  int batch_size_;
   int input_c_;
   int input_h_;
   int input_w_;
+  int num_input_;
+  int num_output_;
   bool apply_softmax_;
 };
 

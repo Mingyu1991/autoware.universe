@@ -113,23 +113,8 @@ if(TRT_AVAIL AND CUDA_AVAIL AND CUDNN_AVAIL)
   add_definitions(-DENABLE_GPU)
 
   include_directories(
-    utils
     ${OpenCV_INCLUDE_DIRS}
     ${CUDA_INCLUDE_DIRS}
-  )
-
-  ament_auto_add_library(libutils SHARED
-    utils/trt_common.cpp
-  )
-  target_link_libraries(libutils
-    ${OpenCV_LIBRARIES}
-    ${NVINFER}
-    ${NVONNXPARSER}
-    ${NVINFER_PLUGIN}
-    ${CUDA_LIBRARIES}
-    ${CUBLAS_LIBRARIES}
-    ${CUDNN_LIBRARY}
-    stdc++fs
   )
 
   ament_auto_add_library(traffic_light_classifier_nodelet SHARED
@@ -138,8 +123,14 @@ if(TRT_AVAIL AND CUDA_AVAIL AND CUDNN_AVAIL)
     src/nodelet.cpp
   )
   target_link_libraries(traffic_light_classifier_nodelet
-    libutils
     ${OpenCV_LIBRARIES}
+    ${NVINFER}
+    ${NVONNXPARSER}
+    ${NVINFER_PLUGIN}
+    ${CUDA_LIBRARIES}
+    ${CUBLAS_LIBRARIES}
+    ${CUDNN_LIBRARY}
+    stdc++fs
   )
   rclcpp_components_register_node(traffic_light_classifier_nodelet
     PLUGIN "traffic_light::TrafficLightClassifierNodelet"
@@ -153,7 +144,14 @@ if(TRT_AVAIL AND CUDA_AVAIL AND CUDNN_AVAIL)
     src/single_image_debug_inference_node.cpp
   )
   target_link_libraries(single_image_debug_inference_node
-    libutils
+    ${OpenCV_LIBRARIES}
+    ${NVINFER}
+    ${NVONNXPARSER}
+    ${NVINFER_PLUGIN}
+    ${CUDA_LIBRARIES}
+    ${CUBLAS_LIBRARIES}
+    ${CUDNN_LIBRARY}
+    stdc++fs
     opencv_core
     opencv_highgui
   )
