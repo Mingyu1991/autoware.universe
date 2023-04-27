@@ -51,8 +51,8 @@ def generate_launch_description():
         os.path.join(fine_detector_share_dir, "data", "tlr_labels.txt"),
     )
     add_launch_arg("fine_detector_precision", "fp16")
-    add_launch_arg("fine_detection_score_thresh", "0.3")
-    add_launch_arg("fine_detection_nms_thresh", "0.65")
+    add_launch_arg("fine_detector_score_thresh", "0.3")
+    add_launch_arg("fine_detector_nms_thresh", "0.65")
 
     add_launch_arg("approximate_sync", "False")
 
@@ -195,8 +195,8 @@ def generate_launch_description():
         "fine_detector_model_path",
         "fine_detector_label_path",
         "fine_detector_precision",
-        "fine_detection_score_thresh",
-        "fine_detection_nms_thresh",
+        "fine_detector_score_thresh",
+        "fine_detector_nms_thresh",
     )
 
     fine_detector_loader = LoadComposableNodes(
