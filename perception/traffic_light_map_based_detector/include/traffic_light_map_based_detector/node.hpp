@@ -144,12 +144,13 @@ private:
    * @brief Get the Visible Traffic Lights object
    *
    * @param all_traffic_lights      all the traffic lights in the route or in the map
-   * @param tf_map2camera           the transformation from map to camera
+   * @param tf_map2camera_vec           the transformation sequences from map to camera
    * @param pinhole_camera_model    pinhole model calculated from camera_info
    * @param visible_traffic_lights  the visible traffic lights object
    */
   void getVisibleTrafficLights(
-    const TrafficLightSet & all_traffic_lights, const tf2::Transform & tf_map2camera,
+    const TrafficLightSet & all_traffic_lights,
+    const std::vector<tf2::Transform> & tf_map2camera_vec,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     std::vector<lanelet::ConstLineString3d> & visible_traffic_lights);
   /**
