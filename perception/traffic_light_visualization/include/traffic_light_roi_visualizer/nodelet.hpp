@@ -102,6 +102,10 @@ private:
     int id, const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & rois,
     autoware_auto_perception_msgs::msg::TrafficLightRoi & correspond_roi);
 
+  bool trafficSignalChanged(
+    const autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals,
+    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray & rough_rois);
+
   rclcpp::TimerBase::SharedPtr timer_;
   image_transport::SubscriberFilter image_sub_;
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
@@ -126,6 +130,8 @@ private:
   std::shared_ptr<SyncWithRoughRoi> sync_with_rough_roi_;
 
   bool enable_fine_detection_;
+  autoware_auto_perception_msgs::msg::TrafficSignalArray last_msg_;
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray last_rough_roi_;
 };
 
 }  // namespace traffic_light

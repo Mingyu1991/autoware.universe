@@ -45,6 +45,7 @@
 
 #include <lanelet2_core/LaneletMap.h>
 #include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/sync_policies/exact_time.h>
 #include <message_filters/synchronizer.h>
 
@@ -62,6 +63,8 @@ namespace mf = message_filters;
 
 class MultiCameraFusion : public rclcpp::Node
 {
+public:
+  typedef sensor_msgs::msg::CameraInfo CamInfoType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoi RoiType;
   typedef autoware_auto_perception_msgs::msg::TrafficSignal SignalType;
   typedef autoware_auto_perception_msgs::msg::TrafficSignalArray SignalArrayType;
@@ -70,27 +73,31 @@ class MultiCameraFusion : public rclcpp::Node
   typedef std::pair<RoiArrayType, SignalArrayType> RecordArrayType;
   typedef std::pair<RoiType, SignalType> RecordType;
 
-public:
   explicit MultiCameraFusion(const rclcpp::NodeOptions & node_options);
 
 private:
   void trafficSignalRoiCallback(
-    const RoiArrayType::ConstSharedPtr roi_msg, const SignalArrayType::ConstSharedPtr signal_msg);
+    const CamInfoType::ConstSharedPtr cam_info_msg, const RoiArrayType::ConstSharedPtr roi_msg,
+    const SignalArrayType::ConstSharedPtr signal_msg);
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
 
-  void multiCameraFusion(std::map<IdType, RecordType> & fusionedRecordMap);
+  void multiCameraFusion(
+    const CamInfoType cam_info, std::map<IdType, RecordType> & fusionedRecordMap);
 
-  void groupFusion(std::map<IdType, RecordType> & fusionedRecordMap);
+  void groupFusion(const CamInfoType cam_info, std::map<IdType, RecordType> & fusionedRecordMap);
 
-  int compareRecord(const RecordType & r1, const RecordType & r2) const;
-
-  typedef mf::sync_policies::ExactTime<RoiArrayType, SignalArrayType> ExactSyncPolicy;
+  typedef mf::sync_policies::ExactTime<CamInfoType, RoiArrayType, SignalArrayType> ExactSyncPolicy;
   typedef mf::Synchronizer<ExactSyncPolicy> ExactSync;
+  typedef mf::sync_policies::ApproximateTime<CamInfoType, RoiArrayType, SignalArrayType>
+    ApproSyncPolicy;
+  typedef mf::Synchronizer<ApproSyncPolicy> ApproSync;
 
   std::vector<std::unique_ptr<mf::Subscriber<SignalArrayType>>> signal_subs_;
   std::vector<std::unique_ptr<mf::Subscriber<RoiArrayType>>> roi_subs_;
-  std::vector<std::unique_ptr<ExactSync>> sync_subs_;
+  std::vector<std::unique_ptr<mf::Subscriber<CamInfoType>>> cam_info_subs_;
+  std::vector<std::unique_ptr<ExactSync>> exact_sync_subs_;
+  std::vector<std::unique_ptr<ApproSync>> appro_sync_subs_;
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
 
   rclcpp::Publisher<SignalArrayType>::SharedPtr signal_pub_;
@@ -101,7 +108,7 @@ private:
   use multimap in case there are multiple cameras publishing images at exactly the same time
   */
   std::multimap<rclcpp::Time, RecordArrayType> record_arr_map_;
-  bool is_approxiate_sync_;
+  bool is_approximate_sync_;
 };
 }  // namespace traffic_light
 #endif  // TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_

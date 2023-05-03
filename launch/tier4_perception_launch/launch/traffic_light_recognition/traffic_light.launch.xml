@@ -24,6 +24,7 @@
       <arg name="min_timestamp_offset" value="-0.3"/>
       <arg name="expect/rois" value="expect/rois"/>
       <arg name="output/rois" value="$(var map_based_detector_output_topic)"/>
+      <arg name="output/camera_info" value="camera_info"/>
     </include>
 
     <include file="$(find-pkg-share tier4_perception_launch)/launch/traffic_light_recognition/traffic_light_node_container.launch.py">
@@ -51,6 +52,7 @@
       <arg name="min_timestamp_offset" value="-0.04"/>
       <arg name="expect/rois" value="expect/rois"/>
       <arg name="output/rois" value="$(var map_based_detector_output_topic)"/>
+      <arg name="output/camera_info" value="camera_info"/>
     </include>
 
     <include file="$(find-pkg-share tier4_perception_launch)/launch/traffic_light_recognition/traffic_light_node_container.launch.py">
@@ -67,12 +69,12 @@
     </include>
   </group>
   <!-- traffic_light_multi_camera_fusion -->
-  <!--group>
+  <group>
     <node pkg="traffic_light_multi_camera_fusion" exec="traffic_light_multi_camera_fusion_node" name="traffic_light_multi_camera_fusion" output="screen">
-      <remap from="~/output/traffic_signals" to="$(var output_traffic_signal)"/>
-      <param name="input/camera_namespaces" value="[$(var namespace1), $(var namespace2)]"/>
+      <remap from="~/output/traffic_signals" to="$(var output/traffic_signals)"/>
+      <param name="camera_namespaces" value="$(var all_camera_namespaces)"/>
     </node>
-  </group-->
+  </group>
   <!-- visualizer -->
   <group>
     <include file="$(find-pkg-share traffic_light_visualization)/launch/traffic_light_map_visualizer.launch.xml"/>

@@ -34,6 +34,53 @@ bool isUnknown(const autoware_auto_perception_msgs::msg::TrafficSignal & signal)
          signal.lights[0].shape == autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN;
 }
 
+int calVisibleScore(
+  const traffic_light::MultiCameraFusion::RoiType & roi,
+  const traffic_light::MultiCameraFusion::CamInfoType & cam_info)
+{
+  uint32_t boundary = 5;
+  uint32_t x1 = roi.roi.x_offset;
+  uint32_t x2 = roi.roi.x_offset + roi.roi.width;
+  uint32_t y1 = roi.roi.y_offset;
+  uint32_t y2 = roi.roi.y_offset + roi.roi.height;
+  if (
+    x1 <= boundary || (cam_info.width - x2) <= boundary || y1 <= boundary ||
+    (cam_info.height - y2) <= boundary) {
+    return 0;
+  } else {
+    return 1;
+  }
+}
+
+int compareRecord(
+  const traffic_light::MultiCameraFusion::RecordType & r1,
+  const traffic_light::MultiCameraFusion::RecordType & r2,
+  const traffic_light::MultiCameraFusion::CamInfoType & cam_info)
+{
+  bool r1_is_unknown = isUnknown(r1.second);
+  bool r2_is_unknown = isUnknown(r2.second);
+  // if both are unknown, they are of the same priority
+  if (r1_is_unknown && r2_is_unknown) {
+    return 0;
+  } else if (r1_is_unknown ^ r2_is_unknown) {
+    // if either is unknown, the unknown is of lower priority
+    return r1_is_unknown ? -1 : 1;
+  }
+  int visible_score_1 = calVisibleScore(r1.first, cam_info);
+  int visible_score_2 = calVisibleScore(r2.first, cam_info);
+  if (visible_score_1 == visible_score_2) {
+    int area_1 = r1.first.roi.width * r1.first.roi.height;
+    int area_2 = r2.first.roi.width * r2.first.roi.height;
+    if (area_1 < area_2) {
+      return -1;
+    } else {
+      return static_cast<int>(area_1 > area_2);
+    }
+  } else {
+    return visible_score_1 < visible_score_2 ? -1 : 1;
+  }
+}
+
 }  // namespace
 
 namespace traffic_light
@@ -44,20 +91,35 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
 {
   using std::placeholders::_1;
   using std::placeholders::_2;
+  using std::placeholders::_3;
 
   std::vector<std::string> camera_namespaces =
     this->declare_parameter("camera_namespaces", std::vector<std::string>{});
+  is_approximate_sync_ = this->declare_parameter<bool>("approximate_sync", false);
+  RCLCPP_INFO_STREAM(get_logger(), "is_approximate_sync_ = " << is_approximate_sync_);
   for (const std::string & camera_ns : camera_namespaces) {
     std::string signal_topic = camera_ns + "/traffic_signals";
     std::string roi_topic = camera_ns + "/rois";
+    std::string cam_info_topic = camera_ns + "/camera_info";
     roi_subs_.emplace_back(
       new mf::Subscriber<RoiArrayType>(this, roi_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
     signal_subs_.emplace_back(new mf::Subscriber<SignalArrayType>(
       this, signal_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
-    sync_subs_.emplace_back(
-      new ExactSync(ExactSyncPolicy(10), *(roi_subs_.back()), *(signal_subs_.back())));
-    sync_subs_.back()->registerCallback(
-      std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2));
+    cam_info_subs_.emplace_back(
+      new mf::Subscriber<CamInfoType>(this, cam_info_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
+    if (is_approximate_sync_ == false) {
+      exact_sync_subs_.emplace_back(new ExactSync(
+        ExactSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()),
+        *(signal_subs_.back())));
+      exact_sync_subs_.back()->registerCallback(
+        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3));
+    } else {
+      appro_sync_subs_.emplace_back(new ApproSync(
+        ApproSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()),
+        *(signal_subs_.back())));
+      appro_sync_subs_.back()->registerCallback(
+        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3));
+    }
   }
 
   map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
@@ -67,7 +129,8 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
 }
 
 void MultiCameraFusion::trafficSignalRoiCallback(
-  const RoiArrayType::ConstSharedPtr roi_msg, const SignalArrayType::ConstSharedPtr signal_msg)
+  const CamInfoType::ConstSharedPtr cam_info_msg, const RoiArrayType::ConstSharedPtr roi_msg,
+  const SignalArrayType::ConstSharedPtr signal_msg)
 {
   rclcpp::Time stamp(roi_msg->header.stamp);
   /*
@@ -77,8 +140,8 @@ void MultiCameraFusion::trafficSignalRoiCallback(
   record_arr_map_.insert(std::make_pair(stamp, std::make_pair(*roi_msg, *signal_msg)));
 
   std::map<IdType, RecordType> fusionedRecordMap;
-  multiCameraFusion(fusionedRecordMap);
-  groupFusion(fusionedRecordMap);
+  multiCameraFusion(*cam_info_msg, fusionedRecordMap);
+  groupFusion(*cam_info_msg, fusionedRecordMap);
 
   SignalArrayType out_msg;
   out_msg.header = signal_msg->header;
@@ -107,44 +170,10 @@ void MultiCameraFusion::mapCallback(
       trafficLightId2RegulatoryEleId_[light.id()] = tl->id();
     }
   }
-  RCLCPP_INFO_STREAM(
-    get_logger(), "received map! trafficLightId2RegulatoryEleId_ size = "
-                    << trafficLightId2RegulatoryEleId_.size());
 }
 
-int MultiCameraFusion::compareRecord(const RecordType & r1, const RecordType & r2) const
-{
-  bool r1_is_unknown = isUnknown(r1.second);
-  bool r2_is_unknown = isUnknown(r2.second);
-  // if both are unknown, they are of the same priority
-  if (r1_is_unknown && r2_is_unknown) {
-    return 0;
-  } else if (r1_is_unknown ^ r2_is_unknown) {
-    // if either is unknown, the unknown is of lower priority
-    return r1_is_unknown ? -1 : 1;
-  }
-  /*
-  ignore the small score difference by dividing by 10,
-  so that the area score could be more important
-  */
-  // int visible_score_1 = r1.first.visible_ratio / 10;
-  // int visible_score_2 = r2.first.visible_ratio / 10;
-  int visible_score_1 = 100;
-  int visible_score_2 = 100;
-  if (visible_score_1 == visible_score_2) {
-    int area_1 = r1.first.roi.width * r1.first.roi.height;
-    int area_2 = r2.first.roi.width * r2.first.roi.height;
-    if (area_1 < area_2) {
-      return -1;
-    } else {
-      return static_cast<int>(area_1 > area_2);
-    }
-  } else {
-    return visible_score_1 < visible_score_2 ? -1 : 1;
-  }
-}
-
-void MultiCameraFusion::multiCameraFusion(std::map<IdType, RecordType> & fusionedRecordMap)
+void MultiCameraFusion::multiCameraFusion(
+  const CamInfoType cam_info, std::map<IdType, RecordType> & fusionedRecordMap)
 {
   double max_keep_t = 0.10;
   fusionedRecordMap.clear();
@@ -176,7 +205,7 @@ void MultiCameraFusion::multiCameraFusion(std::map<IdType, RecordType> & fusione
         */
         if (
           fusionedRecordMap.find(tl_id) == fusionedRecordMap.end() ||
-          compareRecord(record, fusionedRecordMap[tl_id]) >= 0) {
+          ::compareRecord(record, fusionedRecordMap[tl_id], cam_info) >= 0) {
           fusionedRecordMap[tl_id] = record;
         }
       }
@@ -185,7 +214,8 @@ void MultiCameraFusion::multiCameraFusion(std::map<IdType, RecordType> & fusione
   }
 }
 
-void MultiCameraFusion::groupFusion(std::map<IdType, RecordType> & fusionedRecordMap)
+void MultiCameraFusion::groupFusion(
+  const CamInfoType cam_info, std::map<IdType, RecordType> & fusionedRecordMap)
 {
   /*
   the best record for every regulatory element id
@@ -193,10 +223,9 @@ void MultiCameraFusion::groupFusion(std::map<IdType, RecordType> & fusionedRecor
   std::map<IdType, RecordType> regEleId2BestRecord;
   for (auto & p : fusionedRecordMap) {
     IdType reg_ele_id = trafficLightId2RegulatoryEleId_[p.second.first.id];
-    ;
     if (
       regEleId2BestRecord.count(reg_ele_id) == 0 ||
-      compareRecord(p.second, regEleId2BestRecord[reg_ele_id]) >= 0) {
+      ::compareRecord(p.second, regEleId2BestRecord[reg_ele_id], cam_info) >= 0) {
       regEleId2BestRecord[reg_ele_id] = p.second;
     }
   }
