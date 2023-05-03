@@ -61,6 +61,25 @@ namespace traffic_light
 
 namespace mf = message_filters;
 
+struct FusionRecord
+{
+  std_msgs::msg::Header header;
+  autoware_auto_perception_msgs::msg::TrafficLightRoi roi;
+  autoware_auto_perception_msgs::msg::TrafficSignal signal;
+};
+
+struct FusionRecordArr
+{
+  std_msgs::msg::Header header;
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray rois;
+  autoware_auto_perception_msgs::msg::TrafficSignalArray signals;
+};
+
+bool operator<(const FusionRecordArr & r1, const FusionRecordArr & r2)
+{
+  return rclcpp::Time(r1.header.stamp) < rclcpp::Time(r2.header.stamp);
+}
+
 class MultiCameraFusion : public rclcpp::Node
 {
 public:
@@ -70,8 +89,8 @@ public:
   typedef autoware_auto_perception_msgs::msg::TrafficSignalArray SignalArrayType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoiArray RoiArrayType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoi::_id_type IdType;
+
   typedef std::pair<RoiArrayType, SignalArrayType> RecordArrayType;
-  typedef std::pair<RoiType, SignalType> RecordType;
 
   explicit MultiCameraFusion(const rclcpp::NodeOptions & node_options);
 
@@ -83,9 +102,9 @@ private:
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
 
   void multiCameraFusion(
-    const CamInfoType cam_info, std::map<IdType, RecordType> & fusionedRecordMap);
+    const CamInfoType cam_info, std::map<IdType, FusionRecord> & fusionedRecordMap);
 
-  void groupFusion(const CamInfoType cam_info, std::map<IdType, RecordType> & fusionedRecordMap);
+  void groupFusion(const CamInfoType cam_info, std::map<IdType, FusionRecord> & fusionedRecordMap);
 
   typedef mf::sync_policies::ExactTime<CamInfoType, RoiArrayType, SignalArrayType> ExactSyncPolicy;
   typedef mf::Synchronizer<ExactSyncPolicy> ExactSync;
@@ -105,9 +124,9 @@ private:
   std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
   /*
   save record arrays by increasing timestamp order.
-  use multimap in case there are multiple cameras publishing images at exactly the same time
+  use multiset in case there are multiple cameras publishing images at exactly the same time
   */
-  std::multimap<rclcpp::Time, RecordArrayType> record_arr_map_;
+  std::multiset<FusionRecordArr> record_arr_set_;
   bool is_approximate_sync_;
 };
 }  // namespace traffic_light
