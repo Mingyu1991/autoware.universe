@@ -56,6 +56,12 @@ int compareRecord(
   const traffic_light::FusionRecord & r1, const traffic_light::FusionRecord & r2,
   const traffic_light::MultiCameraFusion::CamInfoType & cam_info)
 {
+  // if both records are from the same sensor but different stamp, trust the latest one
+  double t1 = rclcpp::Time(r1.header.stamp).seconds();
+  double t2 = rclcpp::Time(r2.header.stamp).seconds();
+  if (r1.header.frame_id == r2.header.frame_id && std::abs(t1 - t2) >= 1e-3) {
+    return t1 < t2 ? -1 : 1;
+  }
   bool r1_is_unknown = isUnknown(r1.signal);
   bool r2_is_unknown = isUnknown(r2.signal);
   // if both are unknown, they are of the same priority
@@ -64,12 +70,6 @@ int compareRecord(
   } else if (r1_is_unknown ^ r2_is_unknown) {
     // if either is unknown, the unknown is of lower priority
     return r1_is_unknown ? -1 : 1;
-  }
-  /*
-  if both records are not unknown and from same sensor, take the later one
-  */
-  if (r1.header.frame_id == r2.header.frame_id) {
-    return rclcpp::Time(r1.header.stamp) < rclcpp::Time(r2.header.stamp) ? -1 : 1;
   }
   int visible_score_1 = calVisibleScore(r1.roi, cam_info);
   int visible_score_2 = calVisibleScore(r2.roi, cam_info);
@@ -175,14 +175,12 @@ void MultiCameraFusion::mapCallback(
       trafficLightId2RegulatoryEleId_[light.id()] = tl->id();
     }
   }
-  RCLCPP_INFO_STREAM(get_logger(), "2023 parent id = " << trafficLightId2RegulatoryEleId_[2023]);
-  RCLCPP_INFO_STREAM(get_logger(), "2025 parent id = " << trafficLightId2RegulatoryEleId_[2025]);
 }
 
 void MultiCameraFusion::multiCameraFusion(
   const CamInfoType cam_info, std::map<IdType, FusionRecord> & fusionedRecordMap)
 {
-  double max_keep_t = 0.10;
+  double max_keep_t = 0.09;
   fusionedRecordMap.clear();
   /*
   this should not happen. Just in case
