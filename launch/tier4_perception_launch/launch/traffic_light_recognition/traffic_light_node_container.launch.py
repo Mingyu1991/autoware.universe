@@ -124,6 +124,22 @@ def generate_launch_description():
                     {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
                 ],
             ),
+            ComposableNode(
+                package="traffic_light_visualization",
+                plugin="traffic_light::TrafficLightFusionVisualizerNodelet",
+                name="traffic_light_fusion_visualizer",
+                remappings=[
+                    ("~/input/image", LaunchConfiguration("input/image")),
+                    ("~/input/rough/rois", "rough/rois"),
+                    (
+                        "~/input/traffic_signals",
+                        "/perception/traffic_light_recognition/traffic_signals",
+                    ),
+                ],
+                extra_arguments=[
+                    {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
+                ],
+            ),
         ],
         output="both",
     )
