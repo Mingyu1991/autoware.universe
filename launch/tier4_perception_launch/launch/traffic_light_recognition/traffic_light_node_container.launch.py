@@ -65,7 +65,9 @@ def generate_launch_description():
     add_launch_arg(
         "classifier_label_path", os.path.join(classifier_share_dir, "data", "lamp_labels.txt")
     )
-    add_launch_arg("precision", "fp16")
+    add_launch_arg("classifier_precision", "fp16")
+    add_launch_arg("classifier_mean", "[123.675, 116.28, 103.53]")
+    add_launch_arg("classifier_std", "[58.395, 57.12, 57.375]")
 
     add_launch_arg("use_crosswalk_traffic_light_estimator", "True")
     add_launch_arg("use_intra_process", "False")
@@ -93,7 +95,9 @@ def generate_launch_description():
                         "classifier_type",
                         "classifier_model_path",
                         "classifier_label_path",
-                        "precision",
+                        "classifier_precision",
+                        "classifier_mean",
+                        "classifier_std",
                     )
                 ],
                 remappings=[

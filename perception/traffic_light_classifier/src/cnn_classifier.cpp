@@ -33,12 +33,17 @@ CNNClassifier::CNNClassifier(rclcpp::Node * node_ptr) : node_ptr_(node_ptr)
   std::string precision;
   std::string label_file_path;
   std::string model_file_path;
-  precision = node_ptr_->declare_parameter("precision", "fp16");
+  precision = node_ptr_->declare_parameter("classifier_precision", "fp16");
   label_file_path = node_ptr_->declare_parameter("classifier_label_path", "labels.txt");
   model_file_path = node_ptr_->declare_parameter("classifier_model_path", "model.onnx");
-  auto input_name = node_ptr_->declare_parameter("input_name", "input");
-  auto output_name = node_ptr_->declare_parameter("output_name", "output");
   apply_softmax_ = node_ptr_->declare_parameter("apply_softmax", false);
+  mean_ =
+    node_ptr->declare_parameter("classifier_mean", std::vector<double>{123.675, 116.28, 103.53});
+  std_ = node_ptr->declare_parameter("classifier_std", std::vector<double>{58.395, 57.12, 57.375});
+  if (mean_.size() != 3 || std_.size() != 3) {
+    RCLCPP_ERROR(node_ptr->get_logger(), "classifier_mean and classifier_std must be of size 3");
+    return;
+  }
 
   readLabelfile(label_file_path, labels_);
 

@@ -116,8 +116,8 @@ private:
   StreamUniquePtr stream_{makeCudaStream()};
   image_transport::Publisher image_pub_;
   std::vector<std::string> labels_;
-  std::vector<float> mean_{123.675, 116.28, 103.53};
-  std::vector<float> std_{58.395, 57.12, 57.375};
+  std::vector<double> mean_;
+  std::vector<double> std_;
   int batch_size_;
   int input_c_;
   int input_h_;
