@@ -40,7 +40,6 @@
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 
 #include <lanelet2_core/LaneletMap.h>
@@ -120,7 +119,9 @@ private:
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
 
   rclcpp::Publisher<SignalArrayType>::SharedPtr signal_pub_;
-
+  /*
+  the mappping from traffic light id (instance id) to regulatory element id (group id)
+  */
   std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
   /*
   save record arrays by increasing timestamp order.
@@ -128,6 +129,19 @@ private:
   */
   std::multiset<FusionRecordArr> record_arr_set_;
   bool is_approximate_sync_;
+  /*
+  for every input message input_m, if the timestamp difference between input_m and the latest
+  message is smaller than message_lifespan_, then input_m would be used for the fusion. Otherwise,
+  it would be discarded
+  */
+  double message_lifespan_;
+  /*
+  if true, the traffic lights of the same group (sharing the same regulatory element id) would be
+  fused. It's recommended to configure this values so that it's a little bit smaller than the cycle
+  time of your sensors. For example, if the camera frequency is 10Hz, it should be between 0.09 ~
+  0.1
+  */
+  bool perform_group_fusion_;
 };
 }  // namespace traffic_light
 #endif  // TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_

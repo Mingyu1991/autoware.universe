@@ -34,6 +34,14 @@ bool isUnknown(const autoware_auto_perception_msgs::msg::TrafficSignal & signal)
          signal.lights[0].shape == autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN;
 }
 
+/**
+ * @brief Currently the visible score only considers the truncation.
+ * If the detection roi is very close to the image boundary, it would be considered as truncated.
+ *
+ * @param roi       detection roi
+ * @param cam_info  camera info
+ * @return 0 if traffic light is truncated, otherwise 1
+ */
 int calVisibleScore(
   const traffic_light::MultiCameraFusion::RoiType & roi,
   const traffic_light::MultiCameraFusion::CamInfoType & cam_info)
@@ -56,7 +64,9 @@ int compareRecord(
   const traffic_light::FusionRecord & r1, const traffic_light::FusionRecord & r2,
   const traffic_light::MultiCameraFusion::CamInfoType & cam_info)
 {
-  // if both records are from the same sensor but different stamp, trust the latest one
+  /*
+  if both records are from the same sensor but different stamp, trust the latest one
+  */
   double t1 = rclcpp::Time(r1.header.stamp).seconds();
   double t2 = rclcpp::Time(r2.header.stamp).seconds();
   if (r1.header.frame_id == r2.header.frame_id && std::abs(t1 - t2) >= 1e-3) {
@@ -64,11 +74,15 @@ int compareRecord(
   }
   bool r1_is_unknown = isUnknown(r1.signal);
   bool r2_is_unknown = isUnknown(r2.signal);
-  // if both are unknown, they are of the same priority
+  /*
+  if both are unknown, they are of the same priority
+  */
   if (r1_is_unknown && r2_is_unknown) {
     return 0;
   } else if (r1_is_unknown ^ r2_is_unknown) {
-    // if either is unknown, the unknown is of lower priority
+    /*
+    if either is unknown, the unknown is of lower priority
+    */
     return r1_is_unknown ? -1 : 1;
   }
   int visible_score_1 = calVisibleScore(r1.roi, cam_info);
@@ -101,7 +115,15 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
   std::vector<std::string> camera_namespaces =
     this->declare_parameter("camera_namespaces", std::vector<std::string>{});
   is_approximate_sync_ = this->declare_parameter<bool>("approximate_sync", false);
+  message_lifespan_ = this->declare_parameter<double>("message_lifespan", 0.09);
+  perform_group_fusion_ = this->declare_parameter<bool>("perform_group_fusion", false);
   RCLCPP_INFO_STREAM(get_logger(), "is_approximate_sync_ = " << is_approximate_sync_);
+  RCLCPP_INFO_STREAM(get_logger(), "message_lifespan_ = " << message_lifespan_);
+  RCLCPP_INFO_STREAM(get_logger(), "perform_group_fusion_ = " << perform_group_fusion_);
+  RCLCPP_INFO_STREAM(get_logger(), "camera namespaces: ");
+  for (const auto & camera_ns : camera_namespaces) {
+    RCLCPP_INFO_STREAM(get_logger(), "    " << camera_ns);
+  }
   for (const std::string & camera_ns : camera_namespaces) {
     std::string signal_topic = camera_ns + "/traffic_signals";
     std::string roi_topic = camera_ns + "/rois";
@@ -127,9 +149,11 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
     }
   }
 
-  map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
-    "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
-    std::bind(&MultiCameraFusion::mapCallback, this, _1));
+  if (perform_group_fusion_) {
+    map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
+      "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
+      std::bind(&MultiCameraFusion::mapCallback, this, _1));
+  }
   signal_pub_ = create_publisher<SignalArrayType>("~/output/traffic_signals", rclcpp::QoS{1});
 }
 
@@ -146,7 +170,9 @@ void MultiCameraFusion::trafficSignalRoiCallback(
 
   std::map<IdType, FusionRecord> fusionedRecordMap;
   multiCameraFusion(*cam_info_msg, fusionedRecordMap);
-  groupFusion(*cam_info_msg, fusionedRecordMap);
+  if (perform_group_fusion_) {
+    groupFusion(*cam_info_msg, fusionedRecordMap);
+  }
 
   SignalArrayType out_msg;
   out_msg.header = signal_msg->header;
@@ -160,6 +186,7 @@ void MultiCameraFusion::trafficSignalRoiCallback(
 void MultiCameraFusion::mapCallback(
   const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg)
 {
+  RCLCPP_INFO_STREAM(get_logger(), "receive map message");
   lanelet::LaneletMapPtr lanelet_map_ptr = std::make_shared<lanelet::LaneletMap>();
 
   lanelet::utils::conversion::fromBinMsg(*input_msg, lanelet_map_ptr);
@@ -180,7 +207,6 @@ void MultiCameraFusion::mapCallback(
 void MultiCameraFusion::multiCameraFusion(
   const CamInfoType cam_info, std::map<IdType, FusionRecord> & fusionedRecordMap)
 {
-  double max_keep_t = 0.09;
   fusionedRecordMap.clear();
   /*
   this should not happen. Just in case
@@ -196,7 +222,7 @@ void MultiCameraFusion::multiCameraFusion(
     */
     if (
       (newest_stamp - rclcpp::Time(it->header.stamp)) >
-      rclcpp::Duration::from_seconds(max_keep_t)) {
+      rclcpp::Duration::from_seconds(message_lifespan_)) {
       it = record_arr_set_.erase(it);
     } else {
       /*
@@ -234,20 +260,41 @@ void MultiCameraFusion::groupFusion(
   const CamInfoType cam_info, std::map<IdType, FusionRecord> & fusionedRecordMap)
 {
   /*
-  the best record for every regulatory element id
+  this should not happen. Just in case
   */
+  if (perform_group_fusion_ == false) {
+    RCLCPP_WARN(get_logger(), "perform_group_fusion_ is set to false. Skip GroupFusion");
+    return;
+  }
   std::map<IdType, FusionRecord> regEleId2BestRecord;
   for (auto & p : fusionedRecordMap) {
-    IdType reg_ele_id = trafficLightId2RegulatoryEleId_[p.second.roi.id];
-    if (
-      regEleId2BestRecord.count(reg_ele_id) == 0 ||
-      ::compareRecord(p.second, regEleId2BestRecord[reg_ele_id], cam_info) >= 0) {
-      regEleId2BestRecord[reg_ele_id] = p.second;
+    IdType roi_id = p.second.roi.id;
+    /*
+    this should not happen
+    */
+    if (trafficLightId2RegulatoryEleId_.count(roi_id) == 0) {
+      RCLCPP_WARN_STREAM(
+        get_logger(), "Found Traffic Light Id = " << roi_id << " which is not defined in Map");
+    } else {
+      /*
+      keep the best record for every regulatory element id
+      */
+      IdType reg_ele_id = trafficLightId2RegulatoryEleId_[p.second.roi.id];
+      if (
+        regEleId2BestRecord.count(reg_ele_id) == 0 ||
+        ::compareRecord(p.second, regEleId2BestRecord[reg_ele_id], cam_info) >= 0) {
+        regEleId2BestRecord[reg_ele_id] = p.second;
+      }
     }
   }
+  /*
+  replace the resul with the best record of its group
+  */
   for (auto & p : fusionedRecordMap) {
-    IdType reg_ele_id = trafficLightId2RegulatoryEleId_[p.second.roi.id];
-    p.second.signal.lights = regEleId2BestRecord[reg_ele_id].signal.lights;
+    if (trafficLightId2RegulatoryEleId_.count(p.second.roi.id) != 0) {
+      IdType reg_ele_id = trafficLightId2RegulatoryEleId_[p.second.roi.id];
+      p.second.signal.lights = regEleId2BestRecord[reg_ele_id].signal.lights;
+    }
   }
 }
 
