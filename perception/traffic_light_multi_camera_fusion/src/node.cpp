@@ -117,13 +117,6 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
   is_approximate_sync_ = this->declare_parameter<bool>("approximate_sync", false);
   message_lifespan_ = this->declare_parameter<double>("message_lifespan", 0.09);
   perform_group_fusion_ = this->declare_parameter<bool>("perform_group_fusion", false);
-  RCLCPP_INFO_STREAM(get_logger(), "is_approximate_sync_ = " << is_approximate_sync_);
-  RCLCPP_INFO_STREAM(get_logger(), "message_lifespan_ = " << message_lifespan_);
-  RCLCPP_INFO_STREAM(get_logger(), "perform_group_fusion_ = " << perform_group_fusion_);
-  RCLCPP_INFO_STREAM(get_logger(), "camera namespaces: ");
-  for (const auto & camera_ns : camera_namespaces) {
-    RCLCPP_INFO_STREAM(get_logger(), "    " << camera_ns);
-  }
   for (const std::string & camera_ns : camera_namespaces) {
     std::string signal_topic = camera_ns + "/traffic_signals";
     std::string roi_topic = camera_ns + "/rois";
@@ -186,7 +179,6 @@ void MultiCameraFusion::trafficSignalRoiCallback(
 void MultiCameraFusion::mapCallback(
   const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg)
 {
-  RCLCPP_INFO_STREAM(get_logger(), "receive map message");
   lanelet::LaneletMapPtr lanelet_map_ptr = std::make_shared<lanelet::LaneletMap>();
 
   lanelet::utils::conversion::fromBinMsg(*input_msg, lanelet_map_ptr);
