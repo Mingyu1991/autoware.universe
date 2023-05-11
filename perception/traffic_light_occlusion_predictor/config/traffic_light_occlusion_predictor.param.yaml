@@ -1,0 +1,6 @@
+/**:
+  ros__parameters:
+    azimuth_occlusion_resolution: 0.15 # degree
+    elevation_occlusion_resolution: 0.08  # degree
+    max_valid_pt_dist: 50.0
+    min_cloud_size: 100000

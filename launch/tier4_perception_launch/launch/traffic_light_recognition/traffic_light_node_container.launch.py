@@ -35,6 +35,12 @@ def generate_launch_description():
             DeclareLaunchArgument(name, default_value=default_value, description=description)
         )
 
+    def create_parameter_dict(*args):
+        result = {}
+        for x in args:
+            result[x] = LaunchConfiguration(x)
+        return result
+
     fine_detector_share_dir = get_package_share_directory("traffic_light_fine_detector")
     classifier_share_dir = get_package_share_directory("traffic_light_classifier")
     add_launch_arg("enable_image_decompressor", "True")
@@ -54,6 +60,26 @@ def generate_launch_description():
     add_launch_arg("fine_detector_score_thresh", "0.3")
     add_launch_arg("fine_detector_nms_thresh", "0.65")
 
+    fine_detector_param = create_parameter_dict(
+        "fine_detector_model_path",
+        "fine_detector_label_path",
+        "fine_detector_precision",
+        "fine_detector_score_thresh",
+        "fine_detector_nms_thresh",
+    )
+
+    add_launch_arg("azimuth_occlusion_resolution", 0.15)
+    add_launch_arg("elevation_occlusion_resolution", 0.08)
+    add_launch_arg("max_valid_pt_dist", 50.0)
+    add_launch_arg("min_cloud_size", 100000)
+
+    occlusion_predictor_param = create_parameter_dict(
+        "azimuth_occlusion_resolution",
+        "elevation_occlusion_resolution",
+        "max_valid_pt_dist",
+        "min_cloud_size",
+    )
+
     add_launch_arg("approximate_sync", "False")
 
     # traffic_light_classifier
@@ -69,15 +95,19 @@ def generate_launch_description():
     add_launch_arg("classifier_mean", "[123.675, 116.28, 103.53]")
     add_launch_arg("classifier_std", "[58.395, 57.12, 57.375]")
 
+    classifier_param = create_parameter_dict(
+        "approximate_sync",
+        "classifier_type",
+        "classifier_model_path",
+        "classifier_label_path",
+        "classifier_precision",
+        "classifier_mean",
+        "classifier_std",
+    )
+
     add_launch_arg("use_crosswalk_traffic_light_estimator", "True")
     add_launch_arg("use_intra_process", "False")
     add_launch_arg("use_multithread", "False")
-
-    def create_parameter_dict(*args):
-        result = {}
-        for x in args:
-            result[x] = LaunchConfiguration(x)
-        return result
 
     container = ComposableNodeContainer(
         name="traffic_light_node_container",
@@ -89,17 +119,7 @@ def generate_launch_description():
                 package="traffic_light_classifier",
                 plugin="traffic_light::TrafficLightClassifierNodelet",
                 name="traffic_light_classifier",
-                parameters=[
-                    create_parameter_dict(
-                        "approximate_sync",
-                        "classifier_type",
-                        "classifier_model_path",
-                        "classifier_label_path",
-                        "classifier_precision",
-                        "classifier_mean",
-                        "classifier_std",
-                    )
-                ],
+                parameters=[classifier_param],
                 remappings=[
                     ("~/input/image", LaunchConfiguration("input/image")),
                     ("~/input/rois", "rois"),
@@ -211,14 +231,6 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("enable_image_decompressor")),
     )
 
-    fine_detector_param = create_parameter_dict(
-        "fine_detector_model_path",
-        "fine_detector_label_path",
-        "fine_detector_precision",
-        "fine_detector_score_thresh",
-        "fine_detector_nms_thresh",
-    )
-
     fine_detector_loader = LoadComposableNodes(
         composable_node_descriptions=[
             ComposableNode(
@@ -231,6 +243,28 @@ def generate_launch_description():
                     ("~/input/rois", "rough/rois"),
                     ("~/expect/rois", "expect/rois"),
                     ("~/output/rois", "rois"),
+                ],
+                extra_arguments=[
+                    {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
+                ],
+            ),
+        ],
+        target_container=container,
+        condition=IfCondition(LaunchConfiguration("enable_fine_detection")),
+    )
+
+    occlusion_predictor_loader = LoadComposableNodes(
+        composable_node_descriptions=[
+            ComposableNode(
+                package="traffic_light_occlusion_predictor",
+                plugin="traffic_light::TrafficLightOcclusionPredictorNodelet",
+                name="traffic_light_occlusion_predictor",
+                parameters=[occlusion_predictor_param],
+                remappings=[
+                    ("~/input/vector_map", "/map/vector_map"),
+                    ("~/input/rois", "rois"),
+                    ("~/input/traffic_signals" "classified/traffic_signals"),
+                    ("~/output/traffic_signals", "occlusion/traffic_signals"),
                 ],
                 extra_arguments=[
                     {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
@@ -263,5 +297,6 @@ def generate_launch_description():
             fine_detector_loader,
             estimator_loader,
             relay_loader,
+            occlusion_predictor_loader,
         ]
     )
