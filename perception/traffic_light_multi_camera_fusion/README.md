@@ -2,7 +2,7 @@
 
 ## Overview
 
-`traffic_light_multi_camera_fusion` performs traffic light signal fusion which contains two tasks:
+`traffic_light_multi_camera_fusion` performs traffic light signal fusion which can be summarized as the following two tasks:
 
 1. Multi-Camera-Fusion: performed on single traffic light signal detected by different cameras.
 2. Group-Fusion: performed on traffic light signals within the same group, which means traffic lights sharing the same regulatory element id defined in lanetlet2 map.
@@ -26,9 +26,9 @@ You don't need to configure these topics manually. Just provide the `camera_name
 
 ## Node parameters
 
-| Parameter              | Type          | Description                                      |
-| ---------------------- | ------------- | ------------------------------------------------ |
-| `camera_namespaces`    | string vector | Camera Namespaces to be fused                    |
-| `message_lifespan`     | double        | The maximum timestamp span to be fused           |
-| `approximate_sync`     | bool          | Whether work in Approximate Synchronization Mode |
-| `perform_group_fusion` | bool          | Whether perform Group Fusion                     |
+| Parameter              | Type            | Description                                      |
+| ---------------------- | --------------- | ------------------------------------------------ |
+| `camera_namespaces`    | vector\<string> | Camera Namespaces to be fused                    |
+| `message_lifespan`     | double          | The maximum timestamp span to be fused           |
+| `approximate_sync`     | bool            | Whether work in Approximate Synchronization Mode |
+| `perform_group_fusion` | bool            | Whether perform Group Fusion                     |

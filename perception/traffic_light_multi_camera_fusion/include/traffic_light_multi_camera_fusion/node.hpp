@@ -1,4 +1,4 @@
-// Copyright 2020 Tier IV, Inc.
+// Copyright 2023 Tier IV, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,24 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/*
- * Copyright 2023 Autoware Foundation. All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * Authors: Mingyu Li
- *
- */
 
 #ifndef TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_
 #define TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_
@@ -63,6 +45,7 @@ namespace mf = message_filters;
 struct FusionRecord
 {
   std_msgs::msg::Header header;
+  sensor_msgs::msg::CameraInfo cam_info;
   autoware_auto_perception_msgs::msg::TrafficLightRoi roi;
   autoware_auto_perception_msgs::msg::TrafficSignal signal;
 };
@@ -70,6 +53,7 @@ struct FusionRecord
 struct FusionRecordArr
 {
   std_msgs::msg::Header header;
+  sensor_msgs::msg::CameraInfo cam_info;
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray rois;
   autoware_auto_perception_msgs::msg::TrafficSignalArray signals;
 };
@@ -100,10 +84,9 @@ private:
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
 
-  void multiCameraFusion(
-    const CamInfoType cam_info, std::map<IdType, FusionRecord> & fusionedRecordMap);
+  void multiCameraFusion(std::map<IdType, FusionRecord> & fusioned_record_map);
 
-  void groupFusion(const CamInfoType cam_info, std::map<IdType, FusionRecord> & fusionedRecordMap);
+  void groupFusion(std::map<IdType, FusionRecord> & fusioned_record_map);
 
   typedef mf::sync_policies::ExactTime<CamInfoType, RoiArrayType, SignalArrayType> ExactSyncPolicy;
   typedef mf::Synchronizer<ExactSyncPolicy> ExactSync;
@@ -122,7 +105,7 @@ private:
   /*
   the mappping from traffic light id (instance id) to regulatory element id (group id)
   */
-  std::map<lanelet::Id, lanelet::Id> trafficLightId2RegulatoryEleId_;
+  std::map<lanelet::Id, lanelet::Id> traffic_light_id_to_regulatory_ele_id_;
   /*
   save record arrays by increasing timestamp order.
   use multiset in case there are multiple cameras publishing images at exactly the same time
