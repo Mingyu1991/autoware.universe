@@ -57,9 +57,6 @@ public:
     Direction direction)
   : lane_change_parameters_{std::move(parameters)}, direction_{direction}, type_{type}
   {
-    prev_module_reference_path_ = std::make_shared<PathWithLaneId>();
-    prev_module_path_ = std::make_shared<PathWithLaneId>();
-    prev_drivable_lanes_ = std::make_shared<std::vector<DrivableLanes>>();
   }
 
   LaneChangeBase(const LaneChangeBase &) = delete;
@@ -93,18 +90,21 @@ public:
     const std::shared_ptr<PathWithLaneId> & prev_module_path)
   {
     if (prev_module_reference_path) {
-      *prev_module_reference_path_ = *prev_module_reference_path;
+      prev_module_reference_path_ = *prev_module_reference_path;
     }
     if (prev_module_path) {
-      *prev_module_path_ = *prev_module_path;
+      prev_module_path_ = *prev_module_path;
     }
   };
 
-  virtual void setPreviousDrivableLanes(const std::vector<DrivableLanes> & prev_drivable_lanes)
+  virtual void setPreviousDrivableAreaInfo(const DrivableAreaInfo & prev_drivable_area_info)
   {
-    if (prev_drivable_lanes_) {
-      *prev_drivable_lanes_ = prev_drivable_lanes;
-    }
+    prev_drivable_area_info_ = prev_drivable_area_info;
+  }
+
+  virtual void setPreviousTurnSignalInfo(const TurnSignalInfo & prev_turn_signal_info)
+  {
+    prev_turn_signal_info_ = prev_turn_signal_info;
   }
 
   virtual void updateSpecialData() {}
@@ -149,6 +149,8 @@ public:
   bool isStopState() const { return current_lane_change_state_ == LaneChangeStates::Stop; }
 
   bool isValidPath() const { return status_.is_valid_path; }
+
+  bool isCancelEnabled() const { return lane_change_parameters_->enable_cancel_lane_change; }
 
   std_msgs::msg::Header getRouteHeader() const
   {
@@ -229,9 +231,10 @@ protected:
   std::shared_ptr<LaneChangeParameters> lane_change_parameters_{};
   std::shared_ptr<LaneChangePath> abort_path_{};
   std::shared_ptr<const PlannerData> planner_data_{};
-  std::shared_ptr<PathWithLaneId> prev_module_reference_path_{};
-  std::shared_ptr<PathWithLaneId> prev_module_path_{};
-  std::shared_ptr<std::vector<DrivableLanes>> prev_drivable_lanes_{};
+  PathWithLaneId prev_module_reference_path_{};
+  PathWithLaneId prev_module_path_{};
+  DrivableAreaInfo prev_drivable_area_info_{};
+  TurnSignalInfo prev_turn_signal_info_{};
 
   PathWithLaneId prev_approved_path_{};
 

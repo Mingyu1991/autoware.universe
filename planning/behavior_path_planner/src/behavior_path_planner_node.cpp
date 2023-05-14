@@ -313,7 +313,7 @@ BehaviorPathPlannerNode::BehaviorPathPlannerNode(const rclcpp::NodeOptions & nod
     const double turn_signal_intersection_angle_threshold_deg =
       planner_data_->parameters.turn_signal_intersection_angle_threshold_deg;
     const double turn_signal_search_time = planner_data_->parameters.turn_signal_search_time;
-    turn_signal_decider_.setParameters(
+    planner_data_->turn_signal_decider.setParameters(
       planner_data_->parameters.base_link2front, turn_signal_intersection_search_distance,
       turn_signal_search_time, turn_signal_intersection_angle_threshold_deg);
   }
@@ -471,6 +471,7 @@ SideShiftParameters BehaviorPathPlannerNode::getSideShiftParam()
   p.min_shifting_distance = declare_parameter<double>(ns + "min_shifting_distance");
   p.min_shifting_speed = declare_parameter<double>(ns + "min_shifting_speed");
   p.shift_request_time_limit = declare_parameter<double>(ns + "shift_request_time_limit");
+  p.publish_debug_marker = declare_parameter<bool>(ns + "publish_debug_marker");
 
   return p;
 }
@@ -525,6 +526,7 @@ AvoidanceParameters BehaviorPathPlannerNode::getAvoidanceParam()
     p.enable_safety_check = declare_parameter<bool>(ns + "enable_safety_check");
     p.enable_yield_maneuver = declare_parameter<bool>(ns + "enable_yield_maneuver");
     p.disable_path_update = declare_parameter<bool>(ns + "disable_path_update");
+    p.use_hatched_road_markings = declare_parameter<bool>(ns + "use_hatched_road_markings");
     p.publish_debug_marker = declare_parameter<bool>(ns + "publish_debug_marker");
     p.print_debug_info = declare_parameter<bool>(ns + "print_debug_info");
   }
@@ -593,11 +595,8 @@ AvoidanceParameters BehaviorPathPlannerNode::getAvoidanceParam()
   {
     std::string ns = "avoidance.avoidance.lateral.";
     p.lateral_collision_margin = declare_parameter<double>(ns + "lateral_collision_margin");
-    p.lateral_passable_safety_buffer =
-      declare_parameter<double>(ns + "lateral_passable_safety_buffer");
     p.road_shoulder_safety_margin = declare_parameter<double>(ns + "road_shoulder_safety_margin");
-    p.avoidance_execution_lateral_threshold =
-      declare_parameter<double>(ns + "avoidance_execution_lateral_threshold");
+    p.lateral_execution_threshold = declare_parameter<double>(ns + "lateral_execution_threshold");
     p.max_right_shift_length = declare_parameter<double>(ns + "max_right_shift_length");
     p.max_left_shift_length = declare_parameter<double>(ns + "max_left_shift_length");
   }
@@ -655,6 +654,20 @@ AvoidanceParameters BehaviorPathPlannerNode::getAvoidanceParam()
     std::string ns = "avoidance.target_velocity_matrix.";
     p.col_size = declare_parameter<int>(ns + "col_size");
     p.target_velocity_matrix = declare_parameter<std::vector<double>>(ns + "matrix");
+  }
+
+  // shift line pipeline
+  {
+    std::string ns = "avoidance.shift_line_pipeline.";
+    p.quantize_filter_threshold = declare_parameter<double>(ns + "trim.quantize_filter_threshold");
+    p.same_grad_filter_1_threshold =
+      declare_parameter<double>(ns + "trim.same_grad_filter_1_threshold");
+    p.same_grad_filter_2_threshold =
+      declare_parameter<double>(ns + "trim.same_grad_filter_2_threshold");
+    p.same_grad_filter_3_threshold =
+      declare_parameter<double>(ns + "trim.same_grad_filter_3_threshold");
+    p.sharp_shift_filter_threshold =
+      declare_parameter<double>(ns + "trim.sharp_shift_filter_threshold");
   }
 
   return p;
@@ -1235,7 +1248,7 @@ void BehaviorPathPlannerNode::computeTurnSignal(
     turn_signal.command = TurnIndicatorsCommand::DISABLE;
     hazard_signal.command = output.turn_signal_info.hazard_signal.command;
   } else {
-    turn_signal = turn_signal_decider_.getTurnSignal(planner_data, path, output.turn_signal_info);
+    turn_signal = planner_data->getTurnSignal(path, output.turn_signal_info);
     hazard_signal.command = HazardLightsCommand::DISABLE;
   }
   turn_signal.stamp = get_clock()->now();
@@ -1243,13 +1256,14 @@ void BehaviorPathPlannerNode::computeTurnSignal(
   turn_signal_publisher_->publish(turn_signal);
   hazard_signal_publisher_->publish(hazard_signal);
 
-  publish_steering_factor(turn_signal);
+  publish_steering_factor(planner_data, turn_signal);
 }
 
-void BehaviorPathPlannerNode::publish_steering_factor(const TurnIndicatorsCommand & turn_signal)
+void BehaviorPathPlannerNode::publish_steering_factor(
+  const std::shared_ptr<PlannerData> & planner_data, const TurnIndicatorsCommand & turn_signal)
 {
   const auto [intersection_flag, approaching_intersection_flag] =
-    turn_signal_decider_.getIntersectionTurnSignalFlag();
+    planner_data->turn_signal_decider.getIntersectionTurnSignalFlag();
   if (intersection_flag || approaching_intersection_flag) {
     const uint16_t steering_factor_direction = std::invoke([&turn_signal]() {
       if (turn_signal.command == TurnIndicatorsCommand::ENABLE_LEFT) {
@@ -1259,7 +1273,7 @@ void BehaviorPathPlannerNode::publish_steering_factor(const TurnIndicatorsComman
     });
 
     const auto [intersection_pose, intersection_distance] =
-      turn_signal_decider_.getIntersectionPoseAndDistance();
+      planner_data->turn_signal_decider.getIntersectionPoseAndDistance();
     const uint16_t steering_factor_state = std::invoke([&intersection_flag]() {
       if (intersection_flag) {
         return SteeringFactor::TURNING;

@@ -14,6 +14,7 @@
 
 #include "behavior_path_planner/scene_module/side_shift/side_shift_module.hpp"
 
+#include "behavior_path_planner/marker_util/debug_utilities.hpp"
 #include "behavior_path_planner/utils/path_utils.hpp"
 #include "behavior_path_planner/utils/side_shift/util.hpp"
 #include "behavior_path_planner/utils/utils.hpp"
@@ -38,7 +39,7 @@ using tier4_autoware_utils::getPoint;
 SideShiftModule::SideShiftModule(
   const std::string & name, rclcpp::Node & node,
   const std::shared_ptr<SideShiftParameters> & parameters)
-: SceneModuleInterface{name, node, createRTCInterfaceMap(node, name, {""})}, parameters_{parameters}
+: SceneModuleInterface{name, node, {}}, parameters_{parameters}
 {
   using std::placeholders::_1;
   lateral_offset_subscriber_ = node.create_subscription<LateralOffset>(
@@ -58,6 +59,8 @@ SideShiftModule::SideShiftModule(
 void SideShiftModule::initVariables()
 {
   reference_path_ = PathWithLaneId();
+  debug_data_.path_shifter.reset();
+  debug_marker_.markers.clear();
   start_pose_reset_request_ = false;
   requested_lateral_offset_ = 0.0;
   inserted_lateral_offset_ = 0.0;
@@ -186,10 +189,6 @@ ModuleStatus SideShiftModule::updateState()
 
 void SideShiftModule::updateData()
 {
-  if (prev_reference_.points.empty()) {
-    prev_reference_ = *getPreviousModuleOutput().path;
-  }
-
   // special for avoidance: take behind distance upt ot shift-start-point if it exist.
   const auto longest_dist_to_shift_line = [&]() {
     double max_dist = 0.0;
@@ -206,6 +205,9 @@ void SideShiftModule::updateData()
   const auto centerline_path =
     utils::calcCenterLinePath(planner_data_, reference_pose, longest_dist_to_shift_line);
 #else
+  if (prev_reference_.points.empty()) {
+    prev_reference_ = *getPreviousModuleOutput().path;
+  }
   const auto centerline_path = utils::calcCenterLinePath(
     planner_data_, reference_pose, longest_dist_to_shift_line,
     *getPreviousModuleOutput().reference_path);
@@ -302,6 +304,14 @@ BehaviorModuleOutput SideShiftModule::plan()
 
   prev_output_ = shifted_path;
   path_reference_ = getPreviousModuleOutput().reference_path;
+
+  debug_data_.path_shifter = std::make_shared<PathShifter>(path_shifter_);
+
+  if (parameters_->publish_debug_marker) {
+    setDebugMarkersVisualization();
+  } else {
+    debug_marker_.markers.clear();
+  }
 
   return output;
 }
@@ -442,7 +452,8 @@ BehaviorModuleOutput SideShiftModule::adjustDrivableArea(const ShiftedPath & pat
     utils::expandLanelets(shorten_lanes, left_offset, right_offset, dp.drivable_area_types_to_skip);
 
   {  // for old architecture
-    utils::generateDrivableArea(output_path, expanded_lanes, p.vehicle_length, planner_data_);
+    utils::generateDrivableArea(
+      output_path, expanded_lanes, false, p.vehicle_length, planner_data_);
     out.path = std::make_shared<PathWithLaneId>(output_path);
   }
 
@@ -497,5 +508,27 @@ PathWithLaneId SideShiftModule::extendBackwardLength(const PathWithLaneId & orig
   }
 
   return extended_path;
+}
+
+void SideShiftModule::setDebugMarkersVisualization() const
+{
+  using marker_utils::createShiftLineMarkerArray;
+
+  debug_marker_.markers.clear();
+
+  const auto add = [this](const MarkerArray & added) {
+    tier4_autoware_utils::appendMarkerArray(added, &debug_marker_);
+  };
+
+  const auto add_shift_line_marker = [this, add](
+                                       const auto & ns, auto r, auto g, auto b, double w = 0.1) {
+    add(createShiftLineMarkerArray(
+      debug_data_.path_shifter->getShiftLines(), debug_data_.path_shifter->getBaseOffset(), ns, r,
+      g, b, w));
+  };
+
+  if (debug_data_.path_shifter) {
+    add_shift_line_marker("side_shift_shift_points", 0.7, 0.7, 0.7, 0.4);
+  }
 }
 }  // namespace behavior_path_planner

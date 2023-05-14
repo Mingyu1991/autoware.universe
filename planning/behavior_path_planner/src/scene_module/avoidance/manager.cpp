@@ -69,10 +69,7 @@ void AvoidanceModuleManager::updateModuleParams(const std::vector<rclcpp::Parame
   {
     const std::string ns = "avoidance.avoidance.lateral.";
     updateParam<double>(
-      parameters, ns + "avoidance_execution_lateral_threshold",
-      p->avoidance_execution_lateral_threshold);
-    updateParam<double>(
-      parameters, ns + "lateral_passable_safety_buffer", p->lateral_passable_safety_buffer);
+      parameters, ns + "lateral_execution_threshold", p->lateral_execution_threshold);
     updateParam<double>(parameters, ns + "lateral_collision_margin", p->lateral_collision_margin);
     updateParam<double>(
       parameters, ns + "road_shoulder_safety_margin", p->road_shoulder_safety_margin);
@@ -93,6 +90,20 @@ void AvoidanceModuleManager::updateModuleParams(const std::vector<rclcpp::Parame
     const std::string ns = "avoidance.constrains.lateral.";
     updateParam<double>(parameters, ns + "nominal_lateral_jerk", p->nominal_lateral_jerk);
     updateParam<double>(parameters, ns + "max_lateral_jerk", p->max_lateral_jerk);
+  }
+
+  {
+    const std::string ns = "avoidance.shift_line_pipeline.";
+    updateParam<double>(
+      parameters, ns + "trim.quantize_filter_threshold", p->quantize_filter_threshold);
+    updateParam<double>(
+      parameters, ns + "trim.same_grad_filter_1_threshold", p->same_grad_filter_1_threshold);
+    updateParam<double>(
+      parameters, ns + "trim.same_grad_filter_2_threshold", p->same_grad_filter_2_threshold);
+    updateParam<double>(
+      parameters, ns + "trim.same_grad_filter_3_threshold", p->same_grad_filter_3_threshold);
+    updateParam<double>(
+      parameters, ns + "trim.sharp_shift_filter_threshold", p->sharp_shift_filter_threshold);
   }
 
   std::for_each(registered_modules_.begin(), registered_modules_.end(), [&p](const auto & m) {

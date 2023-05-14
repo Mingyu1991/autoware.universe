@@ -230,10 +230,15 @@ public:
   }
 
   /**
-   * @brief Return true if the activation command is received
+   * @brief Return true if the activation command is received from the RTC interface.
+   *        If no RTC interface is registered, return true.
    */
   bool isActivated()
   {
+    if (rtc_interface_ptr_map_.empty()) {
+      return true;
+    }
+
     for (auto itr = rtc_interface_ptr_map_.begin(); itr != rtc_interface_ptr_map_.end(); ++itr) {
       if (itr->second->isRegistered(uuid_map_.at(itr->first))) {
         return itr->second->isActivated(uuid_map_.at(itr->first));

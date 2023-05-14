@@ -94,6 +94,18 @@ std::pair<double, double> getMinMaxValues(const std::vector<double> & vec)
 
   return std::make_pair(vec.at(min_idx), vec.at(max_idx));
 }
+
+void appendObjectMarker(MarkerArray & marker_array, const geometry_msgs::msg::Pose & obj_pose)
+{
+  auto marker = tier4_autoware_utils::createDefaultMarker(
+    "map", rclcpp::Clock{RCL_ROS_TIME}.now(), "dynamic_objects_to_avoid",
+    marker_array.markers.size(), visualization_msgs::msg::Marker::CUBE,
+    tier4_autoware_utils::createMarkerScale(3.0, 1.0, 1.0),
+    tier4_autoware_utils::createMarkerColor(1.0, 0.5, 0.6, 0.8));
+  marker.pose = obj_pose;
+
+  marker_array.markers.push_back(marker);
+}
 }  // namespace
 
 #ifdef USE_OLD_ARCHITECTURE
@@ -162,6 +174,8 @@ ModuleStatus DynamicAvoidanceModule::updateState()
 
 BehaviorModuleOutput DynamicAvoidanceModule::plan()
 {
+  info_marker_.markers.clear();
+
   // 1. get reference path from previous module
   const auto prev_module_path = getPreviousModuleOutput().path;
 
@@ -174,6 +188,8 @@ BehaviorModuleOutput DynamicAvoidanceModule::plan()
     const auto obstacle_poly = calcDynamicObstaclePolygon(*prev_module_path, object);
     if (obstacle_poly) {
       obstacles_for_drivable_area.push_back({object.pose, obstacle_poly.value()});
+
+      appendObjectMarker(info_marker_, object.pose);
     }
   }
 
@@ -210,7 +226,33 @@ DynamicAvoidanceModule::calcTargetObjects() const
 
   // 2. filter obstacles for dynamic avoidance
   const auto & predicted_objects = planner_data_->dynamic_object->objects;
-  const auto target_predicted_objects = getObjectsInLanes(predicted_objects, target_lanes);
+  const auto predicted_objects_in_target_lanes = getObjectsInLanes(predicted_objects, target_lanes);
+
+  // check if object will cut into the ego lane.
+  std::vector<PredictedObject> target_predicted_objects;
+  constexpr double epsilon_path_lat_diff = 0.3;
+  for (const auto & object : predicted_objects_in_target_lanes) {
+    const auto reliable_predicted_path = std::max_element(
+      object.kinematics.predicted_paths.begin(), object.kinematics.predicted_paths.end(),
+      [](const PredictedPath & a, const PredictedPath & b) { return a.confidence < b.confidence; });
+
+    // Ignore object since it will cut into the ego lane
+    const bool will_object_cut_in = [&]() {
+      for (const auto & predicted_path_point : reliable_predicted_path->path) {
+        const double paths_lat_diff =
+          motion_utils::calcLateralOffset(prev_module_path->points, predicted_path_point.position);
+        if (std::abs(paths_lat_diff) < epsilon_path_lat_diff) {
+          return true;
+        }
+      }
+      return false;
+    }();
+    if (will_object_cut_in) {
+      continue;
+    }
+
+    target_predicted_objects.push_back(object);
+  }
 
   // 3. convert predicted objects to dynamic avoidance objects
   std::vector<DynamicAvoidanceObject> target_avoidance_objects;
