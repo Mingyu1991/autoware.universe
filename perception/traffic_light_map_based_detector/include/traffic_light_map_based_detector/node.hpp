@@ -17,6 +17,7 @@
 
 #include <lanelet2_extension/regulatory_elements/autoware_traffic_light.hpp>
 #include <lanelet2_extension/utility/query.hpp>
+#include <perception_utils/traffic_light_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
@@ -26,11 +27,7 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
-#if __has_include(<image_geometry/pinhole_camera_model.hpp>)
-#include <image_geometry/pinhole_camera_model.hpp>
-#else
 #include <image_geometry/pinhole_camera_model.h>
-#endif
 #include <lanelet2_core/LaneletMap.h>
 #include <lanelet2_routing/RoutingGraph.h>
 #include <lanelet2_traffic_rules/TrafficRulesFactory.h>

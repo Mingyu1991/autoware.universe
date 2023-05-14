@@ -1,4 +1,4 @@
-// Copyright 2020 Tier IV, Inc.
+// Copyright 2023 Tier IV, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef TRAFFIC_LIGHT_ROI_VISUALIZER__NODELET_HPP_
-#define TRAFFIC_LIGHT_ROI_VISUALIZER__NODELET_HPP_
+#ifndef TRAFFIC_LIGHT_FUSION_VISUALIZER__NODELET_HPP_
+#define TRAFFIC_LIGHT_FUSION_VISUALIZER__NODELET_HPP_
 
 #include <image_transport/image_transport.hpp>
 #include <image_transport/subscriber_filter.hpp>
@@ -42,27 +42,18 @@ struct ClassificationResult
   std::string label;
 };
 
-class TrafficLightRoiVisualizerNodelet : public rclcpp::Node
+class TrafficLightFusionVisualizerNodelet : public rclcpp::Node
 {
 public:
-  explicit TrafficLightRoiVisualizerNodelet(const rclcpp::NodeOptions & options);
+  explicit TrafficLightFusionVisualizerNodelet(const rclcpp::NodeOptions & options);
   void connectCb();
-
-  void imageRoiCallback(
-    const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
-      input_tl_roi_msg,
-    const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
-      input_traffic_signals_msg);
 
   void imageRoughRoiCallback(
     const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
     const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
-      input_tl_roi_msg,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
       input_tl_rough_roi_msg,
     const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
-      input_traffic_signals_msg);
+      input_signal_msg);
 
 private:
   std::map<int, std::string> state2label_{
@@ -98,42 +89,26 @@ private:
     int id, const autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals,
     ClassificationResult & result);
 
-  bool getRoiFromId(
-    int id, const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & rois,
-    autoware_auto_perception_msgs::msg::TrafficLightRoi & correspond_roi);
-
   bool trafficSignalChanged(
-    const autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray & rough_rois);
+    const autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals);
 
-  rclcpp::TimerBase::SharedPtr timer_;
+  void printSignal(const autoware_auto_perception_msgs::msg::TrafficSignalArray & msg);
+
   image_transport::SubscriberFilter image_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
     rough_roi_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficSignalArray>
-    traffic_signals_sub_;
-  image_transport::Publisher image_pub_;
-  typedef message_filters::sync_policies::ExactTime<
-    sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
-    autoware_auto_perception_msgs::msg::TrafficSignalArray>
-    SyncPolicy;
-  typedef message_filters::Synchronizer<SyncPolicy> Sync;
-  std::shared_ptr<Sync> sync_;
+  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficSignalArray> signal_sub_;
 
   typedef message_filters::sync_policies::ExactTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
-    autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
     autoware_auto_perception_msgs::msg::TrafficSignalArray>
     SyncPolicyWithRoughRoi;
   typedef message_filters::Synchronizer<SyncPolicyWithRoughRoi> SyncWithRoughRoi;
   std::shared_ptr<SyncWithRoughRoi> sync_with_rough_roi_;
 
-  bool enable_fine_detection_;
-  autoware_auto_perception_msgs::msg::TrafficSignalArray last_msg_;
-  autoware_auto_perception_msgs::msg::TrafficLightRoiArray last_rough_roi_;
+  autoware_auto_perception_msgs::msg::TrafficSignalArray last_signal_;
 };
 
 }  // namespace traffic_light
 
-#endif  // TRAFFIC_LIGHT_ROI_VISUALIZER__NODELET_HPP_
+#endif  // TRAFFIC_LIGHT_FUSION_VISUALIZER__NODELET_HPP_
