@@ -123,10 +123,9 @@ TrtYoloX::TrtYoloX(
     fs::path calibration_table{model_path};
     std::string calibName = "";
     std::string ext = "";
-    if (build_config.calib_type_str == "Entropy") {
+    if (build_config.calibType == nvinfer1::CalibrationAlgoType::kENTROPY_CALIBRATION) {
       ext = "EntropyV2-";
-    } else if (
-      build_config.calib_type_str == "Legacy" || build_config.calib_type_str == "Percentile") {
+    } else if (build_config.calibType == nvinfer1::CalibrationAlgoType::kLEGACY_CALIBRATION) {
       ext = "Legacy-";
     } else {
       ext = "MinMax-";
@@ -139,14 +138,12 @@ TrtYoloX::TrtYoloX(
     histogram_table.replace_extension(ext);
 
     std::unique_ptr<nvinfer1::IInt8Calibrator> calibrator;
-    if (build_config.calib_type_str == "Entropy") {
+    if (build_config.calibType == nvinfer1::CalibrationAlgoType::kENTROPY_CALIBRATION) {
       calibrator.reset(
         new tensorrt_yolox::Int8EntropyCalibrator(stream, calibration_table, norm_factor_));
-
-    } else if (
-      build_config.calib_type_str == "Legacy" || build_config.calib_type_str == "Percentile") {
-      const double quantile = 0.999999;
-      const double cutoff = 0.999999;
+    } else if (build_config.calibType == nvinfer1::CalibrationAlgoType::kLEGACY_CALIBRATION) {
+      double quantile = 0.999999;
+      double cutoff = 0.999999;
       calibrator.reset(new tensorrt_yolox::Int8LegacyCalibrator(
         stream, calibration_table, histogram_table, norm_factor_, true, quantile, cutoff));
     } else {
@@ -263,11 +260,6 @@ void TrtYoloX::initPreprocesBuffer(int width, int height)
       image_buf_d_ = cuda_utils::make_unique<unsigned char[]>(width * height * 3);
     }
   }
-}
-
-void TrtYoloX::printProfiling(void)
-{
-  trt_common_->printProfiling();
 }
 
 void TrtYoloX::preprocessGpu(const std::vector<cv::Mat> & images)

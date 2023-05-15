@@ -103,11 +103,6 @@ public:
    */
   void initPreprocesBuffer(int width, int height);
 
-  /**
-   * @brief output TensorRT profiles for each layer
-   */
-  void printProfiling(void);
-
 private:
   void preprocess(const std::vector<cv::Mat> & images);
 
