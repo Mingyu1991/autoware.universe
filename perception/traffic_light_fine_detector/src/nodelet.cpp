@@ -77,7 +77,8 @@ TrafficLightFineDetectorNodelet::TrafficLightFineDetectorNodelet(
     RCLCPP_ERROR(this->get_logger(), "Could not find tlr id");
   }
   trt_yolox_ = std::make_unique<tensorrt_yolox::TrtYoloX>(
-    model_path, precision, num_class, score_thresh_, nms_threshold);
+    model_path, precision, num_class, score_thresh_, nms_threshold, tensorrt_common::BuildConfig(),
+    false);
 
   using std::chrono_literals::operator""ms;
   timer_ = rclcpp::create_timer(

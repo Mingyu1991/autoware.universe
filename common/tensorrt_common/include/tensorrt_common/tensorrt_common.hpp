@@ -44,7 +44,6 @@ namespace tensorrt_common
  */
 struct BuildConfig
 {
-  std::string precison;
   nvinfer1::CalibrationAlgoType calibType;
   int dla;
   bool first;  // For partial quantization
@@ -97,7 +96,7 @@ public:
     std::unique_ptr<nvinfer1::IInt8Calibrator> calibrator,
     const BatchConfig & batch_config = {1, 1, 1}, const size_t max_workspace_size = (16 << 20),
     const BuildConfig buildConfig =
-      {"fp32", nvinfer1::CalibrationAlgoType::kMINMAX_CALIBRATION, -1, false, false},
+      {nvinfer1::CalibrationAlgoType::kMINMAX_CALIBRATION, -1, false, false},
     const std::vector<std::string> & plugin_paths = {});
 
   /**

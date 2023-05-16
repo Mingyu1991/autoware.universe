@@ -254,7 +254,8 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
       get_logger(), "Could not convert from '%s' to 'bgr8'.", input_image_msg->encoding.c_str());
   }
   image_pub_.publish(cv_ptr->toImageMsg());
-  if (trafficSignalChanged(*input_traffic_signals_msg, *input_tl_rough_roi_msg)) {
+  // if (trafficSignalChanged(*input_traffic_signals_msg, *input_tl_rough_roi_msg)) {
+  if (true) {
     cv::Mat image = cv_ptr->image;
     cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
     int width = 1080;

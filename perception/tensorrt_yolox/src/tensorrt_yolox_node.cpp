@@ -102,9 +102,9 @@ TrtYoloXNode::TrtYoloXNode(const rclcpp::NodeOptions & node_options)
   } else {
     calib_type = nvinfer1::CalibrationAlgoType::kLEGACY_CALIBRATION;
   }
-  tensorrt_common::BuildConfig build_config{
-    precision,           calib_type,        dla_core_id, quantize_first_layer,
-    quantize_last_layer, profile_per_layer, clip_value};
+  tensorrt_common::BuildConfig build_config{calib_type,           dla_core_id,
+                                            quantize_first_layer, quantize_last_layer,
+                                            profile_per_layer,    clip_value};
 
   trt_yolox_ = std::make_unique<tensorrt_yolox::TrtYoloX>(
     model_path, precision, label_map_.size(), score_threshold, nms_threshold, build_config,
