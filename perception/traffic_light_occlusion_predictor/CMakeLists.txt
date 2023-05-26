@@ -28,4 +28,5 @@ target_link_libraries(traffic_light_occlusion_predictor ${PCL_LIBRARIES} )
 
 ament_auto_package(INSTALL_TO_SHARE
   config
+  launch
 )

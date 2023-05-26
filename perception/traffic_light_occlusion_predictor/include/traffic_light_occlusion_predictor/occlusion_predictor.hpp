@@ -58,11 +58,10 @@ public:
     float max_valid_pt_distance, float azimuth_occlusion_resolution,
     float elevation_occlusion_resolution);
 
-  void receivePointCloud(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
-
   void predict(
-    const sensor_msgs::msg::CameraInfo & camera_info,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray & rois,
+    const sensor_msgs::msg::CameraInfo::ConstSharedPtr & camera_info_msg,
+    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & rois_msg,
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr & cloud_msg,
     const tf2_ros::Buffer & tf_buffer,
     const std::map<lanelet::Id, tf2::Vector3> & traffic_light_position_map,
     std::vector<int> & occlusion_ratios);
@@ -85,7 +84,6 @@ private:
     const std::map<lanelet::Id, tf2::Vector3> & traffic_light_position_map,
     const tf2::Transform & tf_camera2map, pcl::PointXYZ & top_left, pcl::PointXYZ & bottom_right);
 
-  std::list<sensor_msgs::msg::PointCloud2> history_clouds_;
   std::map<int, std::map<int, std::vector<Ray> > > lidar_rays_;
   float max_valid_pt_distance_;
   float azimuth_occlusion_resolution_;

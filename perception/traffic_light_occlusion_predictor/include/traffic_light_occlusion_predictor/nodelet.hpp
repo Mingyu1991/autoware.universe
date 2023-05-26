@@ -15,13 +15,14 @@
 #ifndef TRAFFIC_LIGHT_OCCLUSION_PREDICTOR__NODELET_HPP_
 #define TRAFFIC_LIGHT_OCCLUSION_PREDICTOR__NODELET_HPP_
 
+#include <perception_utils/prime_synchronizer.hpp>
 #include <perception_utils/traffic_light_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <traffic_light_occlusion_predictor/occlusion_predictor.hpp>
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
+#include <autoware_auto_perception_msgs/msg/traffic_light_occlusion_array.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -50,32 +51,11 @@ private:
     double azimuth_occlusion_resolution;
     double elevation_occlusion_resolution;
     double max_valid_pt_dist;
-    int occlusion_thres;
-    int min_cloud_size;
+    double max_image_cloud_delay;
+    double max_wait_t;
   };
 
 private:
-  /**
-   * @brief
-   * calculate the occlusion probability of each rough roi and publish.
-   *
-   * @param in_image_msg
-   * @param in_roi_msg
-   */
-
-  /**
-   * @brief receive camera_info, rois, traffic signals and calculate the occlusion ratios of the
-   * rois. If the occlusion ratio of a rois is larger than the threshold, set the corresponding
-   * traffic signal as UNKNOWN
-   *
-   * @param in_image_msg
-   * @param in_roi_msg
-   * @param in_signal_msg
-   */
-  void callback(
-    const sensor_msgs::msg::CameraInfo::ConstSharedPtr in_image_msg,
-    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg,
-    const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr in_signal_msg);
   /**
    * @brief receive the lanelet2 map
    *
@@ -83,31 +63,21 @@ private:
    */
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
   /**
-   * @brief receive the point cloud for calculating the occlusion
-   *
-   * @param msg
-   */
-  void pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg);
-  /**
    * @brief subscribers
    *
    */
-  typedef message_filters::sync_policies::ExactTime<
-    sensor_msgs::msg::CameraInfo, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
-    autoware_auto_perception_msgs::msg::TrafficSignalArray>
-    SyncPolicy;
-  typedef message_filters::Synchronizer<SyncPolicy> Sync;
-  std::shared_ptr<Sync> sync_;
+  void syncCallback(
+    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr in_roi_msg,
+    const sensor_msgs::msg::CameraInfo::ConstSharedPtr in_cam_info_msg,
+    const sensor_msgs::msg::PointCloud2::ConstSharedPtr in_cloud_msg);
+
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;
-  message_filters::Subscriber<sensor_msgs::msg::CameraInfo> camera_info_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficSignalArray> signal_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
   /**
    * @brief publishers
    *
    */
-  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficSignalArray>::SharedPtr signal_pub_;
+  rclcpp::Publisher<autoware_auto_perception_msgs::msg::TrafficLightOcclusionArray>::SharedPtr
+    occlusion_pub_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
@@ -118,6 +88,13 @@ private:
    *
    */
   std::shared_ptr<CloudOcclusionPredictor> cloud_occlusion_predictor_;
+
+  typedef perception_utils::PrimeSynchronizer<
+    autoware_auto_perception_msgs::msg::TrafficLightRoiArray, sensor_msgs::msg::CameraInfo,
+    sensor_msgs::msg::PointCloud2>
+    SynchronizerType;
+
+  std::shared_ptr<SynchronizerType> synchronizer_;
 };
 }  // namespace traffic_light
 #endif  // TRAFFIC_LIGHT_OCCLUSION_PREDICTOR__NODELET_HPP_

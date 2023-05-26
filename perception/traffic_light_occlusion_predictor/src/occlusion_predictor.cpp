@@ -41,89 +41,51 @@ CloudOcclusionPredictor::CloudOcclusionPredictor(
 {
 }
 
-void CloudOcclusionPredictor::receivePointCloud(
-  const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
-{
-  // the timestamps must be increasing
-  double history_stamp = rclcpp::Time(history_clouds_.back().header.stamp).seconds();
-  double msg_stamp = rclcpp::Time(msg->header.stamp).seconds();
-  if (history_clouds_.empty() == false && msg_stamp < history_stamp) {
-    return;
-  }
-  history_clouds_.push_back(*msg);
-  // sometimes the top lidar doesn't give any point. we need to filter out these clouds
-}
-
 void CloudOcclusionPredictor::predict(
-  const sensor_msgs::msg::CameraInfo & camera_info,
-  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray & rois,
+  const sensor_msgs::msg::CameraInfo::ConstSharedPtr & camera_info_msg,
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & rois_msg,
+  const sensor_msgs::msg::PointCloud2::ConstSharedPtr & cloud_msg,
   const tf2_ros::Buffer & tf_buffer,
   const std::map<lanelet::Id, tf2::Vector3> & traffic_light_position_map,
   std::vector<int> & occlusion_ratios)
 {
-  occlusion_ratios.resize(rois.rois.size());
-  // if the timestamp difference between cloud and image is too large, discard it.
-  const double max_cloud_image_diff_t = 0.5;
-
-  if (history_clouds_.empty() || rois.rois.empty()) {
+  if (camera_info_msg == nullptr || rois_msg == nullptr || cloud_msg == nullptr) {
     return;
   }
-  // find the cloud whose timestamp is closest to the stamp of rough_rois
-  std::list<sensor_msgs::msg::PointCloud2>::iterator closest_it;
-  double min_stamp_diff = std::numeric_limits<double>::max();
-  for (auto it = history_clouds_.begin(); it != history_clouds_.end(); it++) {
-    double stamp_diff = std::abs(
-      rclcpp::Time(it->header.stamp).seconds() - rclcpp::Time(camera_info.header.stamp).seconds());
-    if (stamp_diff < min_stamp_diff) {
-      min_stamp_diff = stamp_diff;
-      closest_it = it;
-    }
-  }
-  double cloud_delay = rclcpp::Time(camera_info.header.stamp).seconds() -
-                       rclcpp::Time(closest_it->header.stamp).seconds();
-  if (std::abs(cloud_delay) >= max_cloud_image_diff_t) {
-    return;
-  }
-  /**
-   * erase clouds earlier than closest_it since their timestamps couldn't be closer to following
-   * rough_rois than closest_it
-   */
-  for (auto it = history_clouds_.begin(); it != closest_it;) {
-    it = history_clouds_.erase(it);
-  }
-
+  occlusion_ratios.resize(rois_msg->rois.size());
   // get transformation from cloud to camera
   Eigen::Matrix4d camera2cloud;
   try {
-    camera2cloud = tf2::transformToEigen(
-                     tf_buffer.lookupTransform(
-                       camera_info.header.frame_id, history_clouds_.front().header.frame_id,
-                       rclcpp::Time(camera_info.header.stamp), rclcpp::Duration::from_seconds(0.2)))
-                     .matrix();
+    camera2cloud =
+      tf2::transformToEigen(tf_buffer.lookupTransform(
+                              camera_info_msg->header.frame_id, cloud_msg->header.frame_id,
+                              rclcpp::Time(camera_info_msg->header.stamp),
+                              rclcpp::Duration::from_seconds(0.2)))
+        .matrix();
   } catch (tf2::TransformException & ex) {
-    std::cout << "Error: cannot get transform from << " << camera_info.header.frame_id << " to "
-              << history_clouds_.front().header.frame_id << std::endl;
+    std::cout << "Error: cannot get transform from << " << camera_info_msg->header.frame_id
+              << " to " << cloud_msg->header.frame_id << std::endl;
     return;
   }
   // get transformation from map to camera
   tf2::Transform tf_camera2map;
   try {
     geometry_msgs::msg::TransformStamped tf_stamped = tf_buffer.lookupTransform(
-      camera_info.header.frame_id, "map", rclcpp::Time(camera_info.header.stamp),
+      camera_info_msg->header.frame_id, "map", rclcpp::Time(camera_info_msg->header.stamp),
       rclcpp::Duration::from_seconds(0.2));
     tf2::fromMsg(tf_stamped.transform, tf_camera2map);
   } catch (tf2::TransformException & ex) {
-    std::cout << "Error: cannot get transform from << " << camera_info.header.frame_id << " to "
-              << history_clouds_.front().header.frame_id << std::endl;
+    std::cout << "Error: cannot get transform from << " << camera_info_msg->header.frame_id
+              << " to " << cloud_msg->header.frame_id << std::endl;
     return;
   }
 
-  std::vector<pcl::PointXYZ> roi_tls(rois.rois.size()), roi_brs(rois.rois.size());
+  std::vector<pcl::PointXYZ> roi_tls(rois_msg->rois.size()), roi_brs(rois_msg->rois.size());
   image_geometry::PinholeCameraModel pinhole_model;
-  pinhole_model.fromCameraInfo(camera_info);
-  for (size_t i = 0; i < rois.rois.size(); i++) {
+  pinhole_model.fromCameraInfo(*camera_info_msg);
+  for (size_t i = 0; i < rois_msg->rois.size(); i++) {
     calcRoiVectex3D(
-      rois.rois[i], pinhole_model, traffic_light_position_map, tf_camera2map, roi_tls[i],
+      rois_msg->rois[i], pinhole_model, traffic_light_position_map, tf_camera2map, roi_tls[i],
       roi_brs[i]);
   }
 
@@ -132,8 +94,7 @@ void CloudOcclusionPredictor::predict(
   pcl::PointCloud<pcl::PointXYZ> cloud_camera;
   // points within roi
   pcl::PointCloud<pcl::PointXYZ> cloud_roi;
-  tier4_autoware_utils::transformPointCloudFromROSMsg(
-    history_clouds_.front(), cloud_camera, camera2cloud);
+  tier4_autoware_utils::transformPointCloudFromROSMsg(*cloud_msg, cloud_camera, camera2cloud);
 
   filterCloud(cloud_camera, roi_tls, roi_brs, cloud_roi);
 
@@ -240,9 +201,6 @@ void CloudOcclusionPredictor::sampleTrafficLightRoi(
 uint32_t CloudOcclusionPredictor::predict(
   const pcl::PointXYZ & roi_top_left, const pcl::PointXYZ & roi_bottom_right)
 {
-  if (history_clouds_.empty()) {
-    return 0;
-  }
   const uint32_t horizontal_sample_num = 20;
   const uint32_t vertical_sample_num = 20;
   static_assert(horizontal_sample_num > 1 && vertical_sample_num > 1);
