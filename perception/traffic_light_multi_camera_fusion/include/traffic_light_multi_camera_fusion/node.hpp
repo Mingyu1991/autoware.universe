@@ -20,6 +20,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
+#include <autoware_auto_perception_msgs/msg/traffic_light_occlusion_array.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
@@ -48,6 +49,7 @@ struct FusionRecord
   sensor_msgs::msg::CameraInfo cam_info;
   autoware_auto_perception_msgs::msg::TrafficLightRoi roi;
   autoware_auto_perception_msgs::msg::TrafficSignal signal;
+  autoware_auto_perception_msgs::msg::TrafficLightOcclusion occlusion;
 };
 
 struct FusionRecordArr
@@ -56,6 +58,7 @@ struct FusionRecordArr
   sensor_msgs::msg::CameraInfo cam_info;
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray rois;
   autoware_auto_perception_msgs::msg::TrafficSignalArray signals;
+  autoware_auto_perception_msgs::msg::TrafficLightOcclusionArray occlusions;
 };
 
 bool operator<(const FusionRecordArr & r1, const FusionRecordArr & r2)
@@ -71,6 +74,8 @@ public:
   typedef autoware_auto_perception_msgs::msg::TrafficSignal SignalType;
   typedef autoware_auto_perception_msgs::msg::TrafficSignalArray SignalArrayType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoiArray RoiArrayType;
+  typedef autoware_auto_perception_msgs::msg::TrafficLightOcclusion OcclusionType;
+  typedef autoware_auto_perception_msgs::msg::TrafficLightOcclusionArray OcclusionArrayType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoi::_id_type IdType;
 
   typedef std::pair<RoiArrayType, SignalArrayType> RecordArrayType;
@@ -80,7 +85,8 @@ public:
 private:
   void trafficSignalRoiCallback(
     const CamInfoType::ConstSharedPtr cam_info_msg, const RoiArrayType::ConstSharedPtr roi_msg,
-    const SignalArrayType::ConstSharedPtr signal_msg);
+    const SignalArrayType::ConstSharedPtr signal_msg,
+    const OcclusionArrayType::ConstSharedPtr occlusion_msg);
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
 
@@ -88,15 +94,19 @@ private:
 
   void groupFusion(std::map<IdType, FusionRecord> & fusioned_record_map);
 
-  typedef mf::sync_policies::ExactTime<CamInfoType, RoiArrayType, SignalArrayType> ExactSyncPolicy;
+  typedef mf::sync_policies::ExactTime<
+    CamInfoType, RoiArrayType, SignalArrayType, OcclusionArrayType>
+    ExactSyncPolicy;
   typedef mf::Synchronizer<ExactSyncPolicy> ExactSync;
-  typedef mf::sync_policies::ApproximateTime<CamInfoType, RoiArrayType, SignalArrayType>
+  typedef mf::sync_policies::ApproximateTime<
+    CamInfoType, RoiArrayType, SignalArrayType, OcclusionArrayType>
     ApproSyncPolicy;
   typedef mf::Synchronizer<ApproSyncPolicy> ApproSync;
 
   std::vector<std::unique_ptr<mf::Subscriber<SignalArrayType>>> signal_subs_;
   std::vector<std::unique_ptr<mf::Subscriber<RoiArrayType>>> roi_subs_;
   std::vector<std::unique_ptr<mf::Subscriber<CamInfoType>>> cam_info_subs_;
+  std::vector<std::unique_ptr<mf::Subscriber<OcclusionArrayType>>> occlusion_subs_;
   std::vector<std::unique_ptr<ExactSync>> exact_sync_subs_;
   std::vector<std::unique_ptr<ApproSync>> appro_sync_subs_;
   rclcpp::Subscription<autoware_auto_mapping_msgs::msg::HADMapBin>::SharedPtr map_sub_;

@@ -163,7 +163,7 @@ void TrafficLightFusionVisualizerNodelet::imageRoughRoiCallback(
   const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr & input_signal_msg)
 {
   // if(trafficSignalChanged(*input_signal_msg)){
-  if (true) {
+  if (input_tl_rough_roi_msg->rois.size()) {
     cv_bridge::CvImagePtr cv_ptr;
     try {
       cv_ptr = cv_bridge::toCvCopy(input_image_msg, input_image_msg->encoding);
