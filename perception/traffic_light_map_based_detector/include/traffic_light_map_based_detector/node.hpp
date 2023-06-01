@@ -1,4 +1,4 @@
-// Copyright 2023 Tier IV, Inc.
+// Copyright 2023 TIER IV, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -116,7 +116,8 @@ private:
    * @return true       calculation succeed
    * @return false      calculation failed
    */
-  bool getTransform(const rclcpp::Time & t, const std::string & frame_id, tf2::Transform & tf);
+  bool getTransform(
+    const rclcpp::Time & t, const std::string & frame_id, tf2::Transform & tf) const;
   /**
    * @brief callback function for the map message
    *
@@ -147,7 +148,7 @@ private:
     const TrafficLightSet & all_traffic_lights,
     const std::vector<tf2::Transform> & tf_map2camera_vec,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
-    std::vector<lanelet::ConstLineString3d> & visible_traffic_lights);
+    std::vector<lanelet::ConstLineString3d> & visible_traffic_lights) const;
   /**
    * @brief Get the Traffic Light Roi from one tf
    *
@@ -163,7 +164,7 @@ private:
     const tf2::Transform & tf_map2camera,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const lanelet::ConstLineString3d traffic_light, const Config & config,
-    autoware_auto_perception_msgs::msg::TrafficLightRoi & roi);
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & roi) const;
   /**
    * @brief Calculate one traffic light roi for every tf and return the roi containing all of them
    *
@@ -179,7 +180,7 @@ private:
     const std::vector<tf2::Transform> & tf_map2camera_vec,
     const image_geometry::PinholeCameraModel & pinhole_camera_model,
     const lanelet::ConstLineString3d traffic_light, const Config & config,
-    autoware_auto_perception_msgs::msg::TrafficLightRoi & roi);
+    autoware_auto_perception_msgs::msg::TrafficLightRoi & roi) const;
   /**
    * @brief Publish the traffic lights for visualization
    *

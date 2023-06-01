@@ -1,4 +1,4 @@
-// Copyright 2023 Tier IV, Inc.
+// Copyright 2023 TIER IV, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,9 +111,25 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
   config_.timestamp_sample_len = declare_parameter<double>("timestamp_sample_len", 0.01);
   config_.max_detection_range = declare_parameter<double>("max_detection_range", 200.0);
 
-  assert(
-    config_.max_detection_range > 0 && config_.timestamp_sample_len > 0 &&
-    config_.max_timestamp_offset > config_.min_timestamp_offset);
+  if (config_.max_detection_range <= 0) {
+    RCLCPP_ERROR_STREAM(
+      get_logger(), "Invalid param max_detection_range = " << config_.max_detection_range
+                                                           << ", set to default value = 200");
+    config_.max_detection_range = 200.0;
+  }
+  if (config_.timestamp_sample_len <= 0) {
+    RCLCPP_ERROR_STREAM(
+      get_logger(), "Invalid param timestamp_sample_len = " << config_.timestamp_sample_len
+                                                            << ", set to default value = 0.01");
+    config_.timestamp_sample_len = 200.0;
+  }
+  if (config_.max_timestamp_offset <= config_.min_timestamp_offset) {
+    RCLCPP_ERROR_STREAM(
+      get_logger(), "max_timestamp_offset <= min_timestamp_offset. Set both to 0");
+    config_.max_timestamp_offset = 0.0;
+    config_.min_timestamp_offset = 0.0;
+  }
+
   // subscribers
   map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
     "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
@@ -136,7 +152,7 @@ MapBasedDetector::MapBasedDetector(const rclcpp::NodeOptions & node_options)
 }
 
 bool MapBasedDetector::getTransform(
-  const rclcpp::Time & t, const std::string & frame_id, tf2::Transform & tf)
+  const rclcpp::Time & t, const std::string & frame_id, tf2::Transform & tf) const
 {
   try {
     geometry_msgs::msg::TransformStamped transform =
@@ -187,7 +203,6 @@ void MapBasedDetector::cameraInfoCallback(
   if (tf_map2camera_vec.empty()) {
     tf_map2camera_vec.push_back(tf_map2camera);
   }
-  // tf_map2camera_vec.push_back(tf_map2camera);
 
   /*
    * visible_traffic_lights : for each traffic light in map check if in range and in view angle of
@@ -245,7 +260,7 @@ bool MapBasedDetector::getTrafficLightRoi(
   const tf2::Transform & tf_map2camera,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
   const lanelet::ConstLineString3d traffic_light, const Config & config,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & roi)
+  autoware_auto_perception_msgs::msg::TrafficLightRoi & roi) const
 {
   // id
   roi.id = traffic_light.id();
@@ -309,7 +324,7 @@ bool MapBasedDetector::getTrafficLightRoi(
   const std::vector<tf2::Transform> & tf_map2camera_vec,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
   const lanelet::ConstLineString3d traffic_light, const Config & config,
-  autoware_auto_perception_msgs::msg::TrafficLightRoi & out_roi)
+  autoware_auto_perception_msgs::msg::TrafficLightRoi & out_roi) const
 {
   std::vector<autoware_auto_perception_msgs::msg::TrafficLightRoi> rois;
   for (const auto & tf_map2camera : tf_map2camera_vec) {
@@ -405,7 +420,7 @@ void MapBasedDetector::getVisibleTrafficLights(
   const MapBasedDetector::TrafficLightSet & all_traffic_lights,
   const std::vector<tf2::Transform> & tf_map2camera_vec,
   const image_geometry::PinholeCameraModel & pinhole_camera_model,
-  std::vector<lanelet::ConstLineString3d> & visible_traffic_lights)
+  std::vector<lanelet::ConstLineString3d> & visible_traffic_lights) const
 {
   for (const auto & traffic_light : all_traffic_lights) {
     // some "Traffic Light" are actually not traffic lights
