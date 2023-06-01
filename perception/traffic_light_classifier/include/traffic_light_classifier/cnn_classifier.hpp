@@ -51,9 +51,9 @@ public:
   explicit CNNClassifier(rclcpp::Node * node_ptr);
   virtual ~CNNClassifier() = default;
 
-  bool getTrafficSignal(
-    const cv::Mat & input_image,
-    autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal) override;
+  bool getTrafficSignals(
+    const std::vector<cv::Mat> & images,
+    autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals) override;
 
 private:
   void postProcess(
@@ -108,6 +108,7 @@ private:
   };
 
   rclcpp::Node * node_ptr_;
+  int batch_size_;
   std::unique_ptr<tensorrt_classifier::TrtClassifier> classifier_;
   image_transport::Publisher image_pub_;
   std::vector<std::string> labels_;

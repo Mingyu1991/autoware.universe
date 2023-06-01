@@ -50,29 +50,54 @@ CNNClassifier::CNNClassifier(rclcpp::Node * node_ptr) : node_ptr_(node_ptr)
   }
 
   readLabelfile(label_file_path, labels_);
+  nvinfer1::Dims input_dim = tensorrt_common::get_input_dims(model_file_path);
+  assert(input_dim.d[0] > 0);
+  batch_size_ = input_dim.d[0];
 
-  tensorrt_common::BatchConfig batch_config{1, 1, 1};
+  tensorrt_common::BatchConfig batch_config{batch_size_, batch_size_, batch_size_};
   classifier_ = std::make_unique<tensorrt_classifier::TrtClassifier>(
     model_file_path, precision, batch_config, mean_, std_);
 }
 
-bool CNNClassifier::getTrafficSignal(
-  const cv::Mat & input_image, autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal)
+bool CNNClassifier::getTrafficSignals(
+  const std::vector<cv::Mat> & images,
+  autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals)
 {
-  std::vector<float> probs;
-  std::vector<int> classes;
-  std::vector<cv::Mat> images{input_image};
-  bool res = classifier_->doInference(images, classes, probs);
-  if (!res || classes.empty() || probs.empty()) {
+  if (images.size() != traffic_signals.signals.size()) {
+    RCLCPP_WARN(node_ptr_->get_logger(), "image number should be equal to traffic signal number!");
     return false;
   }
-  postProcess(classes[0], probs[0], traffic_signal);
-  /* debug */
-  if (0 < image_pub_.getNumSubscribers()) {
-    cv::Mat debug_image = input_image.clone();
-    outputDebugImage(debug_image, traffic_signal);
-  }
+  std::vector<cv::Mat> image_batch;
+  int signal_i = 0;
 
+  for (size_t image_i = 0; image_i < images.size(); image_i++) {
+    image_batch.emplace_back(images[image_i]);
+    // keep the actual batch size
+    size_t true_batch_size = image_batch.size();
+    // insert fake image since the TRT model requires static batch size
+    if (image_i + 1 == images.size()) {
+      while (static_cast<int>(image_batch.size()) < batch_size_) {
+        image_batch.emplace_back(image_batch.front());
+      }
+    }
+    if (static_cast<int>(image_batch.size()) == batch_size_) {
+      std::vector<float> probs;
+      std::vector<int> classes;
+      bool res = classifier_->doInference(image_batch, classes, probs);
+      if (!res || classes.empty() || probs.empty()) {
+        return false;
+      }
+      for (size_t i = 0; i < true_batch_size; i++) {
+        postProcess(classes[i], probs[i], traffic_signals.signals[signal_i]);
+        /* debug */
+        if (0 < image_pub_.getNumSubscribers()) {
+          outputDebugImage(image_batch[i], traffic_signals.signals[signal_i]);
+        }
+        signal_i++;
+      }
+      image_batch.clear();
+    }
+  }
   return true;
 }
 

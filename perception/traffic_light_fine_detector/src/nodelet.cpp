@@ -193,10 +193,6 @@ void TrafficLightFineDetectorNodelet::callback(
       roi_ids.clear();
     }
   }
-
-  RCLCPP_INFO(
-    get_logger(), "rough roi size = %ld, id2detections size = %ld", rough_roi_msg->rois.size(),
-    id2detections.size());
   detectionMatch(id2expectRoi, id2detections, out_rois);
   out_rois.header = rough_roi_msg->header;
   output_roi_pub_->publish(out_rois);
@@ -207,7 +203,6 @@ void TrafficLightFineDetectorNodelet::callback(
   exe_time_msg.data = exe_time;
   exe_time_msg.stamp = this->now();
   exe_time_pub_->publish(exe_time_msg);
-  RCLCPP_INFO_STREAM(get_logger(), "fine detector t = " << exe_time << "ms");
 }
 
 float TrafficLightFineDetectorNodelet::evalMatchScore(

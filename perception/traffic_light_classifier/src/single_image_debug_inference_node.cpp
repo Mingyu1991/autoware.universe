@@ -122,14 +122,14 @@ private:
         return;
       }
       cv::cvtColor(crop, crop, cv::COLOR_BGR2RGB);
-      autoware_auto_perception_msgs::msg::TrafficSignal traffic_signal;
-      if (!classifier_ptr_->getTrafficSignal(crop, traffic_signal)) {
+      autoware_auto_perception_msgs::msg::TrafficSignalArray traffic_signal;
+      if (!classifier_ptr_->getTrafficSignals({crop}, traffic_signal)) {
         RCLCPP_ERROR(get_logger(), "failed to classify image");
         return;
       }
       cv::Scalar color;
       cv::Scalar text_color;
-      for (const auto & light : traffic_signal.lights) {
+      for (const auto & light : traffic_signal.signals[0].lights) {
         auto color_str = toString(light.color);
         auto shape_str = toString(light.shape);
         auto confidence_str = std::to_string(light.confidence);
