@@ -57,6 +57,10 @@ CNNClassifier::CNNClassifier(rclcpp::Node * node_ptr) : node_ptr_(node_ptr)
   tensorrt_common::BatchConfig batch_config{batch_size_, batch_size_, batch_size_};
   classifier_ = std::make_unique<tensorrt_classifier::TrtClassifier>(
     model_file_path, precision, batch_config, mean_, std_);
+  if (node_ptr_->declare_parameter("build_only", false)) {
+    RCLCPP_INFO(node_ptr_->get_logger(), "TensorRT engine is built and shutdown node.");
+    rclcpp::shutdown();
+  }
 }
 
 bool CNNClassifier::getTrafficSignals(
