@@ -131,10 +131,12 @@ public:
   bool setBindingDimensions(const int32_t index, const nvinfer1::Dims & dimensions) const;
   bool enqueueV2(void ** bindings, cudaStream_t stream, cudaEvent_t * input_consumed);
 
-  /**
-   * @brief get per-layer information for trt-engine-profiler
-   */
+/**
+ * @brief get per-layer information for trt-engine-profiler
+ */
+#if (NV_TENSORRT_MAJOR * 1000) + (NV_TENSORRT_MINOR * 100) + NV_TENSOR_PATCH >= 8200
   std::string getLayerInformation(nvinfer1::LayerInformationFormat format);
+#endif
 
 private:
   Logger logger_;
