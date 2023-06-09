@@ -105,6 +105,12 @@ BehaviorModuleOutput NormalLaneChange::generateOutput()
   output.reference_path = std::make_shared<PathWithLaneId>(getReferencePath());
   output.turn_signal_info = updateOutputTurnSignal();
 
+  const auto current_seg_idx = planner_data_->findEgoSegmentIndex(output.path->points);
+  output.turn_signal_info = planner_data_->turn_signal_decider.use_prior_turn_signal(
+    *output.path, getEgoPose(), current_seg_idx, prev_turn_signal_info_, output.turn_signal_info,
+    planner_data_->parameters.ego_nearest_dist_threshold,
+    planner_data_->parameters.ego_nearest_yaw_threshold);
+
   return output;
 }
 
@@ -120,11 +126,14 @@ void NormalLaneChange::extendOutputDrivableArea(BehaviorModuleOutput & output)
     dp.drivable_area_types_to_skip);
 
   // for new architecture
-  output.drivable_area_info.drivable_lanes = expanded_lanes;
+  DrivableAreaInfo current_drivable_area_info;
+  current_drivable_area_info.drivable_lanes = expanded_lanes;
+  output.drivable_area_info =
+    utils::combineDrivableAreaInfo(current_drivable_area_info, prev_drivable_area_info_);
 
   // for old architecture
   utils::generateDrivableArea(
-    *output.path, expanded_lanes, common_parameters.vehicle_length, planner_data_);
+    *output.path, expanded_lanes, false, common_parameters.vehicle_length, planner_data_);
 }
 
 bool NormalLaneChange::hasFinishedLaneChange() const
@@ -145,10 +154,6 @@ PathWithLaneId NormalLaneChange::getReferencePath() const
 bool NormalLaneChange::isCancelConditionSatisfied()
 {
   current_lane_change_state_ = LaneChangeStates::Normal;
-
-  if (!lane_change_parameters_->enable_cancel_lane_change) {
-    return false;
-  }
 
   Pose ego_pose_before_collision;
   const auto is_path_safe = isApprovedPathSafe(ego_pose_before_collision);
@@ -232,7 +237,7 @@ TurnSignalInfo NormalLaneChange::updateOutputTurnSignal()
 
 lanelet::ConstLanelets NormalLaneChange::getCurrentLanes() const
 {
-  return utils::getCurrentLanesFromPath(*prev_module_reference_path_, planner_data_);
+  return utils::getCurrentLanesFromPath(prev_module_reference_path_, planner_data_);
 }
 
 lanelet::ConstLanelets NormalLaneChange::getLaneChangeLanes(
@@ -284,7 +289,7 @@ PathWithLaneId NormalLaneChange::getPrepareSegment(
     return PathWithLaneId();
   }
 
-  auto prepare_segment = *prev_module_path_;
+  auto prepare_segment = prev_module_path_;
   const size_t current_seg_idx = motion_utils::findFirstNearestSegmentIndexWithSoftConstraints(
     prepare_segment.points, getEgoPose(), 3.0, 1.0);
   utils::clipPathLength(prepare_segment, current_seg_idx, prepare_length, backward_path_length);
@@ -521,7 +526,7 @@ std::vector<DrivableLanes> NormalLaneChange::getDrivableLanes() const
 {
   const auto drivable_lanes = utils::lane_change::generateDrivableLanes(
     *getRouteHandler(), status_.current_lanes, status_.lane_change_lanes);
-  return utils::combineDrivableLanes(*prev_drivable_lanes_, drivable_lanes);
+  return utils::combineDrivableLanes(prev_drivable_area_info_.drivable_lanes, drivable_lanes);
 }
 
 bool NormalLaneChange::isApprovedPathSafe(Pose & ego_pose_before_collision) const
@@ -678,7 +683,7 @@ PathWithLaneId NormalLaneChangeBT::getReferencePath() const
     shorten_lanes, dp.drivable_area_left_bound_offset, dp.drivable_area_right_bound_offset,
     dp.drivable_area_types_to_skip);
   utils::generateDrivableArea(
-    reference_path, expanded_lanes, common_parameters.vehicle_length, planner_data_);
+    reference_path, expanded_lanes, false, common_parameters.vehicle_length, planner_data_);
 
   return reference_path;
 }

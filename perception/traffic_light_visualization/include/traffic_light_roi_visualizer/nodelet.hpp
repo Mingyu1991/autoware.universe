@@ -25,7 +25,7 @@
 
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
-#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/sync_policies/exact_time.h>
 #include <message_filters/synchronizer.h>
 #include <opencv2/imgproc/imgproc_c.h>
 
@@ -76,6 +76,8 @@ private:
     {autoware_auto_perception_msgs::msg::TrafficLight::LEFT_ARROW, "left"},
     {autoware_auto_perception_msgs::msg::TrafficLight::RIGHT_ARROW, "right"},
     {autoware_auto_perception_msgs::msg::TrafficLight::UP_ARROW, "straight"},
+    {autoware_auto_perception_msgs::msg::TrafficLight::UP_LEFT_ARROW, "up_left"},
+    {autoware_auto_perception_msgs::msg::TrafficLight::UP_RIGHT_ARROW, "up_right"},
     {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_ARROW, "down"},
     {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_LEFT_ARROW, "down_left"},
     {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_RIGHT_ARROW, "down_right"},
@@ -100,6 +102,10 @@ private:
     int id, const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & rois,
     autoware_auto_perception_msgs::msg::TrafficLightRoi & correspond_roi);
 
+  bool trafficSignalChanged(
+    const autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals,
+    const autoware_auto_perception_msgs::msg::TrafficLightRoiArray & rough_rois);
+
   rclcpp::TimerBase::SharedPtr timer_;
   image_transport::SubscriberFilter image_sub_;
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
@@ -108,14 +114,14 @@ private:
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficSignalArray>
     traffic_signals_sub_;
   image_transport::Publisher image_pub_;
-  typedef message_filters::sync_policies::ApproximateTime<
+  typedef message_filters::sync_policies::ExactTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
     autoware_auto_perception_msgs::msg::TrafficSignalArray>
     SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   std::shared_ptr<Sync> sync_;
 
-  typedef message_filters::sync_policies::ApproximateTime<
+  typedef message_filters::sync_policies::ExactTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
     autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
     autoware_auto_perception_msgs::msg::TrafficSignalArray>
@@ -124,6 +130,8 @@ private:
   std::shared_ptr<SyncWithRoughRoi> sync_with_rough_roi_;
 
   bool enable_fine_detection_;
+  autoware_auto_perception_msgs::msg::TrafficSignalArray last_msg_;
+  autoware_auto_perception_msgs::msg::TrafficLightRoiArray last_rough_roi_;
 };
 
 }  // namespace traffic_light

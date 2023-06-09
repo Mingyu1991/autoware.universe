@@ -58,9 +58,9 @@ public:
   explicit ColorClassifier(rclcpp::Node * node_ptr);
   virtual ~ColorClassifier() = default;
 
-  bool getTrafficSignal(
-    const cv::Mat & input_image,
-    autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal) override;
+  bool getTrafficSignals(
+    const std::vector<cv::Mat> & images,
+    autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals) override;
 
 private:
   bool filterHSV(

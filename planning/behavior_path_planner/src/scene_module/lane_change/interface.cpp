@@ -97,7 +97,8 @@ ModuleStatus LaneChangeInterface::updateState()
   }
 
   if (module_type_->isCancelConditionSatisfied()) {
-    current_state_ = ModuleStatus::FAILURE;
+    current_state_ =
+      module_type_->isCancelEnabled() ? ModuleStatus::FAILURE : ModuleStatus::RUNNING;
     return current_state_;
   }
 
@@ -130,8 +131,8 @@ BehaviorModuleOutput LaneChangeInterface::plan()
     resetPathIfAbort();
   }
 
-  module_type_->setPreviousDrivableLanes(
-    getPreviousModuleOutput().drivable_area_info.drivable_lanes);
+  module_type_->setPreviousDrivableAreaInfo(getPreviousModuleOutput().drivable_area_info);
+  module_type_->setPreviousTurnSignalInfo(getPreviousModuleOutput().turn_signal_info);
   auto output = module_type_->generateOutput();
   path_reference_ = output.reference_path;
   *prev_approved_path_ = *getPreviousModuleOutput().path;

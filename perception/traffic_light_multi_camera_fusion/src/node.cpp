@@ -63,8 +63,9 @@ int compareRecord(const traffic_light::FusionRecord & r1, const traffic_light::F
   if (r1.header.frame_id == r2.header.frame_id && std::abs(t1 - t2) >= dt_thres) {
     return t1 < t2 ? -1 : 1;
   }
-  bool r1_is_unknown = isUnknown(r1.signal);
-  bool r2_is_unknown = isUnknown(r2.signal);
+  const int max_occlusion_ratio = 50;
+  bool r1_is_unknown = isUnknown(r1.signal) || r1.occlusion.occlusion_ratio >= max_occlusion_ratio;
+  bool r2_is_unknown = isUnknown(r2.signal) || r2.occlusion.occlusion_ratio >= max_occlusion_ratio;
   /*
   if both are unknown, they are of the same priority
   */
@@ -102,6 +103,7 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
   using std::placeholders::_1;
   using std::placeholders::_2;
   using std::placeholders::_3;
+  using std::placeholders::_4;
 
   std::vector<std::string> camera_namespaces =
     this->declare_parameter("camera_namespaces", std::vector<std::string>{});
@@ -112,24 +114,27 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
     std::string signal_topic = camera_ns + "/traffic_signals";
     std::string roi_topic = camera_ns + "/rois";
     std::string cam_info_topic = camera_ns + "/camera_info";
+    std::string occlusion_topic = camera_ns + "/occlusion";
     roi_subs_.emplace_back(
       new mf::Subscriber<RoiArrayType>(this, roi_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
     signal_subs_.emplace_back(new mf::Subscriber<SignalArrayType>(
       this, signal_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
     cam_info_subs_.emplace_back(new mf::Subscriber<CamInfoType>(
       this, cam_info_topic, rclcpp::SensorDataQoS().get_rmw_qos_profile()));
+    occlusion_subs_.emplace_back(new mf::Subscriber<OcclusionArrayType>(
+      this, occlusion_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
     if (is_approximate_sync_ == false) {
       exact_sync_subs_.emplace_back(new ExactSync(
-        ExactSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()),
-        *(signal_subs_.back())));
+        ExactSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()), *(signal_subs_.back()),
+        *(occlusion_subs_.back())));
       exact_sync_subs_.back()->registerCallback(
-        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3));
+        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3, _4));
     } else {
       appro_sync_subs_.emplace_back(new ApproSync(
-        ApproSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()),
-        *(signal_subs_.back())));
+        ApproSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()), *(signal_subs_.back()),
+        *(occlusion_subs_.back())));
       appro_sync_subs_.back()->registerCallback(
-        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3));
+        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3, _4));
     }
   }
 
@@ -143,7 +148,8 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
 
 void MultiCameraFusion::trafficSignalRoiCallback(
   const CamInfoType::ConstSharedPtr cam_info_msg, const RoiArrayType::ConstSharedPtr roi_msg,
-  const SignalArrayType::ConstSharedPtr signal_msg)
+  const SignalArrayType::ConstSharedPtr signal_msg,
+  const OcclusionArrayType::ConstSharedPtr occlusion_msg)
 {
   rclcpp::Time stamp(roi_msg->header.stamp);
   /*
@@ -151,7 +157,7 @@ void MultiCameraFusion::trafficSignalRoiCallback(
   Attention should be paied that this record array might not have the newest timestamp
   */
   record_arr_set_.insert(
-    FusionRecordArr{cam_info_msg->header, *cam_info_msg, *roi_msg, *signal_msg});
+    FusionRecordArr{cam_info_msg->header, *cam_info_msg, *roi_msg, *signal_msg, *occlusion_msg});
 
   std::map<IdType, FusionRecord> fusioned_record_map;
   multiCameraFusion(fusioned_record_map);
@@ -218,13 +224,19 @@ void MultiCameraFusion::multiCameraFusion(std::map<IdType, FusionRecord> & fusio
         auto signal_it = std::find_if(
           record_arr.signals.signals.begin(), record_arr.signals.signals.end(),
           [roi](const SignalType & s1) { return roi.id == s1.map_primitive_id; });
+        auto occlusion_it = std::find_if(
+          record_arr.occlusions.occlusion_ratios.begin(),
+          record_arr.occlusions.occlusion_ratios.end(),
+          [roi](const OcclusionType & o1) { return o1.id == roi.id; });
         /*
         failed to find corresponding signal. skip it
         */
-        if (signal_it == record_arr.signals.signals.end()) {
+        if (
+          signal_it == record_arr.signals.signals.end() ||
+          occlusion_it == record_arr.occlusions.occlusion_ratios.end()) {
           continue;
         }
-        FusionRecord record{record_arr.header, record_arr.cam_info, roi, *signal_it};
+        FusionRecord record{record_arr.header, record_arr.cam_info, roi, *signal_it, *occlusion_it};
         /*
         if this traffic light is not detected yet or can be updated by higher priority record,
         update it

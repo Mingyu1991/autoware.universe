@@ -89,26 +89,6 @@ bool isInImageFrame(
   return false;
 }
 
-tf2::Vector3 getTrafficLightTopLeft(const lanelet::ConstLineString3d & traffic_light)
-{
-  const auto & tl_bl = traffic_light.front();
-  const double tl_height = traffic_light.attributeOr("height", 0.0);
-  return tf2::Vector3(tl_bl.x(), tl_bl.y(), tl_bl.z() + tl_height);
-}
-
-tf2::Vector3 getTrafficLightBottomRight(const lanelet::ConstLineString3d & traffic_light)
-{
-  const auto & tl_bl = traffic_light.back();
-  return tf2::Vector3(tl_bl.x(), tl_bl.y(), tl_bl.z());
-}
-
-tf2::Vector3 getTrafficLightCenter(const lanelet::ConstLineString3d & traffic_light)
-{
-  tf2::Vector3 top_left = getTrafficLightTopLeft(traffic_light);
-  tf2::Vector3 bottom_right = getTrafficLightBottomRight(traffic_light);
-  return (top_left + bottom_right) / 2;
-}
-
 }  // namespace
 
 namespace traffic_light
@@ -285,7 +265,7 @@ bool MapBasedDetector::getTrafficLightRoi(
 
   // for roi.x_offset and roi.y_offset
   {
-    tf2::Vector3 map2tl = getTrafficLightTopLeft(traffic_light);
+    tf2::Vector3 map2tl = perception_utils::traffic_light::getTrafficLightTopLeft(traffic_light);
     tf2::Vector3 camera2tl = tf_map2camera.inverse() * map2tl;
     // max vibration
     const double max_vibration_x =
@@ -309,7 +289,8 @@ bool MapBasedDetector::getTrafficLightRoi(
 
   // for roi.width and roi.height
   {
-    tf2::Vector3 map2tl = getTrafficLightBottomRight(traffic_light);
+    tf2::Vector3 map2tl =
+      perception_utils::traffic_light::getTrafficLightBottomRight(traffic_light);
     tf2::Vector3 camera2tl = tf_map2camera.inverse() * map2tl;
     // max vibration
     const double max_vibration_x =
@@ -451,7 +432,7 @@ void MapBasedDetector::getVisibleTrafficLights(
     // traffic light bottom right
     const auto & tl_br = traffic_light.back();
     // check distance range
-    tf2::Vector3 tl_center = getTrafficLightCenter(traffic_light);
+    tf2::Vector3 tl_center = perception_utils::traffic_light::getTrafficLightCenter(traffic_light);
     // for every possible transformation, check if the tl is visible.
     // If under any tf the tl is visible, keep it
     for (const auto & tf_map2camera : tf_map2camera_vec) {
@@ -475,9 +456,12 @@ void MapBasedDetector::getVisibleTrafficLights(
       }
 
       // check within image frame
-      tf2::Vector3 tf_camera2tltl = tf_map2camera.inverse() * getTrafficLightTopLeft(traffic_light);
-      tf2::Vector3 tf_camera2tlbr =
-        tf_map2camera.inverse() * getTrafficLightBottomRight(traffic_light);
+      tf2::Vector3 tl_top_left =
+        perception_utils::traffic_light::getTrafficLightTopLeft(traffic_light);
+      tf2::Vector3 tf_camera2tltl = tf_map2camera.inverse() * tl_top_left;
+      tf2::Vector3 tl_bottom_right =
+        perception_utils::traffic_light::getTrafficLightBottomRight(traffic_light);
+      tf2::Vector3 tf_camera2tlbr = tf_map2camera.inverse() * tl_bottom_right;
       if (
         !isInImageFrame(pinhole_camera_model, tf_camera2tltl) &&
         !isInImageFrame(pinhole_camera_model, tf_camera2tlbr)) {
@@ -497,7 +481,8 @@ void MapBasedDetector::publishVisibleTrafficLights(
   visualization_msgs::msg::MarkerArray output_msg;
   for (const auto & traffic_light : visible_traffic_lights) {
     const int id = traffic_light.id();
-    tf2::Vector3 tl_central_point = getTrafficLightCenter(traffic_light);
+    tf2::Vector3 tl_central_point =
+      perception_utils::traffic_light::getTrafficLightCenter(traffic_light);
     tf2::Vector3 camera2tl = tf_map2camera.inverse() * tl_central_point;
 
     visualization_msgs::msg::Marker marker;

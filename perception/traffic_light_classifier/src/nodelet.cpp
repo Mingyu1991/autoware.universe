@@ -91,20 +91,18 @@ void TrafficLightClassifierNodelet::imageRoiCallback(
 
   autoware_auto_perception_msgs::msg::TrafficSignalArray output_msg;
 
-  for (size_t i = 0; i < input_rois_msg->rois.size(); ++i) {
+  output_msg.signals.resize(input_rois_msg->rois.size());
+
+  std::vector<cv::Mat> images;
+  for (size_t i = 0; i < input_rois_msg->rois.size(); i++) {
+    output_msg.signals[i].map_primitive_id = input_rois_msg->rois.at(i).id;
     const sensor_msgs::msg::RegionOfInterest & roi = input_rois_msg->rois.at(i).roi;
-    cv::Mat clipped_image(
-      cv_ptr->image, cv::Rect(roi.x_offset, roi.y_offset, roi.width, roi.height));
-
-    autoware_auto_perception_msgs::msg::TrafficSignal traffic_signal;
-    traffic_signal.map_primitive_id = input_rois_msg->rois.at(i).id;
-    if (!classifier_ptr_->getTrafficSignal(clipped_image, traffic_signal)) {
-      RCLCPP_ERROR(this->get_logger(), "failed classify image, abort callback");
-      return;
-    }
-    output_msg.signals.push_back(traffic_signal);
+    images.emplace_back(cv_ptr->image, cv::Rect(roi.x_offset, roi.y_offset, roi.width, roi.height));
   }
-
+  if (!classifier_ptr_->getTrafficSignals(images, output_msg)) {
+    RCLCPP_ERROR(this->get_logger(), "failed classify image, abort callback");
+    return;
+  }
   output_msg.header = input_image_msg->header;
   traffic_signal_array_pub_->publish(output_msg);
 }

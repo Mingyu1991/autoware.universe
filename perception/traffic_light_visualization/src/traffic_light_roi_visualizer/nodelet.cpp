@@ -53,7 +53,7 @@ TrafficLightRoiVisualizerNodelet::TrafficLightRoiVisualizerNodelet(
 
 void TrafficLightRoiVisualizerNodelet::connectCb()
 {
-  if (image_pub_.getNumSubscribers() == 0) {
+  if (image_pub_.getNumSubscribers() == 1000) {
     image_sub_.unsubscribe();
     traffic_signals_sub_.unsubscribe();
     roi_sub_.unsubscribe();
@@ -78,10 +78,11 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   cv::rectangle(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 3);
+    color, 2);
   cv::putText(
-    image, std::to_string(tl_roi.id), cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
-    cv::FONT_HERSHEY_COMPLEX, 1.0, color, 1, CV_AA);
+    image, std::to_string(tl_roi.id),
+    cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset + tl_roi.roi.height + 30),
+    cv::FONT_HERSHEY_COMPLEX, 1.0, color, 2, CV_AA);
   return true;
 }
 
@@ -103,13 +104,13 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
   cv::rectangle(
     image, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset),
     cv::Point(tl_roi.roi.x_offset + tl_roi.roi.width, tl_roi.roi.y_offset + tl_roi.roi.height),
-    color, 3);
+    color, 2);
 
   int offset = 40;
-  cv::putText(
-    image, std::to_string(result.prob),
-    cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 0)), cv::FONT_HERSHEY_COMPLEX,
-    1.1, color, 3);
+  // cv::putText(
+  //   image, std::to_string(result.prob),
+  //   cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 0)), cv::FONT_HERSHEY_COMPLEX,
+  //   1.1, color, 3);
 
   cv::putText(
     image, result.label, cv::Point(tl_roi.roi.x_offset, tl_roi.roi.y_offset - (offset * 1)),
@@ -173,6 +174,48 @@ bool TrafficLightRoiVisualizerNodelet::getRoiFromId(
   return false;
 }
 
+bool TrafficLightRoiVisualizerNodelet::trafficSignalChanged(
+  const autoware_auto_perception_msgs::msg::TrafficSignalArray & msg,
+  const autoware_auto_perception_msgs::msg::TrafficLightRoiArray & rough_rois)
+{
+  std::map<int, autoware_auto_perception_msgs::msg::TrafficSignal> id2lastMsg;
+  for (const auto & signal : last_msg_.signals) {
+    id2lastMsg[signal.map_primitive_id] = signal;
+  }
+  if (msg.signals.size() != last_msg_.signals.size()) {
+    return true;
+  }
+  for (const auto & signal : msg.signals) {
+    if (id2lastMsg.count(signal.map_primitive_id) == 0) {
+      return true;
+    }
+    if (signal.lights.size() != id2lastMsg[signal.map_primitive_id].lights.size()) {
+      return true;
+    }
+    for (size_t i = 0; i < signal.lights.size(); i++) {
+      if (
+        signal.lights[i].shape != id2lastMsg[signal.map_primitive_id].lights[i].shape ||
+        signal.lights[i].color != id2lastMsg[signal.map_primitive_id].lights[i].color) {
+        return true;
+      }
+    }
+  }
+
+  std::set<int> last_rough_roi_ids;
+  for (const auto & rough_roi : last_rough_roi_.rois) {
+    last_rough_roi_ids.insert(rough_roi.id);
+  }
+  if (last_rough_roi_ids.size() != rough_rois.rois.size()) {
+    return true;
+  }
+  for (const auto & rough_roi : rough_rois.rois) {
+    if (last_rough_roi_ids.count(rough_roi.id) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & input_tl_roi_msg,
@@ -211,6 +254,26 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
       get_logger(), "Could not convert from '%s' to 'bgr8'.", input_image_msg->encoding.c_str());
   }
   image_pub_.publish(cv_ptr->toImageMsg());
+  // if (trafficSignalChanged(*input_traffic_signals_msg, *input_tl_rough_roi_msg)) {
+  if (true) {
+    cv::Mat image = cv_ptr->image;
+    cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
+    int width = 1080;
+    int height = width * image.rows / image.cols;
+    cv::resize(image, image, cv::Size(width, height));
+    std::string folder;
+    if (input_image_msg->header.frame_id.find("camera6") != std::string::npos) {
+      folder = "camera6_vis_output/";
+    } else {
+      folder = "camera7_vis_output/";
+    }
+    std::string save_path = "/home/mingyu/tmp/" + folder +
+                            std::to_string(rclcpp::Time(input_image_msg->header.stamp).seconds()) +
+                            ".jpg";
+    cv::imwrite(save_path, image);
+  }
+  last_msg_ = *input_traffic_signals_msg;
+  last_rough_roi_ = *input_tl_rough_roi_msg;
 }
 
 }  // namespace traffic_light

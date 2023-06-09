@@ -24,6 +24,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <tensorrt_classifier/tensorrt_classifier.hpp>
 #include <tensorrt_common/tensorrt_common.hpp>
 
 #include <autoware_auto_perception_msgs/msg/traffic_light.hpp>
@@ -50,19 +51,15 @@ public:
   explicit CNNClassifier(rclcpp::Node * node_ptr);
   virtual ~CNNClassifier() = default;
 
-  bool getTrafficSignal(
-    const cv::Mat & input_image,
-    autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal) override;
+  bool getTrafficSignals(
+    const std::vector<cv::Mat> & images,
+    autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals) override;
 
 private:
-  void preProcess(cv::Mat & image, std::vector<float> & tensor, bool normalize = true);
-  bool postProcess(
-    std::vector<float> & output_data_host,
-    autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal, bool apply_softmax = false);
+  void postProcess(
+    int cls, float prob, autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal);
   bool readLabelfile(std::string filepath, std::vector<std::string> & labels);
   bool isColorLabel(const std::string label);
-  void calcSoftmax(std::vector<float> & data, std::vector<float> & probs, int num_output);
-  std::vector<size_t> argsort(std::vector<float> & tensor, int num_output);
   void outputDebugImage(
     cv::Mat & debug_image,
     const autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal);
@@ -111,20 +108,12 @@ private:
   };
 
   rclcpp::Node * node_ptr_;
-
-  std::unique_ptr<tensorrt_common::TrtCommon> trt_common_;
-  StreamUniquePtr stream_{makeCudaStream()};
+  int batch_size_;
+  std::unique_ptr<tensorrt_classifier::TrtClassifier> classifier_;
   image_transport::Publisher image_pub_;
   std::vector<std::string> labels_;
-  std::vector<double> mean_;
-  std::vector<double> std_;
-  int batch_size_;
-  int input_c_;
-  int input_h_;
-  int input_w_;
-  int num_input_;
-  int num_output_;
-  bool apply_softmax_;
+  std::vector<float> mean_;
+  std::vector<float> std_;
 };
 
 }  // namespace traffic_light
