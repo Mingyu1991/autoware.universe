@@ -83,12 +83,12 @@ void TrafficLightArbiter::onPerceptionMsg(const TrafficSignalArray::ConstSharedP
   latest_perception_msg_ = *msg;
 
   if (
-    (rclcpp::Time(msg->stamp) - rclcpp::Time(latest_external_msg_.stamp)).seconds() >
+    (rclcpp::Time(msg->header.stamp) - rclcpp::Time(latest_external_msg_.header.stamp)).seconds() >
     external_time_tolerance_) {
     latest_external_msg_.signals.clear();
   }
 
-  arbitrateAndPublish(msg->stamp);
+  arbitrateAndPublish(msg->header);
 }
 
 void TrafficLightArbiter::onExternalMsg(const TrafficSignalArray::ConstSharedPtr msg)
@@ -96,15 +96,15 @@ void TrafficLightArbiter::onExternalMsg(const TrafficSignalArray::ConstSharedPtr
   latest_external_msg_ = *msg;
 
   if (
-    (rclcpp::Time(msg->stamp) - rclcpp::Time(latest_perception_msg_.stamp)).seconds() >
-    perception_time_tolerance_) {
+    (rclcpp::Time(msg->header.stamp) - rclcpp::Time(latest_perception_msg_.header.stamp))
+      .seconds() > perception_time_tolerance_) {
     latest_external_msg_.signals.clear();
   }
 
-  arbitrateAndPublish(msg->stamp);
+  arbitrateAndPublish(msg->header);
 }
 
-void TrafficLightArbiter::arbitrateAndPublish(const builtin_interfaces::msg::Time & stamp)
+void TrafficLightArbiter::arbitrateAndPublish(const std_msgs::msg::Header & header)
 {
   using ElementAndPriority = std::pair<Element, bool>;
   std::unordered_map<lanelet::Id, std::vector<ElementAndPriority>> regulatory_element_signals_map;
@@ -166,7 +166,7 @@ void TrafficLightArbiter::arbitrateAndPublish(const builtin_interfaces::msg::Tim
     };
 
   TrafficSignalArray output_signals_msg;
-  output_signals_msg.stamp = stamp;
+  output_signals_msg.header = header;
   output_signals_msg.signals.reserve(regulatory_element_signals_map.size());
 
   for (const auto & [regulatory_element_id, elements] : regulatory_element_signals_map) {

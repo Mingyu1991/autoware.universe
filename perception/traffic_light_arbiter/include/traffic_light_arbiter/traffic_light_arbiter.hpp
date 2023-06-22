@@ -44,7 +44,7 @@ private:
   void onMap(const LaneletMapBin::ConstSharedPtr msg);
   void onPerceptionMsg(const TrafficSignalArray::ConstSharedPtr msg);
   void onExternalMsg(const TrafficSignalArray::ConstSharedPtr msg);
-  void arbitrateAndPublish(const builtin_interfaces::msg::Time & stamp);
+  void arbitrateAndPublish(const std_msgs::msg::Header & header);
 
   std::unordered_set<lanelet::Id> map_regulatory_elements_set_;
 
