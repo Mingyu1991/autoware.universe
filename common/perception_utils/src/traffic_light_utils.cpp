@@ -36,21 +36,21 @@ void setRoiInvalid(autoware_auto_perception_msgs::msg::TrafficLightRoi & roi)
   roi.roi.height = roi.roi.width = 0;
 }
 
-bool isSignalUnknown(const autoware_auto_perception_msgs::msg::TrafficSignal & signal)
+bool isSignalUnknown(const autoware_perception_msgs::msg::TrafficLight & signal)
 {
-  return signal.lights.size() == 1 &&
-         signal.lights[0].shape == autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN &&
-         signal.lights[0].color == autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN;
+  return signal.elements.size() == 1 &&
+         signal.elements[0].shape == autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN &&
+         signal.elements[0].color == autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN;
 }
 
-void setSignalUnknown(autoware_auto_perception_msgs::msg::TrafficSignal & signal, float confidence)
+void setSignalUnknown(autoware_perception_msgs::msg::TrafficLight & signal, float confidence)
 {
-  signal.lights.resize(1);
-  signal.lights[0].shape = autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN;
-  signal.lights[0].color = autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN;
+  signal.elements.resize(1);
+  signal.elements[0].shape = autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN;
+  signal.elements[0].color = autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN;
   // the default value is -1, which means to not set confidence
   if (confidence >= 0) {
-    signal.lights[0].confidence = confidence;
+    signal.elements[0].confidence = confidence;
   }
 }
 

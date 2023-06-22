@@ -18,7 +18,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
-#include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
+#include <autoware_perception_msgs/msg/traffic_light_array.hpp>
 
 #include <vector>
 
@@ -28,8 +28,8 @@ class ClassifierInterface
 {
 public:
   virtual bool getTrafficSignals(
-    const std::vector<cv::Mat> & input_image,
-    autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals) = 0;
+    const std::vector<cv::Mat> & images,
+    autoware_perception_msgs::msg::TrafficLightArray & traffic_signal) = 0;
 };
 }  // namespace traffic_light
 

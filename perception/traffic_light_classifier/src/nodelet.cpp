@@ -37,7 +37,7 @@ TrafficLightClassifierNodelet::TrafficLightClassifierNodelet(const rclcpp::NodeO
   }
 
   traffic_signal_array_pub_ =
-    this->create_publisher<autoware_auto_perception_msgs::msg::TrafficSignalArray>(
+    this->create_publisher<autoware_perception_msgs::msg::TrafficLightArray>(
       "~/output/traffic_signals", rclcpp::QoS{1});
 
   using std::chrono_literals::operator""ms;
@@ -89,13 +89,13 @@ void TrafficLightClassifierNodelet::imageRoiCallback(
       input_image_msg->encoding.c_str());
   }
 
-  autoware_auto_perception_msgs::msg::TrafficSignalArray output_msg;
+  autoware_perception_msgs::msg::TrafficLightArray output_msg;
 
-  output_msg.signals.resize(input_rois_msg->rois.size());
+  output_msg.lights.resize(input_rois_msg->rois.size());
 
   std::vector<cv::Mat> images;
   for (size_t i = 0; i < input_rois_msg->rois.size(); i++) {
-    output_msg.signals[i].map_primitive_id = input_rois_msg->rois.at(i).id;
+    output_msg.lights[i].traffic_light_id = input_rois_msg->rois.at(i).id;
     const sensor_msgs::msg::RegionOfInterest & roi = input_rois_msg->rois.at(i).roi;
     images.emplace_back(cv_ptr->image, cv::Rect(roi.x_offset, roi.y_offset, roi.width, roi.height));
   }

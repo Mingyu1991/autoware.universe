@@ -15,6 +15,21 @@
 #ifndef PLANNING_INTERFACE_TEST_MANAGER__PLANNING_INTERFACE_TEST_MANAGER_HPP_
 #define PLANNING_INTERFACE_TEST_MANAGER__PLANNING_INTERFACE_TEST_MANAGER_HPP_
 
+// since ASSERT_NO_THROW in gtest masks the exception message, redefine it.
+#define ASSERT_NO_THROW_WITH_ERROR_MSG(statement)                                                \
+  try {                                                                                          \
+    statement;                                                                                   \
+    SUCCEED();                                                                                   \
+  } catch (const std::exception & e) {                                                           \
+    FAIL() << "Expected: " << #statement                                                         \
+           << " doesn't throw an exception.\nActual: it throws. Error message: " << e.what()     \
+           << std::endl;                                                                         \
+  } catch (...) {                                                                                \
+    FAIL() << "Expected: " << #statement                                                         \
+           << " doesn't throw an exception.\nActual: it throws. Error message is not available." \
+           << std::endl;                                                                         \
+  }
+
 #include <component_interface_specs/planning.hpp>
 #include <component_interface_utils/rclcpp.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -74,7 +89,6 @@ using geometry_msgs::msg::Quaternion;
 using geometry_msgs::msg::TransformStamped;
 using nav_msgs::msg::OccupancyGrid;
 using nav_msgs::msg::Odometry;
-using planning_interface::Route;
 using sensor_msgs::msg::PointCloud2;
 using tf2_msgs::msg::TFMessage;
 using tier4_api_msgs::msg::CrosswalkStatus;
@@ -85,6 +99,11 @@ using tier4_planning_msgs::msg::Scenario;
 using tier4_planning_msgs::msg::VelocityLimit;
 using tier4_v2x_msgs::msg::VirtualTrafficLightStateArray;
 
+enum class ModuleName {
+  UNKNOWN = 0,
+  START_PLANNER,
+};
+
 class PlanningInterfaceTestManager
 {
 public:
@@ -94,7 +113,8 @@ public:
     rclcpp::Node::SharedPtr target_node, std::string topic_name, const double shift = 0.0);
 
   void publishInitialPose(
-    rclcpp::Node::SharedPtr target_node, std::string topic_name, const double shift = 0.0);
+    rclcpp::Node::SharedPtr target_node, std::string topic_name, const double shift = 0.0,
+    ModuleName module_name = ModuleName::UNKNOWN);
 
   void publishMaxVelocity(rclcpp::Node::SharedPtr target_node, std::string topic_name);
   void publishPointCloud(rclcpp::Node::SharedPtr target_node, std::string topic_name);
@@ -139,7 +159,8 @@ public:
   void testWithNominalRoute(rclcpp::Node::SharedPtr target_node);
   void testWithAbnormalRoute(rclcpp::Node::SharedPtr target_node);
 
-  void testWithBehaviorNominalRoute(rclcpp::Node::SharedPtr target_node);
+  void testWithBehaviorNominalRoute(
+    rclcpp::Node::SharedPtr target_node, ModuleName module_name = ModuleName::UNKNOWN);
 
   void testWithNominalPathWithLaneId(rclcpp::Node::SharedPtr target_node);
   void testWithAbnormalPathWithLaneId(rclcpp::Node::SharedPtr target_node);
@@ -237,7 +258,9 @@ private:
   void publishAbnormalRoute(
     rclcpp::Node::SharedPtr target_node, const LaneletRoute & abnormal_route);
 
-  void publishBehaviorNominalRoute(rclcpp::Node::SharedPtr target_node, std::string topic_name);
+  void publishBehaviorNominalRoute(
+    rclcpp::Node::SharedPtr target_node, std::string topic_name,
+    ModuleName module_name = ModuleName::UNKNOWN);
   void publishNominalPathWithLaneId(rclcpp::Node::SharedPtr target_node, std::string topic_name);
   void publishAbNominalPathWithLaneId(rclcpp::Node::SharedPtr target_node, std::string topic_name);
 

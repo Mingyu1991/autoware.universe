@@ -19,21 +19,6 @@ rclcpp_components_register_node(traffic_light_roi_visualizer_nodelet
   EXECUTABLE traffic_light_visualization_node
 )
 
-# fusion visualizer
-ament_auto_add_library(traffic_light_fusion_visualizer_nodelet SHARED
-  src/traffic_light_fusion_visualizer/nodelet.cpp
-)
-
-target_link_libraries(traffic_light_fusion_visualizer_nodelet
-  ${OpenCV_LIBRARIES}
-)
-
-rclcpp_components_register_node(traffic_light_fusion_visualizer_nodelet
-  PLUGIN "traffic_light::TrafficLightFusionVisualizerNodelet"
-  EXECUTABLE traffic_light_fusion_visualization_node
-)
-# end of fusion visualizer
-
 ament_auto_add_executable(traffic_light_map_visualizer_node
   src/traffic_light_map_visualizer/node.cpp
   src/traffic_light_map_visualizer/main.cpp
