@@ -26,8 +26,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <tensorrt_common/tensorrt_common.hpp>
 
-#include <autoware_auto_perception_msgs/msg/traffic_light.hpp>
-
 #include <cv_bridge/cv_bridge.h>
 
 #include <fstream>
@@ -52,62 +50,61 @@ public:
 
   bool getTrafficSignal(
     const cv::Mat & input_image,
-    autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal) override;
+    autoware_perception_msgs::msg::TrafficLight & traffic_signal) override;
 
 private:
   void preProcess(cv::Mat & image, std::vector<float> & tensor, bool normalize = true);
   bool postProcess(
     std::vector<float> & output_data_host,
-    autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal, bool apply_softmax = false);
+    autoware_perception_msgs::msg::TrafficLight & traffic_signal, bool apply_softmax = false);
   bool readLabelfile(std::string filepath, std::vector<std::string> & labels);
   bool isColorLabel(const std::string label);
   void calcSoftmax(std::vector<float> & data, std::vector<float> & probs, int num_output);
   std::vector<size_t> argsort(std::vector<float> & tensor, int num_output);
   void outputDebugImage(
-    cv::Mat & debug_image,
-    const autoware_auto_perception_msgs::msg::TrafficSignal & traffic_signal);
+    cv::Mat & debug_image, const autoware_perception_msgs::msg::TrafficLight & traffic_signal);
 
 private:
   std::map<int, std::string> state2label_{
     // color
-    {autoware_auto_perception_msgs::msg::TrafficLight::RED, "red"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::AMBER, "yellow"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::GREEN, "green"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::WHITE, "white"},
+    {autoware_perception_msgs::msg::TrafficLightElement::RED, "red"},
+    {autoware_perception_msgs::msg::TrafficLightElement::AMBER, "yellow"},
+    {autoware_perception_msgs::msg::TrafficLightElement::GREEN, "green"},
+    {autoware_perception_msgs::msg::TrafficLightElement::WHITE, "white"},
     // shape
-    {autoware_auto_perception_msgs::msg::TrafficLight::CIRCLE, "circle"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::LEFT_ARROW, "left"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::RIGHT_ARROW, "right"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::UP_ARROW, "straight"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::UP_LEFT_ARROW, "up_left"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::UP_RIGHT_ARROW, "up_right"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_ARROW, "down"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_LEFT_ARROW, "down_left"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_RIGHT_ARROW, "down_right"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::CROSS, "cross"},
+    {autoware_perception_msgs::msg::TrafficLightElement::CIRCLE, "circle"},
+    {autoware_perception_msgs::msg::TrafficLightElement::LEFT_ARROW, "left"},
+    {autoware_perception_msgs::msg::TrafficLightElement::RIGHT_ARROW, "right"},
+    {autoware_perception_msgs::msg::TrafficLightElement::UP_ARROW, "straight"},
+    {autoware_perception_msgs::msg::TrafficLightElement::UP_LEFT_ARROW, "up_left"},
+    {autoware_perception_msgs::msg::TrafficLightElement::UP_RIGHT_ARROW, "up_right"},
+    {autoware_perception_msgs::msg::TrafficLightElement::DOWN_ARROW, "down"},
+    {autoware_perception_msgs::msg::TrafficLightElement::DOWN_LEFT_ARROW, "down_left"},
+    {autoware_perception_msgs::msg::TrafficLightElement::DOWN_RIGHT_ARROW, "down_right"},
+    {autoware_perception_msgs::msg::TrafficLightElement::CROSS, "cross"},
     // other
-    {autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN, "unknown"},
+    {autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN, "unknown"},
   };
 
   std::map<std::string, int> label2state_{
     // color
-    {"red", autoware_auto_perception_msgs::msg::TrafficLight::RED},
-    {"yellow", autoware_auto_perception_msgs::msg::TrafficLight::AMBER},
-    {"green", autoware_auto_perception_msgs::msg::TrafficLight::GREEN},
-    {"white", autoware_auto_perception_msgs::msg::TrafficLight::WHITE},
+    {"red", autoware_perception_msgs::msg::TrafficLightElement::RED},
+    {"yellow", autoware_perception_msgs::msg::TrafficLightElement::AMBER},
+    {"green", autoware_perception_msgs::msg::TrafficLightElement::GREEN},
+    {"white", autoware_perception_msgs::msg::TrafficLightElement::WHITE},
     // shape
-    {"circle", autoware_auto_perception_msgs::msg::TrafficLight::CIRCLE},
-    {"left", autoware_auto_perception_msgs::msg::TrafficLight::LEFT_ARROW},
-    {"right", autoware_auto_perception_msgs::msg::TrafficLight::RIGHT_ARROW},
-    {"straight", autoware_auto_perception_msgs::msg::TrafficLight::UP_ARROW},
-    {"up_left", autoware_auto_perception_msgs::msg::TrafficLight::UP_LEFT_ARROW},
-    {"up_right", autoware_auto_perception_msgs::msg::TrafficLight::UP_RIGHT_ARROW},
-    {"down", autoware_auto_perception_msgs::msg::TrafficLight::DOWN_ARROW},
-    {"down_left", autoware_auto_perception_msgs::msg::TrafficLight::DOWN_LEFT_ARROW},
-    {"down_right", autoware_auto_perception_msgs::msg::TrafficLight::DOWN_RIGHT_ARROW},
-    {"cross", autoware_auto_perception_msgs::msg::TrafficLight::CROSS},
+    {"circle", autoware_perception_msgs::msg::TrafficLightElement::CIRCLE},
+    {"left", autoware_perception_msgs::msg::TrafficLightElement::LEFT_ARROW},
+    {"right", autoware_perception_msgs::msg::TrafficLightElement::RIGHT_ARROW},
+    {"straight", autoware_perception_msgs::msg::TrafficLightElement::UP_ARROW},
+    {"up_left", autoware_perception_msgs::msg::TrafficLightElement::UP_LEFT_ARROW},
+    {"up_right", autoware_perception_msgs::msg::TrafficLightElement::UP_RIGHT_ARROW},
+    {"down", autoware_perception_msgs::msg::TrafficLightElement::DOWN_ARROW},
+    {"down_left", autoware_perception_msgs::msg::TrafficLightElement::DOWN_LEFT_ARROW},
+    {"down_right", autoware_perception_msgs::msg::TrafficLightElement::DOWN_RIGHT_ARROW},
+    {"cross", autoware_perception_msgs::msg::TrafficLightElement::CROSS},
     // other
-    {"unknown", autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN},
+    {"unknown", autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN},
   };
 
   rclcpp::Node * node_ptr_;

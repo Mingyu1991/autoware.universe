@@ -20,7 +20,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
+#include <autoware_perception_msgs/msg/traffic_light_array.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
 #include <cv_bridge/cv_bridge.h>
@@ -52,7 +52,7 @@ public:
     const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
     const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
       input_tl_roi_msg,
-    const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
+    const autoware_perception_msgs::msg::TrafficLightArray::ConstSharedPtr &
       input_traffic_signals_msg);
 
   void imageRoughRoiCallback(
@@ -61,27 +61,27 @@ public:
       input_tl_roi_msg,
     const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
       input_tl_rough_roi_msg,
-    const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
+    const autoware_perception_msgs::msg::TrafficLightArray::ConstSharedPtr &
       input_traffic_signals_msg);
 
 private:
   std::map<int, std::string> state2label_{
     // color
-    {autoware_auto_perception_msgs::msg::TrafficLight::RED, "red"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::AMBER, "yellow"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::GREEN, "green"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::WHITE, "white"},
+    {autoware_perception_msgs::msg::TrafficLightElement::RED, "red"},
+    {autoware_perception_msgs::msg::TrafficLightElement::AMBER, "yellow"},
+    {autoware_perception_msgs::msg::TrafficLightElement::GREEN, "green"},
+    {autoware_perception_msgs::msg::TrafficLightElement::WHITE, "white"},
     // shape
-    {autoware_auto_perception_msgs::msg::TrafficLight::CIRCLE, "circle"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::LEFT_ARROW, "left"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::RIGHT_ARROW, "right"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::UP_ARROW, "straight"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_ARROW, "down"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_LEFT_ARROW, "down_left"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::DOWN_RIGHT_ARROW, "down_right"},
-    {autoware_auto_perception_msgs::msg::TrafficLight::CROSS, "cross"},
+    {autoware_perception_msgs::msg::TrafficLightElement::CIRCLE, "circle"},
+    {autoware_perception_msgs::msg::TrafficLightElement::LEFT_ARROW, "left"},
+    {autoware_perception_msgs::msg::TrafficLightElement::RIGHT_ARROW, "right"},
+    {autoware_perception_msgs::msg::TrafficLightElement::UP_ARROW, "straight"},
+    {autoware_perception_msgs::msg::TrafficLightElement::DOWN_ARROW, "down"},
+    {autoware_perception_msgs::msg::TrafficLightElement::DOWN_LEFT_ARROW, "down_left"},
+    {autoware_perception_msgs::msg::TrafficLightElement::DOWN_RIGHT_ARROW, "down_right"},
+    {autoware_perception_msgs::msg::TrafficLightElement::CROSS, "cross"},
     // other
-    {autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN, "unknown"},
+    {autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN, "unknown"},
   };
 
   bool createRect(
@@ -93,7 +93,7 @@ private:
     const ClassificationResult & result);
 
   bool getClassificationResult(
-    int id, const autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals,
+    int id, const autoware_perception_msgs::msg::TrafficLightArray & traffic_signals,
     ClassificationResult & result);
 
   bool getRoiFromId(
@@ -105,12 +105,12 @@ private:
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray> roi_sub_;
   message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficLightRoiArray>
     rough_roi_sub_;
-  message_filters::Subscriber<autoware_auto_perception_msgs::msg::TrafficSignalArray>
+  message_filters::Subscriber<autoware_perception_msgs::msg::TrafficLightArray>
     traffic_signals_sub_;
   image_transport::Publisher image_pub_;
   typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
-    autoware_auto_perception_msgs::msg::TrafficSignalArray>
+    autoware_perception_msgs::msg::TrafficLightArray>
     SyncPolicy;
   typedef message_filters::Synchronizer<SyncPolicy> Sync;
   std::shared_ptr<Sync> sync_;
@@ -118,7 +118,7 @@ private:
   typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::msg::Image, autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
     autoware_auto_perception_msgs::msg::TrafficLightRoiArray,
-    autoware_auto_perception_msgs::msg::TrafficSignalArray>
+    autoware_perception_msgs::msg::TrafficLightArray>
     SyncPolicyWithRoughRoi;
   typedef message_filters::Synchronizer<SyncPolicyWithRoughRoi> SyncWithRoughRoi;
   std::shared_ptr<SyncWithRoughRoi> sync_with_rough_roi_;

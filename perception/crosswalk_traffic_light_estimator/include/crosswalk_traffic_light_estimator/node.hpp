@@ -22,9 +22,8 @@
 #include <tier4_autoware_utils/tier4_autoware_utils.hpp>
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_light.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_signal.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
+#include <autoware_perception_msgs/msg/traffic_light.hpp>
+#include <autoware_perception_msgs/msg/traffic_light_array.hpp>
 #include <autoware_planning_msgs/msg/lanelet_route.hpp>
 #include <tier4_debug_msgs/msg/float64_stamped.hpp>
 
@@ -42,14 +41,14 @@ namespace traffic_light
 {
 
 using autoware_auto_mapping_msgs::msg::HADMapBin;
-using autoware_auto_perception_msgs::msg::TrafficLight;
-using autoware_auto_perception_msgs::msg::TrafficSignal;
-using autoware_auto_perception_msgs::msg::TrafficSignalArray;
+using autoware_perception_msgs::msg::TrafficLight;
+using autoware_perception_msgs::msg::TrafficLightArray;
+using autoware_perception_msgs::msg::TrafficLightElement;
 using autoware_planning_msgs::msg::LaneletRoute;
 using tier4_autoware_utils::DebugPublisher;
 using tier4_autoware_utils::StopWatch;
 using tier4_debug_msgs::msg::Float64Stamped;
-using TrafficLightIdMap = std::unordered_map<lanelet::Id, TrafficSignal>;
+using TrafficLightIdMap = std::unordered_map<lanelet::Id, TrafficLight>;
 
 class CrosswalkTrafficLightEstimatorNode : public rclcpp::Node
 {
@@ -59,8 +58,8 @@ public:
 private:
   rclcpp::Subscription<HADMapBin>::SharedPtr sub_map_;
   rclcpp::Subscription<LaneletRoute>::SharedPtr sub_route_;
-  rclcpp::Subscription<TrafficSignalArray>::SharedPtr sub_traffic_light_array_;
-  rclcpp::Publisher<TrafficSignalArray>::SharedPtr pub_traffic_light_array_;
+  rclcpp::Subscription<TrafficLightArray>::SharedPtr sub_traffic_light_array_;
+  rclcpp::Publisher<TrafficLightArray>::SharedPtr pub_traffic_light_array_;
 
   lanelet::LaneletMapPtr lanelet_map_ptr_;
   lanelet::traffic_rules::TrafficRulesPtr traffic_rules_ptr_;
@@ -71,11 +70,11 @@ private:
 
   void onMap(const HADMapBin::ConstSharedPtr msg);
   void onRoute(const LaneletRoute::ConstSharedPtr msg);
-  void onTrafficLightArray(const TrafficSignalArray::ConstSharedPtr msg);
+  void onTrafficLightArray(const TrafficLightArray::ConstSharedPtr msg);
 
   void updateLastDetectedSignal(const TrafficLightIdMap & traffic_signals);
   void setCrosswalkTrafficSignal(
-    const lanelet::ConstLanelet & crosswalk, const uint8_t color, TrafficSignalArray & msg) const;
+    const lanelet::ConstLanelet & crosswalk, const uint8_t color, TrafficLightArray & msg) const;
 
   lanelet::ConstLanelets getNonRedLanelets(
     const lanelet::ConstLanelets & lanelets, const TrafficLightIdMap & traffic_light_id_map) const;

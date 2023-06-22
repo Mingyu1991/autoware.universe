@@ -21,7 +21,10 @@
 
 #include <autoware_auto_mapping_msgs/msg/had_map_bin.hpp>
 #include <autoware_auto_perception_msgs/msg/traffic_light_roi_array.hpp>
-#include <autoware_auto_perception_msgs/msg/traffic_signal_array.hpp>
+#include <autoware_perception_msgs/msg/traffic_light.hpp>
+#include <autoware_perception_msgs/msg/traffic_light_array.hpp>
+#include <autoware_perception_msgs/msg/traffic_signal.hpp>
+#include <autoware_perception_msgs/msg/traffic_signal_array.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 
 #include <lanelet2_core/LaneletMap.h>
@@ -47,7 +50,7 @@ struct FusionRecord
   std_msgs::msg::Header header;
   sensor_msgs::msg::CameraInfo cam_info;
   autoware_auto_perception_msgs::msg::TrafficLightRoi roi;
-  autoware_auto_perception_msgs::msg::TrafficSignal signal;
+  autoware_perception_msgs::msg::TrafficLight light;
 };
 
 struct FusionRecordArr
@@ -55,7 +58,7 @@ struct FusionRecordArr
   std_msgs::msg::Header header;
   sensor_msgs::msg::CameraInfo cam_info;
   autoware_auto_perception_msgs::msg::TrafficLightRoiArray rois;
-  autoware_auto_perception_msgs::msg::TrafficSignalArray signals;
+  autoware_perception_msgs::msg::TrafficLightArray lights;
 };
 
 bool operator<(const FusionRecordArr & r1, const FusionRecordArr & r2)
@@ -68,8 +71,10 @@ class MultiCameraFusion : public rclcpp::Node
 public:
   typedef sensor_msgs::msg::CameraInfo CamInfoType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoi RoiType;
-  typedef autoware_auto_perception_msgs::msg::TrafficSignal SignalType;
-  typedef autoware_auto_perception_msgs::msg::TrafficSignalArray SignalArrayType;
+  typedef autoware_perception_msgs::msg::TrafficSignal SignalType;
+  typedef autoware_perception_msgs::msg::TrafficSignalArray SignalArrayType;
+  typedef autoware_perception_msgs::msg::TrafficLight LightType;
+  typedef autoware_perception_msgs::msg::TrafficLightArray LightArrayType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoiArray RoiArrayType;
   typedef autoware_auto_perception_msgs::msg::TrafficLightRoi::_id_type IdType;
 
@@ -80,21 +85,21 @@ public:
 private:
   void trafficSignalRoiCallback(
     const CamInfoType::ConstSharedPtr cam_info_msg, const RoiArrayType::ConstSharedPtr roi_msg,
-    const SignalArrayType::ConstSharedPtr signal_msg);
+    const LightArrayType::ConstSharedPtr signal_msg);
 
   void mapCallback(const autoware_auto_mapping_msgs::msg::HADMapBin::ConstSharedPtr input_msg);
 
   void multiCameraFusion(std::map<IdType, FusionRecord> & fusioned_record_map);
 
-  void groupFusion(std::map<IdType, FusionRecord> & fusioned_record_map);
+  void groupFusion(std::map<IdType, FusionRecord> & fusioned_record_map, SignalArrayType & out_msg);
 
-  typedef mf::sync_policies::ExactTime<CamInfoType, RoiArrayType, SignalArrayType> ExactSyncPolicy;
+  typedef mf::sync_policies::ExactTime<CamInfoType, RoiArrayType, LightArrayType> ExactSyncPolicy;
   typedef mf::Synchronizer<ExactSyncPolicy> ExactSync;
-  typedef mf::sync_policies::ApproximateTime<CamInfoType, RoiArrayType, SignalArrayType>
+  typedef mf::sync_policies::ApproximateTime<CamInfoType, RoiArrayType, LightArrayType>
     ApproSyncPolicy;
   typedef mf::Synchronizer<ApproSyncPolicy> ApproSync;
 
-  std::vector<std::unique_ptr<mf::Subscriber<SignalArrayType>>> signal_subs_;
+  std::vector<std::unique_ptr<mf::Subscriber<LightArrayType>>> light_subs_;
   std::vector<std::unique_ptr<mf::Subscriber<RoiArrayType>>> roi_subs_;
   std::vector<std::unique_ptr<mf::Subscriber<CamInfoType>>> cam_info_subs_;
   std::vector<std::unique_ptr<ExactSync>> exact_sync_subs_;
@@ -118,13 +123,6 @@ private:
   it would be discarded
   */
   double message_lifespan_;
-  /*
-  if true, the traffic lights of the same group (sharing the same regulatory element id) would be
-  fused. It's recommended to configure this values so that it's a little bit smaller than the cycle
-  time of your sensors. For example, if the camera frequency is 10Hz, it should be between 0.09 ~
-  0.1
-  */
-  bool perform_group_fusion_;
 };
 }  // namespace traffic_light
 #endif  // TRAFFIC_LIGHT_MULTI_CAMERA_FUSION__NODE_HPP_

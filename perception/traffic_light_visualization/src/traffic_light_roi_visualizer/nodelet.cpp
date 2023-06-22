@@ -121,7 +121,7 @@ bool TrafficLightRoiVisualizerNodelet::createRect(
 void TrafficLightRoiVisualizerNodelet::imageRoiCallback(
   const sensor_msgs::msg::Image::ConstSharedPtr & input_image_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & input_tl_roi_msg,
-  [[maybe_unused]] const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
+  [[maybe_unused]] const autoware_perception_msgs::msg::TrafficLightArray::ConstSharedPtr &
     input_traffic_signals_msg)
 {
   cv_bridge::CvImagePtr cv_ptr;
@@ -138,21 +138,21 @@ void TrafficLightRoiVisualizerNodelet::imageRoiCallback(
 }
 
 bool TrafficLightRoiVisualizerNodelet::getClassificationResult(
-  int id, const autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals,
+  int id, const autoware_perception_msgs::msg::TrafficLightArray & traffic_signals,
   ClassificationResult & result)
 {
   bool has_correspond_traffic_signal = false;
-  for (const auto & traffic_signal : traffic_signals.signals) {
-    if (id != traffic_signal.map_primitive_id) {
+  for (const auto & traffic_signal : traffic_signals.lights) {
+    if (id != traffic_signal.traffic_light_id) {
       continue;
     }
     has_correspond_traffic_signal = true;
-    for (size_t i = 0; i < traffic_signal.lights.size(); i++) {
-      auto light = traffic_signal.lights.at(i);
+    for (size_t i = 0; i < traffic_signal.elements.size(); i++) {
+      auto element = traffic_signal.elements.at(i);
       // all lamp confidence are the same
-      result.prob = light.confidence;
-      result.label += (state2label_[light.color] + "-" + state2label_[light.shape]);
-      if (i < traffic_signal.lights.size() - 1) {
+      result.prob = element.confidence;
+      result.label += (state2label_[element.color] + "-" + state2label_[element.shape]);
+      if (i + 1 < traffic_signal.elements.size()) {
         result.label += ",";
       }
     }
@@ -178,7 +178,7 @@ void TrafficLightRoiVisualizerNodelet::imageRoughRoiCallback(
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr & input_tl_roi_msg,
   const autoware_auto_perception_msgs::msg::TrafficLightRoiArray::ConstSharedPtr &
     input_tl_rough_roi_msg,
-  const autoware_auto_perception_msgs::msg::TrafficSignalArray::ConstSharedPtr &
+  const autoware_perception_msgs::msg::TrafficLightArray::ConstSharedPtr &
     input_traffic_signals_msg)
 {
   cv_bridge::CvImagePtr cv_ptr;
