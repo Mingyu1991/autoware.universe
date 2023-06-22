@@ -51,6 +51,8 @@ using SetRoute = planning_interface::SetRoute;
 using ChangeRoutePoints = planning_interface::ChangeRoutePoints;
 using ChangeRoute = planning_interface::ChangeRoute;
 using Route = planning_interface::Route;
+using NormalRoute = planning_interface::NormalRoute;
+using MrmRoute = planning_interface::MrmRoute;
 using RouteState = planning_interface::RouteState;
 using Odometry = nav_msgs::msg::Odometry;
 
@@ -74,12 +76,23 @@ private:
   void on_odometry(const Odometry::ConstSharedPtr msg);
 
   rclcpp::Publisher<MarkerArray>::SharedPtr pub_marker_;
-  void change_route();
+  void clear_route();
   void change_route(const LaneletRoute & route);
+  LaneletRoute create_route(const SetRoute::Service::Request::SharedPtr req);
+  LaneletRoute create_route(const SetRoutePoints::Service::Request::SharedPtr req);
+  LaneletRoute create_route(
+    const std_msgs::msg::Header & header,
+    const std::vector<autoware_adapi_v1_msgs::msg::RouteSegment> & route_segments,
+    const geometry_msgs::msg::Pose & goal_pose, const bool allow_goal_modification);
+  LaneletRoute create_route(
+    const std_msgs::msg::Header & header, const std::vector<geometry_msgs::msg::Pose> & waypoints,
+    const geometry_msgs::msg::Pose & goal_pose, const bool allow_goal_modification);
 
   RouteState::Message state_;
   component_interface_utils::Publisher<RouteState>::SharedPtr pub_state_;
   component_interface_utils::Publisher<Route>::SharedPtr pub_route_;
+  component_interface_utils::Publisher<NormalRoute>::SharedPtr pub_normal_route_;
+  component_interface_utils::Publisher<MrmRoute>::SharedPtr pub_mrm_route_;
   void change_state(RouteState::Message::_state_type state);
 
   component_interface_utils::Service<ClearRoute>::SharedPtr srv_clear_route_;
@@ -119,7 +132,10 @@ private:
     const SetRoutePoints::Service::Response::SharedPtr res);
 
   double reroute_time_threshold_{10.0};
+  double minimum_reroute_length_{30.0};
   bool checkRerouteSafety(const LaneletRoute & original_route, const LaneletRoute & target_route);
+
+  std::shared_ptr<LaneletRoute> normal_route_{nullptr};
 };
 
 }  // namespace mission_planner

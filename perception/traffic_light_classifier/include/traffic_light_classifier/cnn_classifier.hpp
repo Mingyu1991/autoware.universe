@@ -26,7 +26,11 @@
 #include <rclcpp/rclcpp.hpp>
 #include <tensorrt_common/tensorrt_common.hpp>
 
+#if __has_include(<cv_bridge/cv_bridge.hpp>)
+#include <cv_bridge/cv_bridge.hpp>
+#else
 #include <cv_bridge/cv_bridge.h>
+#endif
 
 #include <fstream>
 #include <map>

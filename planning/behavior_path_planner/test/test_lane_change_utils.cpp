@@ -27,13 +27,82 @@ TEST(BehaviorPathPlanningLaneChangeUtilsTest, projectCurrentPoseToTarget)
   ego_pose.position = tier4_autoware_utils::createPoint(0, 0, 0);
 
   geometry_msgs::msg::Pose obj_pose;
-  obj_pose.position = tier4_autoware_utils::createPoint(-4, 3, 0);
   const auto obj_yaw = tier4_autoware_utils::deg2rad(0.0);
-  ego_pose.orientation = tier4_autoware_utils::createQuaternionFromYaw(obj_yaw);
+  obj_pose.orientation = tier4_autoware_utils::createQuaternionFromYaw(obj_yaw);
+  obj_pose.position = tier4_autoware_utils::createPoint(-4, 3, 0);
 
-  const auto result =
-    behavior_path_planner::utils::safety_check::projectCurrentPoseToTarget(ego_pose, obj_pose);
+  const auto result = tier4_autoware_utils::inverseTransformPose(obj_pose, ego_pose);
 
   EXPECT_NEAR(result.position.x, -4, epsilon);
   EXPECT_NEAR(result.position.y, 3, epsilon);
+}
+
+TEST(BehaviorPathPlanningLaneChangeUtilsTest, TESTLateralAccelerationMap)
+{
+  LateralAccelerationMap lat_acc_map;
+  lat_acc_map.add(0.0, 0.2, 0.315);
+  lat_acc_map.add(3.0, 0.2, 0.315);
+  lat_acc_map.add(5.0, 0.2, 0.315);
+  lat_acc_map.add(6.0, 0.315, 0.40);
+  lat_acc_map.add(10.0, 0.315, 0.50);
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(-1.0);
+    EXPECT_NEAR(min_acc, 0.2, epsilon);
+    EXPECT_NEAR(max_acc, 0.315, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(0.0);
+    EXPECT_NEAR(min_acc, 0.2, epsilon);
+    EXPECT_NEAR(max_acc, 0.315, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(1.0);
+    EXPECT_NEAR(min_acc, 0.2, epsilon);
+    EXPECT_NEAR(max_acc, 0.315, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(3.0);
+    EXPECT_NEAR(min_acc, 0.2, epsilon);
+    EXPECT_NEAR(max_acc, 0.315, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(5.0);
+    EXPECT_NEAR(min_acc, 0.2, epsilon);
+    EXPECT_NEAR(max_acc, 0.315, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(5.5);
+    EXPECT_NEAR(min_acc, 0.2575, epsilon);
+    EXPECT_NEAR(max_acc, 0.3575, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(6.0);
+    EXPECT_NEAR(min_acc, 0.315, epsilon);
+    EXPECT_NEAR(max_acc, 0.4, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(8.0);
+    EXPECT_NEAR(min_acc, 0.315, epsilon);
+    EXPECT_NEAR(max_acc, 0.45, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(10.0);
+    EXPECT_NEAR(min_acc, 0.315, epsilon);
+    EXPECT_NEAR(max_acc, 0.50, epsilon);
+  }
+
+  {
+    const auto [min_acc, max_acc] = lat_acc_map.find(11.0);
+    EXPECT_NEAR(min_acc, 0.315, epsilon);
+    EXPECT_NEAR(max_acc, 0.50, epsilon);
+  }
 }
