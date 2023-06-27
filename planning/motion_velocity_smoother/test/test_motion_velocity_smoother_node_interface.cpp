@@ -21,20 +21,12 @@
 
 #include <vector>
 
-using motion_velocity_smoother::MotionVelocitySmootherNode;
-using planning_test_utils::PlanningInterfaceTestManager;
-
-std::shared_ptr<PlanningInterfaceTestManager> generateTestManager()
+TEST(PlanningModuleInterfaceTest, testPlanningInterfaceWithVariousTrajectoryInput)
 {
-  auto test_manager = std::make_shared<PlanningInterfaceTestManager>();
-  test_manager->setTrajectorySubscriber("motion_velocity_smoother/output/trajectory");
-  test_manager->setTrajectoryInputTopicName("motion_velocity_smoother/input/trajectory");
-  test_manager->setOdometryTopicName("/localization/kinematic_state");
-  return test_manager;
-}
+  rclcpp::init(0, nullptr);
 
-std::shared_ptr<MotionVelocitySmootherNode> generateNode()
-{
+  auto test_manager = std::make_shared<planning_test_utils::PlanningInterfaceTestManager>();
+
   auto node_options = rclcpp::NodeOptions{};
   node_options.append_parameter_override("algorithm_type", "JerkFiltered");
   node_options.append_parameter_override("publish_debug_trajs", false);
@@ -51,30 +43,19 @@ std::shared_ptr<MotionVelocitySmootherNode> generateNode()
      "--params-file", motion_velocity_smoother_dir + "/config/default_common.param.yaml",
      "--params-file", motion_velocity_smoother_dir + "/config/JerkFiltered.param.yaml"});
 
-  return std::make_shared<MotionVelocitySmootherNode>(node_options);
-}
+  auto test_target_node =
+    std::make_shared<motion_velocity_smoother::MotionVelocitySmootherNode>(node_options);
 
-void publishMandatoryTopics(
-  std::shared_ptr<PlanningInterfaceTestManager> test_manager,
-  rclcpp::Node::SharedPtr test_target_node)
-{
   // publish necessary topics from test_manager
   test_manager->publishOdometry(test_target_node, "/localization/kinematic_state");
   test_manager->publishMaxVelocity(
     test_target_node, "motion_velocity_smoother/input/external_velocity_limit_mps");
-  test_manager->publishOperationModeState(
-    test_target_node, "motion_velocity_smoother/input/operation_mode_state");
-  test_manager->publishAcceleration(
-    test_target_node, "motion_velocity_smoother/input/acceleration");
-}
 
-TEST(PlanningModuleInterfaceTest, testPlanningInterfaceWithVariousTrajectoryInput)
-{
-  rclcpp::init(0, nullptr);
-  auto test_manager = generateTestManager();
-  auto test_target_node = generateNode();
+  // set subscriber for test_target_node
+  test_manager->setTrajectorySubscriber("motion_velocity_smoother/output/trajectory");
 
-  publishMandatoryTopics(test_manager, test_target_node);
+  // setting topic name of subscribing topic
+  test_manager->setTrajectoryInputTopicName("motion_velocity_smoother/input/trajectory");
 
   // test for normal trajectory
   ASSERT_NO_THROW(test_manager->testWithNominalTrajectory(test_target_node));
@@ -82,23 +63,4 @@ TEST(PlanningModuleInterfaceTest, testPlanningInterfaceWithVariousTrajectoryInpu
 
   // test for trajectory with empty/one point/overlapping point
   ASSERT_NO_THROW(test_manager->testWithAbnormalTrajectory(test_target_node));
-
-  rclcpp::shutdown();
-}
-
-TEST(PlanningModuleInterfaceTest, NodeTestWithOffTrackEgoPose)
-{
-  rclcpp::init(0, nullptr);
-  auto test_manager = generateTestManager();
-  auto test_target_node = generateNode();
-
-  publishMandatoryTopics(test_manager, test_target_node);
-
-  // test for normal trajectory
-  ASSERT_NO_THROW(test_manager->testWithNominalTrajectory(test_target_node));
-  EXPECT_GE(test_manager->getReceivedTopicNum(), 1);
-
-  ASSERT_NO_THROW(test_manager->testTrajectoryWithInvalidEgoPose(test_target_node));
-
-  rclcpp::shutdown();
 }

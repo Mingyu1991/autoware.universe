@@ -78,14 +78,9 @@ public:
   void setVelocity(const double velocity);
 
   /**
-   * @brief  Set lateral acceleration limit
+   * @brief  Set acceleration limit
    */
-  void setLateralAccelerationLimit(const double lateral_acc);
-
-  /**
-   * @brief  Set longitudinal acceleration
-   */
-  void setLongitudinalAcceleration(const double longitudinal_acc);
+  void setLateralAccelerationLimit(const double acc);
 
   /**
    * @brief  Add shift point. You don't have to care about the start/end_idx.
@@ -170,9 +165,7 @@ private:
   double velocity_{0.0};
 
   // lateral acceleration limit considered in the path planning
-  double lateral_acc_limit_{-1.0};
-
-  double longitudinal_acc_{0.0};
+  double acc_limit_{-1.0};
 
   // Logger
   mutable rclcpp::Logger logger_{
@@ -186,10 +179,6 @@ private:
 
   std::pair<std::vector<double>, std::vector<double>> getBaseLengthsWithoutAccelLimit(
     const double arclength, const double shift_length, const bool offset_back) const;
-
-  std::pair<std::vector<double>, std::vector<double>> getBaseLengthsWithoutAccelLimit(
-    const double arclength, const double shift_length, const double velocity,
-    const double longitudinal_acc, const double total_time, const bool offset_back) const;
 
   /**
    * @brief Calculate path index for shift_lines and set is_index_aligned_ to true.

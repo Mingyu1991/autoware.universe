@@ -58,11 +58,6 @@ SmootherBase::SmootherBase(rclcpp::Node & node)
     node.declare_parameter<double>("sparse_min_interval_distance");
 }
 
-void SmootherBase::setWheelBase(const double wheel_base)
-{
-  base_param_.wheel_base = wheel_base;
-}
-
 void SmootherBase::setParam(const BaseParam & param)
 {
   base_param_ = param;

@@ -307,7 +307,6 @@ VoxelGridDynamicMapLoader::VoxelGridDynamicMapLoader(
   }
 
   const auto period_ns = rclcpp::Rate(timer_interval_ms).period();
-  timer_callback_group_ = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   map_update_timer_ = rclcpp::create_timer(
     node, node->get_clock(), period_ns, std::bind(&VoxelGridDynamicMapLoader::timer_callback, this),
     timer_callback_group_);
@@ -433,8 +432,7 @@ bool VoxelGridDynamicMapLoader::should_update_map() const
 void VoxelGridDynamicMapLoader::request_update_map(const geometry_msgs::msg::Point & position)
 {
   auto request = std::make_shared<autoware_map_msgs::srv::GetDifferentialPointCloudMap::Request>();
-  request->area.center_x = position.x;
-  request->area.center_y = position.y;
+  request->area.center = position;
   request->area.radius = map_loader_radius_;
   request->cached_ids = getCurrentMapIDs();
 

@@ -63,8 +63,6 @@ private:
   lanelet::ConstLanelets getIntersectedLanelets(
     const LinearRing2d &, const lanelet::ConstLanelets &);
   bool isPolygonOverlapLanelets(const Polygon2d &, const lanelet::ConstLanelets &);
-  geometry_msgs::msg::Polygon setFootprint(
-    const autoware_auto_perception_msgs::msg::DetectedObject &);
 };
 
 }  // namespace object_lanelet_filter

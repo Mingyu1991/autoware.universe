@@ -100,8 +100,9 @@ private:
   void onTrajectory(const Trajectory::ConstSharedPtr msg);
 
   /// @brief validate the inputs of the node
+  /// @param[in] ego_idx trajectory index closest to the current ego pose
   /// @return true if the inputs are valid
-  bool validInputs();
+  bool validInputs(const boost::optional<size_t> & ego_idx);
 };
 }  // namespace obstacle_velocity_limiter
 

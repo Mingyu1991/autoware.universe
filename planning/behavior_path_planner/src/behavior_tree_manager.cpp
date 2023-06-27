@@ -115,7 +115,6 @@ BehaviorModuleOutput BehaviorTreeManager::run(const std::shared_ptr<PlannerData>
   std::for_each(scene_modules_.begin(), scene_modules_.end(), [](const auto & m) {
     m->publishInfoMarker();
     m->publishDebugMarker();
-    m->publishStopReasons();
     m->publishVirtualWall();
     if (!m->isExecutionRequested()) {
       m->onExit();

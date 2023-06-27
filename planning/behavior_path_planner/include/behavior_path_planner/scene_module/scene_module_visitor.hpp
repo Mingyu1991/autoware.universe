@@ -33,7 +33,7 @@ class ExternalRequestLaneChangeModule;
 class LaneChangeInterface;
 class LaneChangeBTInterface;
 class LaneFollowingModule;
-class StartPlannerModule;
+class PullOutModule;
 class GoalPlannerModule;
 class SideShiftModule;
 

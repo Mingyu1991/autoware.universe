@@ -19,6 +19,8 @@
 #include "osqp_interface/osqp_interface.hpp"
 #include "rclcpp/rclcpp.hpp"
 
+#include <Eigen/Dense>
+
 namespace autoware::motion::control::mpc_lateral_controller
 {
 

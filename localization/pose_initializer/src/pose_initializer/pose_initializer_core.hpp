@@ -26,7 +26,6 @@
 class StopCheckModule;
 class NdtModule;
 class GnssModule;
-class YabLocModule;
 class EkfLocalizationTriggerModule;
 class NdtLocalizationTriggerModule;
 
@@ -51,7 +50,6 @@ private:
   std::array<double, 36> gnss_particle_covariance_;
   std::unique_ptr<GnssModule> gnss_;
   std::unique_ptr<NdtModule> ndt_;
-  std::unique_ptr<YabLocModule> yabloc_;
   std::unique_ptr<StopCheckModule> stop_check_;
   std::unique_ptr<EkfLocalizationTriggerModule> ekf_localization_trigger_;
   std::unique_ptr<NdtLocalizationTriggerModule> ndt_localization_trigger_;

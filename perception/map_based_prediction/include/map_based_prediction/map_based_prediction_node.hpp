@@ -59,13 +59,6 @@ struct LateralKinematicsToLanelet
   double filtered_right_lateral_velocity;
 };
 
-enum class Maneuver {
-  UNINITIALIZED = 0,
-  LANE_FOLLOW = 1,
-  LEFT_LANE_CHANGE = 2,
-  RIGHT_LANE_CHANGE = 3,
-};
-
 struct ObjectData
 {
   std_msgs::msg::Header header;
@@ -76,9 +69,12 @@ struct ObjectData
   double time_delay;
   // for lane change prediction
   std::unordered_map<lanelet::ConstLanelet, LateralKinematicsToLanelet> lateral_kinematics_set;
-  Maneuver one_shot_maneuver{Maneuver::UNINITIALIZED};
-  Maneuver output_maneuver{
-    Maneuver::UNINITIALIZED};  // output maneuver considering previous one shot maneuvers
+};
+
+enum class Maneuver {
+  LANE_FOLLOW = 0,
+  LEFT_LANE_CHANGE = 1,
+  RIGHT_LANE_CHANGE = 2,
 };
 
 struct LaneletData
@@ -149,15 +145,9 @@ private:
   double sigma_yaw_angle_deg_;
   double object_buffer_time_length_;
   double history_time_length_;
-  std::string lane_change_detection_method_;
   double dist_threshold_to_bound_;
   double time_threshold_to_bound_;
   double cutoff_freq_of_velocity_lpf_;
-  double dist_ratio_threshold_to_left_bound_;
-  double dist_ratio_threshold_to_right_bound_;
-  double diff_dist_threshold_to_left_bound_;
-  double diff_dist_threshold_to_right_bound_;
-  int num_continuous_state_transition_;
   double reference_path_resolution_;
 
   // Stop watch
@@ -192,7 +182,7 @@ private:
     const TrackedObject & object, const LaneletsData & current_lanelets_data,
     const double object_detected_time);
   Maneuver predictObjectManeuver(
-    const TrackedObject & object, const LaneletData & current_lanelet_data,
+    const TrackedObject & object, const LaneletData & current_lanelet,
     const double object_detected_time);
   geometry_msgs::msg::Pose compensateTimeDelay(
     const geometry_msgs::msg::Pose & delayed_pose, const geometry_msgs::msg::Twist & twist,
@@ -223,13 +213,6 @@ private:
 
   visualization_msgs::msg::Marker getDebugMarker(
     const TrackedObject & object, const Maneuver & maneuver, const size_t obj_num);
-
-  Maneuver predictObjectManeuverByTimeToLaneChange(
-    const TrackedObject & object, const LaneletData & current_lanelet_data,
-    const double object_detected_time);
-  Maneuver predictObjectManeuverByLatDiffDistance(
-    const TrackedObject & object, const LaneletData & current_lanelet_data,
-    const double object_detected_time);
 };
 }  // namespace map_based_prediction
 

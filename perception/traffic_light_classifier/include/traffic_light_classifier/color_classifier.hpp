@@ -22,13 +22,9 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <rclcpp/rclcpp.hpp>
 
-#include <autoware_perception_msgs/msg/traffic_light_array.hpp>
+#include <autoware_auto_perception_msgs/msg/traffic_light.hpp>
 
-#if __has_include(<cv_bridge/cv_bridge.hpp>)
-#include <cv_bridge/cv_bridge.hpp>
-#else
 #include <cv_bridge/cv_bridge.h>
-#endif
 
 #include <vector>
 
@@ -64,7 +60,7 @@ public:
 
   bool getTrafficSignals(
     const std::vector<cv::Mat> & images,
-    autoware_perception_msgs::msg::TrafficLightArray & traffic_signals);
+    autoware_auto_perception_msgs::msg::TrafficSignalArray & traffic_signals) override;
 
 private:
   bool filterHSV(

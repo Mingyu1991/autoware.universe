@@ -107,17 +107,10 @@ void PlanningInterfaceTestManager::publishParkingScenario(
 }
 
 void PlanningInterfaceTestManager::publishInitialPose(
-  rclcpp::Node::SharedPtr target_node, std::string topic_name, const double shift,
-  ModuleName module_name)
+  rclcpp::Node::SharedPtr target_node, std::string topic_name, const double shift)
 {
-  if (module_name == ModuleName::START_PLANNER) {
-    test_utils::publishToTargetNode(
-      test_node_, target_node, topic_name, initial_pose_pub_,
-      test_utils::makeInitialPoseFromLaneId(10291));
-  } else {
-    test_utils::publishToTargetNode(
-      test_node_, target_node, topic_name, initial_pose_pub_, test_utils::makeInitialPose(shift));
-  }
+  test_utils::publishToTargetNode(
+    test_node_, target_node, topic_name, initial_pose_pub_, test_utils::makeInitialPose(shift));
 }
 
 void PlanningInterfaceTestManager::publishParkingState(
@@ -249,17 +242,11 @@ void PlanningInterfaceTestManager::publishNominalRoute(
 }
 
 void PlanningInterfaceTestManager::publishBehaviorNominalRoute(
-  rclcpp::Node::SharedPtr target_node, std::string topic_name, ModuleName module_name)
+  rclcpp::Node::SharedPtr target_node, std::string topic_name)
 {
-  if (module_name == ModuleName::START_PLANNER) {
-    test_utils::publishToTargetNode(
-      test_node_, target_node, topic_name, behavior_normal_route_pub_,
-      test_utils::makeBehaviorRouteFromLaneId(10291, 10333), 5);
-  } else {
-    test_utils::publishToTargetNode(
-      test_node_, target_node, topic_name, behavior_normal_route_pub_,
-      test_utils::makeBehaviorNormalRoute(), 5);
-  }
+  test_utils::publishToTargetNode(
+    test_node_, target_node, topic_name, behavior_normal_route_pub_,
+    test_utils::makeBehaviorNormalRoute(), 5);
 }
 
 void PlanningInterfaceTestManager::publishAbnormalRoute(
@@ -345,10 +332,9 @@ void PlanningInterfaceTestManager::testWithNominalRoute(rclcpp::Node::SharedPtr 
 }
 
 // test for normal working
-void PlanningInterfaceTestManager::testWithBehaviorNominalRoute(
-  rclcpp::Node::SharedPtr target_node, ModuleName module_name)
+void PlanningInterfaceTestManager::testWithBehaviorNominalRoute(rclcpp::Node::SharedPtr target_node)
 {
-  publishBehaviorNominalRoute(target_node, input_route_name_, module_name);
+  publishBehaviorNominalRoute(target_node, input_route_name_);
 }
 
 // check to see if target node is dead.

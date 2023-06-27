@@ -28,31 +28,31 @@ namespace
 {
 std::string toString(const uint8_t state)
 {
-  if (state == autoware_perception_msgs::msg::TrafficLightElement::RED) {
+  if (state == autoware_auto_perception_msgs::msg::TrafficLight::RED) {
     return "red";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::AMBER) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::AMBER) {
     return "yellow";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::GREEN) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::GREEN) {
     return "green";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::WHITE) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::WHITE) {
     return "white";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::CIRCLE) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::CIRCLE) {
     return "circle";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::LEFT_ARROW) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::LEFT_ARROW) {
     return "left";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::RIGHT_ARROW) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::RIGHT_ARROW) {
     return "right";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::UP_ARROW) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::UP_ARROW) {
     return "straight";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::DOWN_ARROW) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::DOWN_ARROW) {
     return "down";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::DOWN_LEFT_ARROW) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::DOWN_LEFT_ARROW) {
     return "down_left";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::DOWN_RIGHT_ARROW) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::DOWN_RIGHT_ARROW) {
     return "down_right";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::CROSS) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::CROSS) {
     return "cross";
-  } else if (state == autoware_perception_msgs::msg::TrafficLightElement::UNKNOWN) {
+  } else if (state == autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN) {
     return "unknown";
   } else {
     return "";
@@ -122,17 +122,17 @@ private:
         return;
       }
       cv::cvtColor(crop, crop, cv::COLOR_BGR2RGB);
-      autoware_perception_msgs::msg::TrafficLightArray traffic_signals;
-      if (!classifier_ptr_->getTrafficSignals({crop}, traffic_signals)) {
+      autoware_auto_perception_msgs::msg::TrafficSignalArray traffic_signal;
+      if (!classifier_ptr_->getTrafficSignals({crop}, traffic_signal)) {
         RCLCPP_ERROR(get_logger(), "failed to classify image");
         return;
       }
       cv::Scalar color;
       cv::Scalar text_color;
-      for (const auto & element : traffic_signals.lights[0].elements) {
-        auto color_str = toString(element.color);
-        auto shape_str = toString(element.shape);
-        auto confidence_str = std::to_string(element.confidence);
+      for (const auto & light : traffic_signal.signals[0].lights) {
+        auto color_str = toString(light.color);
+        auto shape_str = toString(light.shape);
+        auto confidence_str = std::to_string(light.confidence);
         if (shape_str == "circle") {
           if (color_str == "red") {
             color = cv::Scalar(0, 0, 255);

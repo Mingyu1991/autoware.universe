@@ -22,7 +22,6 @@
 #include "behavior_path_planner/utils/lane_change/utils.hpp"
 #include "behavior_path_planner/utils/path_shifter/path_shifter.hpp"
 
-#include <magic_enum.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include "tier4_planning_msgs/msg/lane_change_debug_msg.hpp"
@@ -30,6 +29,8 @@
 #include <autoware_auto_planning_msgs/msg/path_with_lane_id.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+
+#include <tf2/utils.h>
 
 #include <algorithm>
 #include <memory>
@@ -40,7 +41,6 @@
 namespace behavior_path_planner
 {
 using autoware_auto_planning_msgs::msg::PathWithLaneId;
-using data::lane_change::PathSafetyStatus;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::Pose;
 using geometry_msgs::msg::Twist;
@@ -73,33 +73,17 @@ public:
 
   virtual void extendOutputDrivableArea(BehaviorModuleOutput & output) = 0;
 
+  virtual bool hasFinishedLaneChange() const = 0;
+
   virtual PathWithLaneId getReferencePath() const = 0;
 
-  virtual std::optional<PathWithLaneId> extendPath() = 0;
+  virtual bool isCancelConditionSatisfied() = 0;
+
+  virtual bool isAbortConditionSatisfied(const Pose & pose) = 0;
 
   virtual void resetParameters() = 0;
 
   virtual TurnSignalInfo updateOutputTurnSignal() = 0;
-
-  virtual bool hasFinishedLaneChange() const = 0;
-
-  virtual bool hasFinishedAbort() const = 0;
-
-  virtual bool isAbortState() const = 0;
-
-  virtual bool isAbleToReturnCurrentLane() const = 0;
-
-  virtual LaneChangePath getLaneChangePath() const = 0;
-
-  virtual bool isEgoOnPreparePhase() const = 0;
-
-  virtual bool isRequiredStop(const bool is_object_coming_from_rear) const = 0;
-
-  virtual PathSafetyStatus isApprovedPathSafe() const = 0;
-
-  virtual bool isNearEndOfLane() const = 0;
-
-  virtual bool getAbortPath() = 0;
 
   virtual void setPreviousModulePaths(
     const std::shared_ptr<PathWithLaneId> & prev_module_reference_path,
@@ -125,27 +109,40 @@ public:
 
   virtual void updateSpecialData() {}
 
-  virtual void insertStopPoint([[maybe_unused]] PathWithLaneId & path) {}
-
   const LaneChangeStatus & getLaneChangeStatus() const { return status_; }
+
+  LaneChangePath getLaneChangePath() const
+  {
+    return isAbortState() ? *abort_path_ : status_.lane_change_path;
+  }
 
   const LaneChangePaths & getDebugValidPath() const { return debug_valid_path_; }
 
   const CollisionCheckDebugMap & getDebugData() const { return object_debug_; }
 
-  const Pose & getEgoPose() const { return planner_data_->self_odometry->pose.pose; }
+  bool isAbortState() const
+  {
+    if (!lane_change_parameters_->enable_abort_lane_change) {
+      return false;
+    }
 
-  const Point & getEgoPosition() const { return getEgoPose().position; }
+    const auto is_within_current_lane = utils::lane_change::isEgoWithinOriginalLane(
+      status_.current_lanes, getEgoPose(), planner_data_->parameters);
 
-  const Twist & getEgoTwist() const { return planner_data_->self_odometry->twist.twist; }
+    if (!is_within_current_lane) {
+      return false;
+    }
 
-  const BehaviorPathPlannerParameters & getCommonParam() const { return planner_data_->parameters; }
+    if (current_lane_change_state_ != LaneChangeStates::Abort) {
+      return false;
+    }
 
-  LaneChangeParameters getLaneChangeParam() const { return *lane_change_parameters_; }
+    if (!abort_path_) {
+      return false;
+    }
 
-  bool isCancelEnabled() const { return lane_change_parameters_->enable_cancel_lane_change; }
-
-  bool isAbortEnabled() const { return lane_change_parameters_->enable_abort_lane_change; }
+    return true;
+  }
 
   bool isSafe() const { return status_.is_safe; }
 
@@ -153,27 +150,24 @@ public:
 
   bool isValidPath() const { return status_.is_valid_path; }
 
+  bool isCancelEnabled() const { return lane_change_parameters_->enable_cancel_lane_change; }
+
+  std_msgs::msg::Header getRouteHeader() const
+  {
+    return planner_data_->route_handler->getRouteHeader();
+  }
+
   void setData(const std::shared_ptr<const PlannerData> & data) { planner_data_ = data; }
 
-  void toNormalState() { current_lane_change_state_ = LaneChangeStates::Normal; }
+  const Pose & getEgoPose() const { return planner_data_->self_odometry->pose.pose; }
 
-  void toStopState() { current_lane_change_state_ = LaneChangeStates::Stop; }
+  const Point & getEgoPosition() const { return getEgoPose().position; }
 
-  void toCancelState() { current_lane_change_state_ = LaneChangeStates::Cancel; }
-
-  void toAbortState() { current_lane_change_state_ = LaneChangeStates::Abort; }
-
-  double getEgoVelocity() const { return getEgoTwist().linear.x; }
+  const Twist & getEgoTwist() const { return planner_data_->self_odometry->twist.twist; }
 
   std::shared_ptr<RouteHandler> getRouteHandler() const { return planner_data_->route_handler; }
 
-  std_msgs::msg::Header getRouteHeader() const { return getRouteHandler()->getRouteHeader(); }
-
-  std::string getModuleTypeStr() const { return std::string{magic_enum::enum_name(type_)}; }
-
-  LaneChangeModuleType getModuleType() const { return type_; }
-
-  TurnSignalDecider getTurnSignalDecider() { return planner_data_->turn_signal_decider; }
+  double getEgoVelocity() const { return getEgoTwist().linear.x; }
 
   Direction getDirection() const
   {
@@ -192,7 +186,8 @@ protected:
 
   virtual PathWithLaneId getPrepareSegment(
     const lanelet::ConstLanelets & current_lanes, const double arc_length_from_current,
-    const double backward_path_length, const double prepare_length) const = 0;
+    const double backward_path_length, const double prepare_length,
+    const double prepare_velocity) const = 0;
 
   virtual bool getLaneChangePaths(
     const lanelet::ConstLanelets & original_lanelets,
@@ -201,14 +196,32 @@ protected:
 
   virtual std::vector<DrivableLanes> getDrivableLanes() const = 0;
 
-  virtual TurnSignalInfo calcTurnSignalInfo() = 0;
+  virtual bool isApprovedPathSafe(Pose & ego_pose_before_collision) const = 0;
+
+  virtual void calcTurnSignalInfo() = 0;
 
   virtual bool isValidPath(const PathWithLaneId & path) const = 0;
 
-  virtual bool isAbleToStopSafely() const = 0;
-
   virtual lanelet::ConstLanelets getLaneChangeLanes(
     const lanelet::ConstLanelets & current_lanes, Direction direction) const = 0;
+
+  bool isNearEndOfLane() const
+  {
+    const auto & current_pose = getEgoPose();
+    const auto shift_intervals = planner_data_->route_handler->getLateralIntervalsToPreferredLane(
+      status_.current_lanes.back());
+    const double threshold =
+      utils::calcMinimumLaneChangeLength(planner_data_->parameters, shift_intervals);
+
+    return (std::max(0.0, utils::getDistanceToEndOfLane(current_pose, status_.current_lanes)) -
+            threshold) < planner_data_->parameters.backward_length_buffer_for_end_of_lane;
+  }
+
+  bool isCurrentSpeedLow() const
+  {
+    constexpr double threshold_ms = 10.0 * 1000 / 3600;
+    return getEgoTwist().linear.x < threshold_ms;
+  }
 
   LaneChangeStatus status_{};
   PathShifter path_shifter_{};
@@ -224,6 +237,9 @@ protected:
   TurnSignalInfo prev_turn_signal_info_{};
 
   PathWithLaneId prev_approved_path_{};
+
+  double lane_change_lane_length_{200.0};
+  double check_length_{100.0};
 
   bool is_abort_path_approved_{false};
   bool is_abort_approval_requested_{false};

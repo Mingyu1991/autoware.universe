@@ -38,8 +38,6 @@
 #include <string>
 #include <vector>
 
-class ScanGroundFilterTest;
-
 namespace ground_segmentation
 {
 using vehicle_info_util::VehicleInfo;
@@ -257,9 +255,6 @@ private:
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   explicit ScanGroundFilterComponent(const rclcpp::NodeOptions & options);
-
-  // for test
-  friend ScanGroundFilterTest;
 };
 }  // namespace ground_segmentation
 

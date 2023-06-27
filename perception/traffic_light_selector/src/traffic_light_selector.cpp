@@ -115,7 +115,7 @@ void TrafficLightSelector::on_msg(const TrafficLightArray::ConstSharedPtr msg)
   }
 
   TrafficSignalArray array;
-  array.header = msg->header;
+  array.stamp = msg->stamp;
   for (const auto & [id, elements] : intersections) {
     TrafficSignal signal;
     signal.traffic_signal_id = id;

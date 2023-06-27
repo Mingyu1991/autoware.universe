@@ -254,8 +254,7 @@ private:
   /**
    * @brief update simple1DFilter
    */
-  void updateSimple1DFilters(
-    const geometry_msgs::msg::PoseWithCovarianceStamped & pose, const size_t smoothing_step);
+  void updateSimple1DFilters(const geometry_msgs::msg::PoseWithCovarianceStamped & pose);
 
   /**
    * @brief initialize simple1DFilter

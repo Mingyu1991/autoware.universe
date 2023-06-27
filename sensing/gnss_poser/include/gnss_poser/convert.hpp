@@ -80,8 +80,7 @@ GNSSStat NavSatFix2LocalCartesianWGS84(
   return local_cartesian;
 }
 GNSSStat NavSatFix2UTM(
-  const sensor_msgs::msg::NavSatFix & nav_sat_fix_msg, const rclcpp::Logger & logger,
-  int height_system)
+  const sensor_msgs::msg::NavSatFix & nav_sat_fix_msg, const rclcpp::Logger & logger)
 {
   GNSSStat utm;
   utm.coordinate_system = CoordinateSystem::UTM;
@@ -90,11 +89,9 @@ GNSSStat NavSatFix2UTM(
     GeographicLib::UTMUPS::Forward(
       nav_sat_fix_msg.latitude, nav_sat_fix_msg.longitude, utm.zone, utm.east_north_up, utm.x,
       utm.y);
-    if (height_system == 0) {
-      utm.z = EllipsoidHeight2OrthometricHeight(nav_sat_fix_msg, logger);
-    } else {
-      utm.z = nav_sat_fix_msg.altitude;
-    }
+
+    utm.z = EllipsoidHeight2OrthometricHeight(nav_sat_fix_msg, logger);
+
     utm.latitude = nav_sat_fix_msg.latitude;
     utm.longitude = nav_sat_fix_msg.longitude;
     utm.altitude = nav_sat_fix_msg.altitude;
@@ -105,7 +102,7 @@ GNSSStat NavSatFix2UTM(
 }
 GNSSStat NavSatFix2LocalCartesianUTM(
   const sensor_msgs::msg::NavSatFix & nav_sat_fix_msg,
-  sensor_msgs::msg::NavSatFix nav_sat_fix_origin, const rclcpp::Logger & logger, int height_system)
+  sensor_msgs::msg::NavSatFix nav_sat_fix_origin, const rclcpp::Logger & logger)
 {
   GNSSStat utm_local;
   utm_local.coordinate_system = CoordinateSystem::UTM;
@@ -116,12 +113,7 @@ GNSSStat NavSatFix2LocalCartesianUTM(
     GeographicLib::UTMUPS::Forward(
       nav_sat_fix_origin.latitude, nav_sat_fix_origin.longitude, utm_origin.zone,
       utm_origin.east_north_up, utm_origin.x, utm_origin.y);
-    if (height_system == 0) {
-      utm_origin.z = EllipsoidHeight2OrthometricHeight(nav_sat_fix_origin, logger);
-    } else {
-      utm_origin.z = nav_sat_fix_origin.altitude;
-    }
-
+    utm_origin.z = EllipsoidHeight2OrthometricHeight(nav_sat_fix_origin, logger);
     // individual coordinates of global coordinate system
     double global_x = 0.0;
     double global_y = 0.0;
@@ -134,11 +126,7 @@ GNSSStat NavSatFix2LocalCartesianUTM(
     // individual coordinates of local coordinate system
     utm_local.x = global_x - utm_origin.x;
     utm_local.y = global_y - utm_origin.y;
-    if (height_system == 0) {
-      utm_local.z = EllipsoidHeight2OrthometricHeight(nav_sat_fix_msg, logger) - utm_origin.z;
-    } else {
-      utm_local.z = nav_sat_fix_msg.altitude - utm_origin.z;
-    }
+    utm_local.z = EllipsoidHeight2OrthometricHeight(nav_sat_fix_msg, logger) - utm_origin.z;
   } catch (const GeographicLib::GeographicErr & err) {
     RCLCPP_ERROR_STREAM(
       logger, "Failed to convert from LLH to UTM in local coordinates" << err.what());
@@ -176,9 +164,9 @@ GNSSStat UTM2MGRS(
 
 GNSSStat NavSatFix2MGRS(
   const sensor_msgs::msg::NavSatFix & nav_sat_fix_msg, const MGRSPrecision & precision,
-  const rclcpp::Logger & logger, int height_system)
+  const rclcpp::Logger & logger)
 {
-  const auto utm = NavSatFix2UTM(nav_sat_fix_msg, logger, height_system);
+  const auto utm = NavSatFix2UTM(nav_sat_fix_msg, logger);
   const auto mgrs = UTM2MGRS(utm, precision, logger);
   return mgrs;
 }

@@ -48,15 +48,15 @@ std::shared_ptr<SceneModuleInterface> LaneChangeModuleManager::createNewSceneMod
     std::make_unique<ExternalRequestLaneChange>(parameters_, direction_));
 }
 
-void LaneChangeModuleManager::updateModuleParams(const std::vector<rclcpp::Parameter> & parameters)
+void LaneChangeModuleManager::updateModuleParams(
+  [[maybe_unused]] const std::vector<rclcpp::Parameter> & parameters)
 {
   using tier4_autoware_utils::updateParam;
 
-  auto p = parameters_;
+  [[maybe_unused]] auto p = parameters_;
 
-  const std::string ns = name_ + ".";
-  updateParam<double>(
-    parameters, ns + "finish_judge_lateral_threshold", p->finish_judge_lateral_threshold);
+  [[maybe_unused]] const std::string ns = name_ + ".";
+  // updateParam<bool>(parameters, ns + ..., ...);
 
   std::for_each(registered_modules_.begin(), registered_modules_.end(), [&p](const auto & m) {
     m->updateModuleParams(p);
