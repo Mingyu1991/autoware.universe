@@ -17,6 +17,7 @@
 
 #include "behavior_path_planner/scene_module/scene_module_interface.hpp"
 #include "behavior_path_planner/scene_module/scene_module_manager_interface.hpp"
+#include "behavior_path_planner/scene_module/scene_module_visitor.hpp"
 #include "behavior_path_planner/utils/lane_following/module_data.hpp"
 
 #include <lanelet2_extension/utility/utilities.hpp>
@@ -161,6 +162,11 @@ public:
    * @brief show planner manager internal condition.
    */
   void print() const;
+
+  /**
+   * @brief visit each module and get debug information.
+   */
+  std::shared_ptr<SceneModuleVisitor> getDebugMsg();
 
 private:
   /**
@@ -369,6 +375,10 @@ private:
   mutable StopWatch<std::chrono::milliseconds> stop_watch_;
 
   mutable std::unordered_map<std::string, double> processing_time_;
+
+  mutable std::vector<ModuleUpdateInfo> debug_info_;
+
+  mutable std::shared_ptr<SceneModuleVisitor> debug_msg_ptr_;
 
   bool verbose_{false};
 };

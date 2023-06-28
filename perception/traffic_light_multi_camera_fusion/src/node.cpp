@@ -22,11 +22,11 @@
 namespace
 {
 
-bool isUnknown(const autoware_auto_perception_msgs::msg::TrafficSignal & signal)
+bool isUnknown(const tier4_perception_msgs::msg::TrafficSignal & signal)
 {
-  return signal.lights.size() == 1 &&
-         signal.lights[0].color == autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN &&
-         signal.lights[0].shape == autoware_auto_perception_msgs::msg::TrafficLight::UNKNOWN;
+  return signal.elements.size() == 1 &&
+         signal.elements[0].color == tier4_perception_msgs::msg::TrafficLightElement::UNKNOWN &&
+         signal.elements[0].shape == tier4_perception_msgs::msg::TrafficLightElement::UNKNOWN;
 }
 
 /**
@@ -63,9 +63,8 @@ int compareRecord(const traffic_light::FusionRecord & r1, const traffic_light::F
   if (r1.header.frame_id == r2.header.frame_id && std::abs(t1 - t2) >= dt_thres) {
     return t1 < t2 ? -1 : 1;
   }
-  const int max_occlusion_ratio = 50;
-  bool r1_is_unknown = isUnknown(r1.signal) || r1.occlusion.occlusion_ratio >= max_occlusion_ratio;
-  bool r2_is_unknown = isUnknown(r2.signal) || r2.occlusion.occlusion_ratio >= max_occlusion_ratio;
+  bool r1_is_unknown = isUnknown(r1.signal);
+  bool r2_is_unknown = isUnknown(r2.signal);
   /*
   if both are unknown, they are of the same priority
   */
@@ -92,6 +91,47 @@ int compareRecord(const traffic_light::FusionRecord & r1, const traffic_light::F
   }
 }
 
+template <class K, class V>
+V at_or(const std::unordered_map<K, V> & map, const K & key, const V & value)
+{
+  return map.count(key) ? map.at(key) : value;
+}
+
+autoware_perception_msgs::msg::TrafficLightElement convert(
+  const tier4_perception_msgs::msg::TrafficLightElement & input)
+{
+  typedef tier4_perception_msgs::msg::TrafficLightElement OldElem;
+  typedef autoware_perception_msgs::msg::TrafficLightElement NewElem;
+  static const std::unordered_map<OldElem::_color_type, NewElem::_color_type> color_map(
+    {{OldElem::RED, NewElem::RED},
+     {OldElem::AMBER, NewElem::AMBER},
+     {OldElem::GREEN, NewElem::GREEN},
+     {OldElem::WHITE, NewElem::WHITE}});
+  static const std::unordered_map<OldElem::_shape_type, NewElem::_shape_type> shape_map(
+    {{OldElem::CIRCLE, NewElem::CIRCLE},
+     {OldElem::LEFT_ARROW, NewElem::LEFT_ARROW},
+     {OldElem::RIGHT_ARROW, NewElem::RIGHT_ARROW},
+     {OldElem::UP_ARROW, NewElem::UP_ARROW},
+     {OldElem::UP_LEFT_ARROW, NewElem::UP_LEFT_ARROW},
+     {OldElem::UP_RIGHT_ARROW, NewElem::UP_RIGHT_ARROW},
+     {OldElem::DOWN_ARROW, NewElem::DOWN_ARROW},
+     {OldElem::DOWN_LEFT_ARROW, NewElem::DOWN_LEFT_ARROW},
+     {OldElem::DOWN_RIGHT_ARROW, NewElem::DOWN_RIGHT_ARROW},
+     {OldElem::CROSS, NewElem::CROSS}});
+  static const std::unordered_map<OldElem::_status_type, NewElem::_status_type> status_map(
+    {{OldElem::SOLID_OFF, NewElem::SOLID_OFF},
+     {OldElem::SOLID_ON, NewElem::SOLID_ON},
+     {OldElem::FLASHING, NewElem::FLASHING}});
+  // clang-format on
+
+  NewElem output;
+  output.color = at_or(color_map, input.color, NewElem::UNKNOWN);
+  output.shape = at_or(shape_map, input.shape, NewElem::UNKNOWN);
+  output.status = at_or(status_map, input.status, NewElem::UNKNOWN);
+  output.confidence = input.confidence;
+  return output;
+}
+
 }  // namespace
 
 namespace traffic_light
@@ -103,53 +143,45 @@ MultiCameraFusion::MultiCameraFusion(const rclcpp::NodeOptions & node_options)
   using std::placeholders::_1;
   using std::placeholders::_2;
   using std::placeholders::_3;
-  using std::placeholders::_4;
 
   std::vector<std::string> camera_namespaces =
     this->declare_parameter("camera_namespaces", std::vector<std::string>{});
   is_approximate_sync_ = this->declare_parameter<bool>("approximate_sync", false);
   message_lifespan_ = this->declare_parameter<double>("message_lifespan", 0.09);
-  perform_group_fusion_ = this->declare_parameter<bool>("perform_group_fusion", false);
   for (const std::string & camera_ns : camera_namespaces) {
     std::string signal_topic = camera_ns + "/traffic_signals";
     std::string roi_topic = camera_ns + "/rois";
     std::string cam_info_topic = camera_ns + "/camera_info";
-    std::string occlusion_topic = camera_ns + "/occlusion";
     roi_subs_.emplace_back(
       new mf::Subscriber<RoiArrayType>(this, roi_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
     signal_subs_.emplace_back(new mf::Subscriber<SignalArrayType>(
       this, signal_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
     cam_info_subs_.emplace_back(new mf::Subscriber<CamInfoType>(
       this, cam_info_topic, rclcpp::SensorDataQoS().get_rmw_qos_profile()));
-    occlusion_subs_.emplace_back(new mf::Subscriber<OcclusionArrayType>(
-      this, occlusion_topic, rclcpp::QoS{1}.get_rmw_qos_profile()));
     if (is_approximate_sync_ == false) {
       exact_sync_subs_.emplace_back(new ExactSync(
-        ExactSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()), *(signal_subs_.back()),
-        *(occlusion_subs_.back())));
+        ExactSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()),
+        *(signal_subs_.back())));
       exact_sync_subs_.back()->registerCallback(
-        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3, _4));
+        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3));
     } else {
       appro_sync_subs_.emplace_back(new ApproSync(
-        ApproSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()), *(signal_subs_.back()),
-        *(occlusion_subs_.back())));
+        ApproSyncPolicy(10), *(cam_info_subs_.back()), *(roi_subs_.back()),
+        *(signal_subs_.back())));
       appro_sync_subs_.back()->registerCallback(
-        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3, _4));
+        std::bind(&MultiCameraFusion::trafficSignalRoiCallback, this, _1, _2, _3));
     }
   }
 
-  if (perform_group_fusion_) {
-    map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
-      "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
-      std::bind(&MultiCameraFusion::mapCallback, this, _1));
-  }
-  signal_pub_ = create_publisher<SignalArrayType>("~/output/traffic_signals", rclcpp::QoS{1});
+  map_sub_ = create_subscription<autoware_auto_mapping_msgs::msg::HADMapBin>(
+    "~/input/vector_map", rclcpp::QoS{1}.transient_local(),
+    std::bind(&MultiCameraFusion::mapCallback, this, _1));
+  signal_pub_ = create_publisher<NewSignalArrayType>("~/output/traffic_signals", rclcpp::QoS{1});
 }
 
 void MultiCameraFusion::trafficSignalRoiCallback(
   const CamInfoType::ConstSharedPtr cam_info_msg, const RoiArrayType::ConstSharedPtr roi_msg,
-  const SignalArrayType::ConstSharedPtr signal_msg,
-  const OcclusionArrayType::ConstSharedPtr occlusion_msg)
+  const SignalArrayType::ConstSharedPtr signal_msg)
 {
   rclcpp::Time stamp(roi_msg->header.stamp);
   /*
@@ -157,21 +189,16 @@ void MultiCameraFusion::trafficSignalRoiCallback(
   Attention should be paied that this record array might not have the newest timestamp
   */
   record_arr_set_.insert(
-    FusionRecordArr{cam_info_msg->header, *cam_info_msg, *roi_msg, *signal_msg, *occlusion_msg});
+    FusionRecordArr{cam_info_msg->header, *cam_info_msg, *roi_msg, *signal_msg});
 
-  std::map<IdType, FusionRecord> fusioned_record_map;
+  std::map<IdType, FusionRecord> fusioned_record_map, grouped_record_map;
   multiCameraFusion(fusioned_record_map);
-  if (perform_group_fusion_) {
-    groupFusion(fusioned_record_map);
-  }
+  groupFusion(fusioned_record_map, grouped_record_map);
 
-  SignalArrayType out_msg;
-  out_msg.header = signal_msg->header;
-  out_msg.signals.reserve(fusioned_record_map.size());
-  for (const auto & p : fusioned_record_map) {
-    out_msg.signals.emplace_back(p.second.signal);
-  }
-  signal_pub_->publish(out_msg);
+  NewSignalArrayType msg_out;
+  convertOutputMsg(grouped_record_map, msg_out);
+  msg_out.stamp = cam_info_msg->header.stamp;
+  signal_pub_->publish(msg_out);
 }
 
 void MultiCameraFusion::mapCallback(
@@ -191,6 +218,22 @@ void MultiCameraFusion::mapCallback(
     for (const auto & light : lights) {
       traffic_light_id_to_regulatory_ele_id_[light.id()] = tl->id();
     }
+  }
+}
+
+void MultiCameraFusion::convertOutputMsg(
+  const std::map<IdType, FusionRecord> & grouped_record_map, NewSignalArrayType & msg_out)
+{
+  msg_out.signals.clear();
+  for (const auto & p : grouped_record_map) {
+    IdType reg_ele_id = p.first;
+    const SignalType & signal = p.second.signal;
+    NewSignalType signal_out;
+    signal_out.traffic_signal_id = reg_ele_id;
+    for (const auto & ele : signal.elements) {
+      signal_out.elements.push_back(convert(ele));
+    }
+    msg_out.signals.push_back(signal_out);
   }
 }
 
@@ -223,28 +266,22 @@ void MultiCameraFusion::multiCameraFusion(std::map<IdType, FusionRecord> & fusio
         const RoiType & roi = record_arr.rois.rois[i];
         auto signal_it = std::find_if(
           record_arr.signals.signals.begin(), record_arr.signals.signals.end(),
-          [roi](const SignalType & s1) { return roi.id == s1.map_primitive_id; });
-        auto occlusion_it = std::find_if(
-          record_arr.occlusions.occlusion_ratios.begin(),
-          record_arr.occlusions.occlusion_ratios.end(),
-          [roi](const OcclusionType & o1) { return o1.id == roi.id; });
+          [roi](const SignalType & s1) { return roi.traffic_light_id == s1.traffic_light_id; });
         /*
         failed to find corresponding signal. skip it
         */
-        if (
-          signal_it == record_arr.signals.signals.end() ||
-          occlusion_it == record_arr.occlusions.occlusion_ratios.end()) {
+        if (signal_it == record_arr.signals.signals.end()) {
           continue;
         }
-        FusionRecord record{record_arr.header, record_arr.cam_info, roi, *signal_it, *occlusion_it};
+        FusionRecord record{record_arr.header, record_arr.cam_info, roi, *signal_it};
         /*
         if this traffic light is not detected yet or can be updated by higher priority record,
         update it
         */
         if (
-          fusioned_record_map.find(roi.id) == fusioned_record_map.end() ||
-          ::compareRecord(record, fusioned_record_map[roi.id]) >= 0) {
-          fusioned_record_map[roi.id] = record;
+          fusioned_record_map.find(roi.traffic_light_id) == fusioned_record_map.end() ||
+          ::compareRecord(record, fusioned_record_map[roi.traffic_light_id]) >= 0) {
+          fusioned_record_map[roi.traffic_light_id] = record;
         }
       }
       it++;
@@ -252,18 +289,13 @@ void MultiCameraFusion::multiCameraFusion(std::map<IdType, FusionRecord> & fusio
   }
 }
 
-void MultiCameraFusion::groupFusion(std::map<IdType, FusionRecord> & fusioned_record_map)
+void MultiCameraFusion::groupFusion(
+  std::map<IdType, FusionRecord> & fusioned_record_map,
+  std::map<IdType, FusionRecord> & grouped_record_map)
 {
-  /*
-  this should not happen. Just in case
-  */
-  if (perform_group_fusion_ == false) {
-    RCLCPP_WARN(get_logger(), "perform_group_fusion_ is set to false. Skip GroupFusion");
-    return;
-  }
-  std::map<IdType, FusionRecord> reg_ele_id_to_best_record;
+  grouped_record_map.clear();
   for (auto & p : fusioned_record_map) {
-    IdType roi_id = p.second.roi.id;
+    IdType roi_id = p.second.roi.traffic_light_id;
     /*
     this should not happen
     */
@@ -274,21 +306,12 @@ void MultiCameraFusion::groupFusion(std::map<IdType, FusionRecord> & fusioned_re
       /*
       keep the best record for every regulatory element id
       */
-      IdType reg_ele_id = traffic_light_id_to_regulatory_ele_id_[p.second.roi.id];
+      IdType reg_ele_id = traffic_light_id_to_regulatory_ele_id_[p.second.roi.traffic_light_id];
       if (
-        reg_ele_id_to_best_record.count(reg_ele_id) == 0 ||
-        ::compareRecord(p.second, reg_ele_id_to_best_record[reg_ele_id]) >= 0) {
-        reg_ele_id_to_best_record[reg_ele_id] = p.second;
+        grouped_record_map.count(reg_ele_id) == 0 ||
+        ::compareRecord(p.second, grouped_record_map[reg_ele_id]) >= 0) {
+        grouped_record_map[reg_ele_id] = p.second;
       }
-    }
-  }
-  /*
-  replace the resul with the best record of its group
-  */
-  for (auto & p : fusioned_record_map) {
-    if (traffic_light_id_to_regulatory_ele_id_.count(p.second.roi.id) != 0) {
-      IdType reg_ele_id = traffic_light_id_to_regulatory_ele_id_[p.second.roi.id];
-      p.second.signal.lights = reg_ele_id_to_best_record[reg_ele_id].signal.lights;
     }
   }
 }

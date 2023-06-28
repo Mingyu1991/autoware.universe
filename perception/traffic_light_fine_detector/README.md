@@ -12,7 +12,7 @@ The model is based on [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX) and
 
 ### Training Data
 
-The model was fine-tuned on around 17,000 TierIV internal images of Japanese traffic lights.
+The model was fine-tuned on around 17,000 TIER IV internal images of Japanese traffic lights.
 
 ### Trained Onnx model
 
@@ -26,18 +26,18 @@ Based on the camera image and the global ROI array detected by `map_based_detect
 
 ### Input
 
-| Name            | Type                                                       | Description                                                         |
-| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
-| `~/input/image` | `sensor_msgs/Image`                                        | The full size camera image                                          |
-| `~/input/rois`  | `autoware_auto_perception_msgs::msg::TrafficLightRoiArray` | The array of ROIs detected by map_based_detector                    |
-| `~/expect/rois` | `autoware_auto_perception_msgs::msg::TrafficLightRoiArray` | The array of ROIs detected by map_based_detector without any offset |
+| Name            | Type                                               | Description                                                         |
+| --------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
+| `~/input/image` | `sensor_msgs/Image`                                | The full size camera image                                          |
+| `~/input/rois`  | `tier4_perception_msgs::msg::TrafficLightRoiArray` | The array of ROIs detected by map_based_detector                    |
+| `~/expect/rois` | `tier4_perception_msgs::msg::TrafficLightRoiArray` | The array of ROIs detected by map_based_detector without any offset |
 
 ### Output
 
-| Name                  | Type                                                       | Description                  |
-| --------------------- | ---------------------------------------------------------- | ---------------------------- |
-| `~/output/rois`       | `autoware_auto_perception_msgs::msg::TrafficLightRoiArray` | The detected accurate rois   |
-| `~/debug/exe_time_ms` | `tier4_debug_msgs::msg::Float32Stamped`                    | The time taken for inference |
+| Name                  | Type                                               | Description                  |
+| --------------------- | -------------------------------------------------- | ---------------------------- |
+| `~/output/rois`       | `tier4_perception_msgs::msg::TrafficLightRoiArray` | The detected accurate rois   |
+| `~/debug/exe_time_ms` | `tier4_debug_msgs::msg::Float32Stamped`            | The time taken for inference |
 
 ## Parameters
 

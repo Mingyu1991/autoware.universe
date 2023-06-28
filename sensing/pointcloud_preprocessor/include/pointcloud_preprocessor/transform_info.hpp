@@ -12,25 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef TRAFFIC_LIGHT_CLASSIFIER__CLASSIFIER_INTERFACE_HPP_
-#define TRAFFIC_LIGHT_CLASSIFIER__CLASSIFIER_INTERFACE_HPP_
+#pragma once
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include <Eigen/Eigen>
 
-#include <tier4_perception_msgs/msg/traffic_signal_array.hpp>
-
-#include <vector>
-
-namespace traffic_light
+namespace pointcloud_preprocessor
 {
-class ClassifierInterface
+
+/**
+ * This holds the coordinate transformation information of the point cloud.
+ * Usage example:
+ *   \code
+ *   if (transform_info.need_transform) {
+ *       point = transform_info.eigen_transform * point;
+ *   }
+ *   \endcode
+ */
+struct TransformInfo
 {
-public:
-  virtual bool getTrafficSignals(
-    const std::vector<cv::Mat> & input_image,
-    tier4_perception_msgs::msg::TrafficSignalArray & traffic_signals) = 0;
+  TransformInfo()
+  {
+    eigen_transform = Eigen::Matrix4f::Identity(4, 4);
+    need_transform = false;
+  }
+
+  Eigen::Matrix4f eigen_transform;
+  bool need_transform;
 };
-}  // namespace traffic_light
 
-#endif  // TRAFFIC_LIGHT_CLASSIFIER__CLASSIFIER_INTERFACE_HPP_
+}  // namespace pointcloud_preprocessor

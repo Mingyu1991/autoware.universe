@@ -27,43 +27,54 @@
       # avoidance is performed for the object type with true
       target_object:
         car:
-          enable: true
-          envelope_buffer_margin: 0.3
-          safety_buffer_lateral: 0.7
-          safety_buffer_longitudinal: 0.0
+          enable: true                                 # [-]
+          moving_speed_threshold: 1.0                  # [m/s]
+          moving_time_threshold: 1.0                   # [s]
+          max_expand_ratio: 0.0                        # [-]
+          envelope_buffer_margin: 0.3                  # [m]
+          avoid_margin_lateral: 1.0                    # [m]
+          safety_buffer_lateral: 0.7                   # [m]
+          safety_buffer_longitudinal: 0.0              # [m]
         truck:
           enable: true
           envelope_buffer_margin: 0.3
+          avoid_margin_lateral: 1.0
           safety_buffer_lateral: 0.7
           safety_buffer_longitudinal: 0.0
         bus:
           enable: true
           envelope_buffer_margin: 0.3
+          avoid_margin_lateral: 1.0
           safety_buffer_lateral: 0.7
           safety_buffer_longitudinal: 0.0
         trailer:
           enable: true
           envelope_buffer_margin: 0.3
+          avoid_margin_lateral: 1.0
           safety_buffer_lateral: 0.7
           safety_buffer_longitudinal: 0.0
         unknown:
           enable: false
           envelope_buffer_margin: 0.3
+          avoid_margin_lateral: 1.0
           safety_buffer_lateral: 0.7
           safety_buffer_longitudinal: 0.0
         bicycle:
           enable: false
           envelope_buffer_margin: 0.8
+          avoid_margin_lateral: 1.0
           safety_buffer_lateral: 1.0
           safety_buffer_longitudinal: 1.0
         motorcycle:
           enable: false
           envelope_buffer_margin: 0.8
+          avoid_margin_lateral: 1.0
           safety_buffer_lateral: 1.0
           safety_buffer_longitudinal: 1.0
         pedestrian:
           enable: false
           envelope_buffer_margin: 0.8
+          avoid_margin_lateral: 1.0
           safety_buffer_lateral: 1.0
           safety_buffer_longitudinal: 1.0
 
@@ -97,7 +108,6 @@
       avoidance:
         # avoidance lateral parameters
         lateral:
-          lateral_collision_margin: 1.0                 # [m]
           lateral_execution_threshold: 0.499            # [m]
           road_shoulder_safety_margin: 0.3              # [m]
           max_right_shift_length: 5.0

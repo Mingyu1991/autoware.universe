@@ -148,7 +148,7 @@ void TrafficLightFineDetectorNodelet::callback(
   std::map<int, TrafficLightRoi> id2expectRoi;
   std::map<int, tensorrt_yolox::ObjectArray> id2detections;
   for (const auto & expect_roi : expect_roi_msg->rois) {
-    id2expectRoi[expect_roi.id] = expect_roi;
+    id2expectRoi[expect_roi.traffic_light_id] = expect_roi;
   }
 
   rosMsg2CvMat(in_image_msg, original_image, "bgr8");
@@ -164,7 +164,7 @@ void TrafficLightFineDetectorNodelet::callback(
     fitInFrame(lt, rb, cv::Size(original_image.size()));
     rois.emplace_back(lt, rb);
     lts.emplace_back(lt);
-    roi_ids.emplace_back(rough_roi.id);
+    roi_ids.emplace_back(rough_roi.traffic_light_id);
     // keep the actual batch size
     size_t true_batch_size = rois.size();
     // insert fake rois since the TRT model requires static batch size
@@ -271,7 +271,7 @@ void TrafficLightFineDetectorNodelet::detectionMatch(
   out_rois.rois.clear();
   for (const auto & p : bestDetections) {
     TrafficLightRoi tlr;
-    tlr.id = p.first;
+    tlr.traffic_light_id = p.first;
     tlr.roi.x_offset = p.second.x_offset;
     tlr.roi.y_offset = p.second.y_offset;
     tlr.roi.width = p.second.width;

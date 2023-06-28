@@ -90,6 +90,8 @@ protected:
   void calcTurnSignalInfo() override;
 
   bool isValidPath(const PathWithLaneId & path) const override;
+
+  rclcpp::Logger logger_ = rclcpp::get_logger("lane_change").get_child(getModuleTypeStr());
 };
 
 class NormalLaneChangeBT : public NormalLaneChange

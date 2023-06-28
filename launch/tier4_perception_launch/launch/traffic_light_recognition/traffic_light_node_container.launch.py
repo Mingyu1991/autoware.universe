@@ -142,7 +142,7 @@ def generate_launch_description():
                     ("~/input/vector_map", "/map/vector_map"),
                     ("~/input/route", "/planning/mission_planning/route"),
                     ("~/input/classified/traffic_signals", "classified/traffic_signals"),
-                    ("~/output/traffic_signals", "traffic_signals"),
+                    ("~/output/traffic_signals", "estimated/traffic_signals"),
                 ],
                 extra_arguments=[{"use_intra_process_comms": False}],
             ),
@@ -160,7 +160,7 @@ def generate_launch_description():
                 namespace="",
                 parameters=[
                     {"input_topic": "classified/traffic_signals"},
-                    {"output_topic": "traffic_signals"},
+                    {"output_topic": "estimated/traffic_signals"},
                     {"type": "autoware_auto_perception_msgs/msg/TrafficSignalArray"},
                 ],
                 extra_arguments=[
